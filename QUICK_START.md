@@ -75,7 +75,7 @@ Sign in with these accounts (on `/auth.html`):
 
 | Role | Email | Password | Access |
 |------|-------|----------|--------|
-| Admin | admin@relialimo.demo | DemoAdmin123! | Full system |
+| Admin | admin@relialimo.demo | G0dD@mnNutj08! | Full system |
 | Dispatcher | dispatcher@relialimo.demo | DemoDispatcher123! | Reservations |
 | Driver | driver@relialimo.demo | DemoDriver123! | Assignments |
 

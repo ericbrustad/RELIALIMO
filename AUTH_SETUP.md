@@ -97,7 +97,7 @@ On `auth.html`, click demo buttons to test different roles:
 
 ### Admin Account
 - **Email**: admin@relialimo.demo
-- **Password**: DemoAdmin123!
+- **Password**: G0dD@mnNutj08!
 - **Role**: admin
 - **Access**: Full system access
 
@@ -160,7 +160,7 @@ Edit `/auth.js`:
 const DEMO_ACCOUNTS = {
   admin: {
     email: 'admin@relialimo.demo',
-    password: 'DemoAdmin123!'
+    password: 'G0dD@mnNutj08!'
   },
   // ... modify as needed
 };
