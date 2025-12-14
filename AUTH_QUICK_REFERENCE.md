@@ -7,7 +7,7 @@
 ```
 👨‍💼 Admin          📋 Dispatcher      🚗 Driver
 admin@...         dispatcher@...     driver@...
-DemoAdmin123!     DemoDispatcher123! DemoDriver123!
+G0dD@mnNutj08!     DemoDispatcher123! DemoDriver123!
 ```
 Just click the colored button!
 
