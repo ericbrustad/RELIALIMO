@@ -14,7 +14,7 @@ let demoBtns;
 const DEMO_ACCOUNTS = {
   admin: {
     email: 'admin@relialimo.demo',
-    password: 'DemoAdmin123!'
+    password: 'G0dD@mnNutj08!'
   },
   dispatcher: {
     email: 'dispatcher@relialimo.demo',
