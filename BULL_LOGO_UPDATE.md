@@ -17,13 +17,15 @@ All bull emoji references have been replaced with a professional red bull logo i
 The new red bull logo now appears in:
 
 1. **Main Dashboard** - `/index.html`
-   - `RELIA🐂LIMO™` in header
+   - `RELIA<img width="622" height="525" alt="image" src="https://github.com/user-attachments/assets/1b4530a0-8969-43ea-80ab-d10c0c290af0" />
+LIMO™` in header
 
 2. **Authentication** - `/auth.html`
    - Login page header
 
 3. **Calendar** - `/calendar.html`
-   - `RELIA🐂LIMO™ - CALENDAR`
+   - `RELIA<img width="622" height="525" alt="image" src="https://github.com/user-attachments/assets/71dfa48b-e8c8-4888-b955-8d7a5a2931c5" />
+LIMO™ - CALENDAR`
 
 4. **Reservations Dashboard** - `/index-reservations.html`
    - `RELIA🐂LIMO™` header
