@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dispatch Grid - RELIA🐂LIMO™</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="dispatch-grid.css" />
+    <script>
+      // Hide main navigation if in iframe
+      if (window.self !== window.top) {
+        document.addEventListener('DOMContentLoaded', function() {
+          const headerContent = document.querySelector('.header-content');
+          if (headerContent) {
+            headerContent.style.display = 'none';
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Header -->
+      <header class="header">
+        <!-- Main Navigation -->
+        <div class="header-content">
+          <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™ - DISPATCH</h1>
+        </div>
+        
+        <!-- Dispatch Tabs -->
+        <div class="dispatch-tabs-bar">
+          <div class="dispatch-tabs">
+            <button class="dispatch-tab active" data-view="grid">Grid</button>
+            <button class="dispatch-tab" data-view="map">Map</button>
+            <button class="dispatch-tab" data-view="graph">Graph</button>
+            <button class="dispatch-tab" data-view="gps">GPS</button>
+            <a href="#" class="dispatch-link" onclick="openGridSetup(); return false;">Grid Setup</a>
+            <a href="#" class="dispatch-link" id="manageResourcesLink">Manage Resources</a>
+            <a href="#" class="dispatch-link" id="linkDriversCarsLink">Link Drivers and Cars</a>
+            <button class="dispatch-print">🖨 Print</button>
+          </div>
+          <div class="dispatch-actions">
+            <span class="dispatch-info">Now: <span id="currentTime">12/12/2025</span></span>
+            <span class="dispatch-info">User: <strong>admin</strong></span>
+            <span class="dispatch-info">Controls: <span style="color: #17a2b8;">x</span></span>
+            <span class="dispatch-info">Trip Count: <strong>2</strong></span>
+          </div>
+        </div>
+
+        <!-- Filters and Search -->
+        <div class="dispatch-filters">
+          <div class="filter-group">
+            <div class="date-selector">
+              <input type="date" id="dispatchDate" value="2025-12-12" class="dispatch-date-input" />
+              <button class="date-nav-btn">◀</button>
+            </div>
+            
+            <div class="checkbox-filters">
+              <label class="filter-checkbox">
+                <input type="checkbox" /> NewLeg
+              </label>
+              <label class="filter-checkbox">
+                <input type="checkbox" /> Settled
+              </label>
+              <label class="filter-checkbox checked">
+                <input type="checkbox" checked /> In-House
+              </label>
+              <label class="filter-checkbox checked">
+                <input type="checkbox" checked /> Farm-In
+              </label>
+              <label class="filter-checkbox checked">
+                <input type="checkbox" checked /> Farm-Out
+              </label>
+              <label class="filter-checkbox">
+                <input type="checkbox" /> Quotes
+              </label>
+            </div>
+          </div>
+
+          <div class="search-group">
+            <label style="color: #333; font-weight: 600;">Quick Search Within Grid:</label>
+            <input type="text" class="quick-search-input" />
+            <button class="search-btn">GO</button>
+            <a href="#" class="advanced-link">Advanced Search</a>
+            <button class="refresh-btn">🔄</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content - Dispatch Grid -->
+      <main class="main-content">
+        <!-- Grid View -->
+        <div class="dispatch-grid-container" id="gridView">
+          <table class="dispatch-grid-table">
+            <thead>
+              <tr>
+                <th class="sortable">Svc Type <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Conf# <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Status <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Req/PU Date <span class="sort-arrow">▼</span></th>
+                <th class="sortable">PU Time <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Type <span class="sort-arrow">▼</span></th>
+                <th class="sortable">PU Location <span class="sort-arrow">▼</span></th>
+                <th class="sortable">DO Location <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Veh <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Driver <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Car <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Passenger Name <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Pass# <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Lug <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Curr Tm <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Affiliate Name <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Recorded Tm <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Fit Act Tm <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Fit Tm/Dte <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Fit Status <span class="sort-arrow">▼</span></th>
+                <th class="sortable">Origins <span class="sort-arrow">▼</span></th>
+                <th class="sortable">FOT F# <span class="sort-arrow">▼</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Row 1 -->
+              <tr class="assigned-row">
+                <td>From Airport</td>
+                <td><a href="#" class="conf-link">22456</a></td>
+                <td><span class="status-badge status-assigned">Assigned</span></td>
+                <td>12/12/2025</td>
+                <td>07:00 PM</td>
+                <td>INH</td>
+                <td class="highlight-yellow">MSP DL 942</td>
+                <td>Home 4456 Queensland Lane North</td>
+                <td>BLACK_SUV</td>
+                <td>Eric B</td>
+                <td>_Car_Suv</td>
+                <td>Colleen Brown*</td>
+                <td>1</td>
+                <td>1</td>
+                <td></td>
+                <td>Minneapolis–Saint Paul International...</td>
+                <td></td>
+                <td>07:10 PM</td>
+                <td>07:20 PM</td>
+                <td>1 / O5</td>
+                <td>Scheduled</td>
+                <td></td>
+              </tr>
+
+              <!-- Row 2 -->
+              <tr class="assigned-row">
+                <td>From Airport</td>
+                <td><a href="#" class="conf-link">22441</a></td>
+                <td><span class="status-badge status-assigned">Assigned</span></td>
+                <td>12/12/2025</td>
+                <td>08:47 PM</td>
+                <td>INH</td>
+                <td class="highlight-yellow">MSP DL 1260</td>
+                <td>650 Parkside Cir Burnsville MN 55337</td>
+                <td>BLACK_SUV</td>
+                <td>Eric B</td>
+                <td>_Car_Suv</td>
+                <td>Allison Ross</td>
+                <td>2</td>
+                <td>1</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>08:57 PM</td>
+                <td>08:47 PM</td>
+                <td>1 / O20</td>
+                <td>Scheduled</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Map View -->
+        <div class="dispatch-map-container" id="mapView" style="display: none;">
+          <div id="dispatchMap" class="dispatch-map"></div>
+          
+          <!-- Map Controls -->
+          <div class="map-controls">
+            <button class="map-control-btn" id="recenterBtn" title="Recenter Map">🎯</button>
+            <button class="map-control-btn" id="zoomInBtn" title="Zoom In">+</button>
+            <button class="map-control-btn" id="zoomOutBtn" title="Zoom Out">−</button>
+          </div>
+
+          <!-- Reservations List Sidebar -->
+          <div class="map-sidebar">
+            <table class="map-reservations-table">
+              <thead>
+                <tr>
+                  <th>Conf#</th>
+                  <th>PU Date</th>
+                  <th>PU Time</th>
+                  <th>DO Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="map-reservation-row" data-conf="22456">
+                  <td><a href="#" class="conf-link">22456</a></td>
+                  <td>12/12/2025</td>
+                  <td>07:00 PM</td>
+                  <td>07:20 PM</td>
+                </tr>
+                <tr class="map-reservation-detail" data-conf="22456">
+                  <td colspan="4" style="background: #e8f4f8; padding: 8px; font-size: 11px;">
+                    <div><strong>PU:</strong> MSP Airport Terminal 1</div>
+                    <div><strong>DO:</strong> 4456 Queensland Lane North</div>
+                  </td>
+                </tr>
+                <tr class="map-reservation-row" data-conf="22441">
+                  <td><a href="#" class="conf-link">22441</a></td>
+                  <td>12/12/2025</td>
+                  <td>08:47 PM</td>
+                  <td>08:47 PM</td>
+                </tr>
+                <tr class="map-reservation-detail" data-conf="22441">
+                  <td colspan="4" style="background: #e8f4f8; padding: 8px; font-size: 11px;">
+                    <div><strong>PU:</strong> MSP Airport Terminal 1</div>
+                    <div><strong>DO:</strong> 650 Parkside Cir, Burnsville, MN 55337</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Graph View -->
+        <div class="dispatch-graph-container" id="graphView" style="display: none;">
+          <!-- Graph Header -->
+          <div class="graph-header">
+            <div class="graph-date-display">12 Dec 2025</div>
+            <div class="graph-view-toggle">
+              <button class="graph-toggle-btn active" data-view="drivers">Drivers</button>
+              <button class="graph-toggle-btn" data-view="cars">Cars</button>
+            </div>
+          </div>
+
+          <!-- Graph Grid -->
+          <div class="graph-grid-wrapper">
+            <!-- Time Labels Column -->
+            <div class="graph-time-column">
+              <div class="graph-time-header"></div>
+              <div class="graph-time-slot">12:00</div>
+              <div class="graph-time-slot">01:00</div>
+              <div class="graph-time-slot">02:00</div>
+              <div class="graph-time-slot">03:00</div>
+              <div class="graph-time-slot">04:00</div>
+              <div class="graph-time-slot">05:00</div>
+              <div class="graph-time-slot">06:00</div>
+              <div class="graph-time-slot">07:00</div>
+              <div class="graph-time-slot">08:00</div>
+              <div class="graph-time-slot">09:00</div>
+              <div class="graph-time-slot">10:00</div>
+              <div class="graph-time-slot">11:00 AM</div>
+              <div class="graph-time-slot">12:00</div>
+              <div class="graph-time-slot">01:00</div>
+              <div class="graph-time-slot">02:00</div>
+              <div class="graph-time-slot">03:00</div>
+              <div class="graph-time-slot">04:00</div>
+              <div class="graph-time-slot">05:00</div>
+              <div class="graph-time-slot">06:00</div>
+              <div class="graph-time-slot">07:00</div>
+              <div class="graph-time-slot">08:00</div>
+              <div class="graph-time-slot">09:00</div>
+              <div class="graph-time-slot">10:00</div>
+              <div class="graph-time-slot">11:00</div>
+            </div>
+
+            <!-- Scrollable Columns Area -->
+            <div class="graph-columns-wrapper">
+              <!-- Unassigned Column -->
+              <div class="graph-column">
+                <div class="graph-column-header">Unassigned</div>
+                <div class="graph-timeline-area" data-column="unassigned">
+                  <!-- Empty slots -->
+                  <div class="graph-hour-slot" data-hour="0"></div>
+                  <div class="graph-hour-slot" data-hour="1"></div>
+                  <div class="graph-hour-slot" data-hour="2"></div>
+                  <div class="graph-hour-slot" data-hour="3"></div>
+                  <div class="graph-hour-slot" data-hour="4"></div>
+                  <div class="graph-hour-slot" data-hour="5"></div>
+                  <div class="graph-hour-slot" data-hour="6"></div>
+                  <div class="graph-hour-slot" data-hour="7"></div>
+                  <div class="graph-hour-slot" data-hour="8"></div>
+                  <div class="graph-hour-slot" data-hour="9"></div>
+                  <div class="graph-hour-slot" data-hour="10"></div>
+                  <div class="graph-hour-slot" data-hour="11"></div>
+                  <div class="graph-hour-slot" data-hour="12"></div>
+                  <div class="graph-hour-slot" data-hour="13"></div>
+                  <div class="graph-hour-slot" data-hour="14"></div>
+                  <div class="graph-hour-slot" data-hour="15"></div>
+                  <div class="graph-hour-slot" data-hour="16"></div>
+                  <div class="graph-hour-slot" data-hour="17"></div>
+                  <div class="graph-hour-slot" data-hour="18"></div>
+                  <div class="graph-hour-slot" data-hour="19"></div>
+                  <div class="graph-hour-slot" data-hour="20"></div>
+                  <div class="graph-hour-slot" data-hour="21"></div>
+                  <div class="graph-hour-slot" data-hour="22"></div>
+                  <div class="graph-hour-slot" data-hour="23"></div>
+                </div>
+              </div>
+
+              <!-- Eric B Column -->
+              <div class="graph-column">
+                <div class="graph-column-header">Eric B</div>
+                <div class="graph-timeline-area" data-column="eric-b" style="position: relative;">
+                  <!-- Hour slots -->
+                  <div class="graph-hour-slot" data-hour="0"></div>
+                  <div class="graph-hour-slot" data-hour="1"></div>
+                  <div class="graph-hour-slot" data-hour="2"></div>
+                  <div class="graph-hour-slot" data-hour="3"></div>
+                  <div class="graph-hour-slot" data-hour="4"></div>
+                  <div class="graph-hour-slot" data-hour="5"></div>
+                  <div class="graph-hour-slot" data-hour="6"></div>
+                  <div class="graph-hour-slot" data-hour="7"></div>
+                  <div class="graph-hour-slot" data-hour="8"></div>
+                  <div class="graph-hour-slot" data-hour="9"></div>
+                  <div class="graph-hour-slot" data-hour="10"></div>
+                  <div class="graph-hour-slot" data-hour="11"></div>
+                  <div class="graph-hour-slot" data-hour="12"></div>
+                  <div class="graph-hour-slot" data-hour="13"></div>
+                  <div class="graph-hour-slot" data-hour="14"></div>
+                  <div class="graph-hour-slot" data-hour="15"></div>
+                  <div class="graph-hour-slot" data-hour="16"></div>
+                  <div class="graph-hour-slot" data-hour="17"></div>
+                  <div class="graph-hour-slot" data-hour="18"></div>
+                  <div class="graph-hour-slot" data-hour="19"></div>
+                  <div class="graph-hour-slot" data-hour="20"></div>
+                  <div class="graph-hour-slot" data-hour="21"></div>
+                  <div class="graph-hour-slot" data-hour="22"></div>
+                  <div class="graph-hour-slot" data-hour="23"></div>
+
+                  <!-- Reservation Block 1: 03:00 PM - 04:05 PM -->
+                  <div class="graph-reservation-block" style="top: calc(15 * 50px); height: 65px;" title="Conf# 22456">
+                    <div class="graph-res-time">03:00 PM - 04:05 PM</div>
+                    <div class="graph-res-info">#115 Service Trial 53347...</div>
+                  </div>
+
+                  <!-- Reservation Block 2: 07:20 PM - 08:47 PM -->
+                  <div class="graph-reservation-block" style="top: calc(19.33 * 50px); height: 87px;" title="Conf# 22441">
+                    <div class="graph-res-time">07:20 PM -</div>
+                    <div class="graph-res-info">MSP - 6436</div>
+                    <div class="graph-res-info">Queensland</div>
+                    <div class="graph-res-info">Lane North</div>
+                    <div class="graph-res-info">55331</div>
+                    <div class="graph-res-time-end">- 08:47 PM -</div>
+                    <div class="graph-res-info">MSP - 500</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Additional Driver Columns -->
+              <div class="graph-column">
+                <div class="graph-column-header">Tony Arroyo</div>
+                <div class="graph-timeline-area" data-column="tony-arroyo">
+                  <div class="graph-hour-slot" data-hour="0"></div>
+                  <div class="graph-hour-slot" data-hour="1"></div>
+                  <div class="graph-hour-slot" data-hour="2"></div>
+                  <div class="graph-hour-slot" data-hour="3"></div>
+                  <div class="graph-hour-slot" data-hour="4"></div>
+                  <div class="graph-hour-slot" data-hour="5"></div>
+                  <div class="graph-hour-slot" data-hour="6"></div>
+                  <div class="graph-hour-slot" data-hour="7"></div>
+                  <div class="graph-hour-slot" data-hour="8"></div>
+                  <div class="graph-hour-slot" data-hour="9"></div>
+                  <div class="graph-hour-slot" data-hour="10"></div>
+                  <div class="graph-hour-slot" data-hour="11"></div>
+                  <div class="graph-hour-slot" data-hour="12"></div>
+                  <div class="graph-hour-slot" data-hour="13"></div>
+                  <div class="graph-hour-slot" data-hour="14"></div>
+                  <div class="graph-hour-slot" data-hour="15"></div>
+                  <div class="graph-hour-slot" data-hour="16"></div>
+                  <div class="graph-hour-slot" data-hour="17"></div>
+                  <div class="graph-hour-slot" data-hour="18"></div>
+                  <div class="graph-hour-slot" data-hour="19"></div>
+                  <div class="graph-hour-slot" data-hour="20"></div>
+                  <div class="graph-hour-slot" data-hour="21"></div>
+                  <div class="graph-hour-slot" data-hour="22"></div>
+                  <div class="graph-hour-slot" data-hour="23"></div>
+                </div>
+              </div>
+
+              <!-- More columns (you can add more as needed) -->
+              <div class="graph-column">
+                <div class="graph-column-header">Test</div>
+                <div class="graph-timeline-area" data-column="test">
+                  <div class="graph-hour-slot" data-hour="0"></div>
+                  <div class="graph-hour-slot" data-hour="1"></div>
+                  <div class="graph-hour-slot" data-hour="2"></div>
+                  <div class="graph-hour-slot" data-hour="3"></div>
+                  <div class="graph-hour-slot" data-hour="4"></div>
+                  <div class="graph-hour-slot" data-hour="5"></div>
+                  <div class="graph-hour-slot" data-hour="6"></div>
+                  <div class="graph-hour-slot" data-hour="7"></div>
+                  <div class="graph-hour-slot" data-hour="8"></div>
+                  <div class="graph-hour-slot" data-hour="9"></div>
+                  <div class="graph-hour-slot" data-hour="10"></div>
+                  <div class="graph-hour-slot" data-hour="11"></div>
+                  <div class="graph-hour-slot" data-hour="12"></div>
+                  <div class="graph-hour-slot" data-hour="13"></div>
+                  <div class="graph-hour-slot" data-hour="14"></div>
+                  <div class="graph-hour-slot" data-hour="15"></div>
+                  <div class="graph-hour-slot" data-hour="16"></div>
+                  <div class="graph-hour-slot" data-hour="17"></div>
+                  <div class="graph-hour-slot" data-hour="18"></div>
+                  <div class="graph-hour-slot" data-hour="19"></div>
+                  <div class="graph-hour-slot" data-hour="20"></div>
+                  <div class="graph-hour-slot" data-hour="21"></div>
+                  <div class="graph-hour-slot" data-hour="22"></div>
+                  <div class="graph-hour-slot" data-hour="23"></div>
+                </div>
+              </div>
+
+              <div class="graph-column">
+                <div class="graph-column-header">Gules</div>
+                <div class="graph-timeline-area" data-column="gules">
+                  <div class="graph-hour-slot" data-hour="0"></div>
+                  <div class="graph-hour-slot" data-hour="1"></div>
+                  <div class="graph-hour-slot" data-hour="2"></div>
+                  <div class="graph-hour-slot" data-hour="3"></div>
+                  <div class="graph-hour-slot" data-hour="4"></div>
+                  <div class="graph-hour-slot" data-hour="5"></div>
+                  <div class="graph-hour-slot" data-hour="6"></div>
+                  <div class="graph-hour-slot" data-hour="7"></div>
+                  <div class="graph-hour-slot" data-hour="8"></div>
+                  <div class="graph-hour-slot" data-hour="9"></div>
+                  <div class="graph-hour-slot" data-hour="10"></div>
+                  <div class="graph-hour-slot" data-hour="11"></div>
+                  <div class="graph-hour-slot" data-hour="12"></div>
+                  <div class="graph-hour-slot" data-hour="13"></div>
+                  <div class="graph-hour-slot" data-hour="14"></div>
+                  <div class="graph-hour-slot" data-hour="15"></div>
+                  <div class="graph-hour-slot" data-hour="16"></div>
+                  <div class="graph-hour-slot" data-hour="17"></div>
+                  <div class="graph-hour-slot" data-hour="18"></div>
+                  <div class="graph-hour-slot" data-hour="19"></div>
+                  <div class="graph-hour-slot" data-hour="20"></div>
+                  <div class="graph-hour-slot" data-hour="21"></div>
+                  <div class="graph-hour-slot" data-hour="22"></div>
+                  <div class="graph-hour-slot" data-hour="23"></div>
+                </div>
+              </div>
+
+              <div class="graph-column">
+                <div class="graph-column-header">Steve C</div>
+                <div class="graph-timeline-area" data-column="steve-c">
+                  <div class="graph-hour-slot" data-hour="0"></div>
+                  <div class="graph-hour-slot" data-hour="1"></div>
+                  <div class="graph-hour-slot" data-hour="2"></div>
+                  <div class="graph-hour-slot" data-hour="3"></div>
+                  <div class="graph-hour-slot" data-hour="4"></div>
+                  <div class="graph-hour-slot" data-hour="5"></div>
+                  <div class="graph-hour-slot" data-hour="6"></div>
+                  <div class="graph-hour-slot" data-hour="7"></div>
+                  <div class="graph-hour-slot" data-hour="8"></div>
+                  <div class="graph-hour-slot" data-hour="9"></div>
+                  <div class="graph-hour-slot" data-hour="10"></div>
+                  <div class="graph-hour-slot" data-hour="11"></div>
+                  <div class="graph-hour-slot" data-hour="12"></div>
+                  <div class="graph-hour-slot" data-hour="13"></div>
+                  <div class="graph-hour-slot" data-hour="14"></div>
+                  <div class="graph-hour-slot" data-hour="15"></div>
+                  <div class="graph-hour-slot" data-hour="16"></div>
+                  <div class="graph-hour-slot" data-hour="17"></div>
+                  <div class="graph-hour-slot" data-hour="18"></div>
+                  <div class="graph-hour-slot" data-hour="19"></div>
+                  <div class="graph-hour-slot" data-hour="20"></div>
+                  <div class="graph-hour-slot" data-hour="21"></div>
+                  <div class="graph-hour-slot" data-hour="22"></div>
+                  <div class="graph-hour-slot" data-hour="23"></div>
+                </div>
+              </div>
+
+              <!-- Add more driver columns as needed -->
+            </div>
+          </div>
+        </div>
+
+        <!-- GPS View -->
+        <div class="dispatch-gps-container" id="gpsView" style="display: none;">
+          <!-- GPS Header -->
+          <div class="gps-header">
+            <label style="font-weight: 600; margin-right: 10px;">GPS Source:</label>
+            <select class="gps-source-select">
+              <option>Driver Anywhere, Affiliate Vehicles</option>
+              <option>Driver Anywhere Only</option>
+              <option>Affiliate Vehicles Only</option>
+              <option>All Sources</option>
+            </select>
+          </div>
+
+          <!-- GPS Map -->
+          <div id="gpsMap" class="gps-map"></div>
+          
+          <!-- GPS Map Controls -->
+          <div class="gps-map-controls">
+            <button class="gps-control-btn" id="gpsRecenterBtn" title="Recenter Map">🎯</button>
+            <button class="gps-control-btn" id="gpsZoomInBtn" title="Zoom In">+</button>
+            <button class="gps-control-btn" id="gpsZoomOutBtn" title="Zoom Out">−</button>
+          </div>
+
+          <!-- Vehicle Info Sidebar -->
+          <div class="gps-sidebar">
+            <div class="gps-sidebar-header">
+              <div class="gps-vehicle-title">
+                <span class="gps-vehicle-icon">🚗</span>
+                <span class="gps-vehicle-name">7 Passenger Suv</span>
+                <button class="gps-refresh-btn" title="Refresh">🔄</button>
+              </div>
+            </div>
+
+            <div class="gps-vehicle-list">
+              <!-- Vehicle 1 -->
+              <div class="gps-vehicle-card active">
+                <div class="gps-vehicle-header">
+                  <div class="gps-status-dot status-available"></div>
+                  <span class="gps-vehicle-label">_Car_Suv*</span>
+                </div>
+                <div class="gps-vehicle-details">
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Vehicle</span>
+                    <span class="gps-value">7 Passenger Suv</span>
+                  </div>
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Status</span>
+                    <span class="gps-value status-available">Available</span>
+                  </div>
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Driver</span>
+                    <span class="gps-value">Eric Brustad</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Vehicle 2 -->
+              <div class="gps-vehicle-card">
+                <div class="gps-vehicle-header">
+                  <div class="gps-status-dot status-busy"></div>
+                  <span class="gps-vehicle-label">BLACK_SUV</span>
+                </div>
+                <div class="gps-vehicle-details">
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Vehicle</span>
+                    <span class="gps-value">BLACK_SUV</span>
+                  </div>
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Status</span>
+                    <span class="gps-value status-busy">On Trip</span>
+                  </div>
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Driver</span>
+                    <span class="gps-value">Eric B</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Vehicle 3 -->
+              <div class="gps-vehicle-card">
+                <div class="gps-vehicle-header">
+                  <div class="gps-status-dot status-available"></div>
+                  <span class="gps-vehicle-label">SEDAN</span>
+                </div>
+                <div class="gps-vehicle-details">
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Vehicle</span>
+                    <span class="gps-value">Sedan</span>
+                  </div>
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Status</span>
+                    <span class="gps-value status-available">Available</span>
+                  </div>
+                  <div class="gps-detail-row">
+                    <span class="gps-label">Driver</span>
+                    <span class="gps-value">Tony Arroyo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="gps-sidebar-footer">
+              <label class="gps-checkbox">
+                <input type="checkbox" checked />
+                <span>On Duty</span>
+              </label>
+              <label class="gps-checkbox">
+                <input type="checkbox" />
+                <span>Show Labels?</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Grid Setup Modal -->
+    <div class="setup-modal-overlay" id="setupModal" style="display: none;">
+      <div class="setup-modal">
+        <div class="setup-header">
+          <h2 class="setup-title">Dispatch Grid Field Configuration</h2>
+          <button class="setup-close-btn" onclick="closeGridSetup()">×</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="setup-tabs">
+          <button class="setup-tab active" data-tab="grid">Grid Setup</button>
+          <button class="setup-tab" data-tab="datetime">Date/Time</button>
+          <button class="setup-tab" data-tab="conflicts">Conflicts</button>
+          <button class="setup-tab" data-tab="prefs">My Prefs</button>
+          <button class="setup-tab" data-tab="company">Company Prefs</button>
+        </div>
+
+        <!-- Grid Setup Tab Content -->
+        <div class="setup-content" id="gridSetupContent">
+          <!-- Copy Configuration -->
+          <div class="setup-section">
+            <label class="setup-label">Copy Grid Configuration From:</label>
+            <div class="setup-row">
+              <select class="setup-select">
+                <option>admin (Master User)</option>
+                <option>Default Configuration</option>
+                <option>Eric B</option>
+                <option>Tony Arroyo</option>
+              </select>
+              <button class="setup-btn setup-btn-primary">Go</button>
+            </div>
+          </div>
+
+          <!-- Field Configuration Table -->
+          <div class="setup-table-container">
+            <table class="setup-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px;">Show</th>
+                  <th>Field Name</th>
+                  <th style="width: 120px;">Width</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Pick-up Routing -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td colspan="2" class="field-header">Pick-up Routing</td>
+                </tr>
+
+                <!-- Drop-off Routing -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td colspan="2" class="field-header">Drop-off Routing</td>
+                </tr>
+
+                <!-- Service Type -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Service Type</td>
+                  <td>
+                    <input type="number" value="100" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Confirmation Number -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Confirmation Number</td>
+                  <td>
+                    <input type="number" value="75" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Trip Status -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Trip Status</td>
+                  <td>
+                    <input type="number" value="80" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Trip Notes -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Trip Notes</td>
+                  <td>
+                    <input type="number" value="15" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Pick-up Date -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Pick-up Date</td>
+                  <td>
+                    <input type="number" value="75" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Pick-up Time -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Pick-up Time</td>
+                  <td>
+                    <input type="number" value="75" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Trip Type -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Trip Type (In-House/Farm-In/Farm-Out)</td>
+                  <td>
+                    <input type="number" value="45" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Additional fields... -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Pick-up Location</td>
+                  <td>
+                    <input type="number" value="150" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="setup-actions">
+            <button class="setup-btn setup-btn-primary" onclick="saveGridSetup()">Update Dispatch Grid Fields</button>
+            <button class="setup-btn setup-btn-secondary" onclick="closeGridSetup()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Other Tab Contents (placeholders) -->
+        <div class="setup-content" id="dateTimeContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>Date/Time configuration options...</p>
+          </div>
+        </div>
+
+        <div class="setup-content" id="conflictsContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>Conflicts detection settings...</p>
+          </div>
+        </div>
+
+        <div class="setup-content" id="prefsContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>My preferences...</p>
+          </div>
+        </div>
+
+        <div class="setup-content" id="companyContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>Company preferences...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <link rel="stylesheet" href="dispatch-grid-setup.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module" src="dispatch-grid.js"></script>
+    <script>
+      function openGridSetup() {
+        document.getElementById('setupModal').style.display = 'flex';
+      }
+
+      function closeGridSetup() {
+        document.getElementById('setupModal').style.display = 'none';
+      }
+
+      function saveGridSetup() {
+        alert('Grid configuration saved successfully!');
+        closeGridSetup();
+      }
+
+      // Tab switching for setup modal
+      document.querySelectorAll('.setup-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const tabName = tab.dataset.tab;
+          
+          document.querySelectorAll('.setup-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          
+          document.querySelectorAll('.setup-content').forEach(content => {
+            content.style.display = 'none';
+          });
+          
+          document.getElementById(tabName === 'grid' ? 'gridSetupContent' : 
+                                  tabName === 'datetime' ? 'dateTimeContent' :
+                                  tabName === 'conflicts' ? 'conflictsContent' :
+                                  tabName === 'prefs' ? 'prefsContent' : 'companyContent').style.display = 'block';
+        });
+      });
+
+      // Close modal when clicking outside
+      document.getElementById('setupModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'setupModal') {
+          closeGridSetup();
+        }
+      });
+    </script>
+  </body>
+</html>

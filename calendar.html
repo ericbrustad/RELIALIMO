@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calendar - RELIA🐂LIMO™</title>
+    <link rel="stylesheet" href="calendar.css" />
+    <script>
+      // Hide main navigation if in iframe
+      if (window.self !== window.top) {
+        document.addEventListener('DOMContentLoaded', function() {
+          const headerContent = document.querySelector('.header-content');
+          if (headerContent) {
+            headerContent.style.display = 'none';
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Header -->
+      <header class="header">
+        <!-- Main Navigation -->
+        <div class="header-content">
+          <div class="header-left">
+            <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™ - CALENDAR</h1>
+          </div>
+          <div class="main-nav">
+            <button class="nav-btn" data-section="office">🏢 Office</button>
+            <button class="nav-btn" data-section="accounts">👤 Accounts</button>
+            <button class="nav-btn" data-section="quotes">📋 Quotes</button>
+            <button class="nav-btn active" data-section="calendar">📅 Calendar</button>
+            <button class="nav-btn" data-section="reservations">🚗 Reservations</button>
+            <button class="nav-btn" data-section="dispatch">🚙 Dispatch</button>
+            <button class="nav-btn" data-section="network">🌐 Network</button>
+            <button class="nav-btn" data-section="settle">💰 Settle</button>
+            <button class="nav-btn" data-section="receivables">📊 Receivables</button>
+            <button class="nav-btn" data-section="payables">💳 Payables</button>
+            <button class="nav-btn" data-section="memos">📝 Memos</button>
+            <button class="nav-btn" data-section="files">📁 Files</button>
+            <button class="nav-btn" data-section="tools">🔧 Tools</button>
+            <button class="nav-btn" data-section="reports">📈 Reports</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Calendar Controls Bar -->
+      <div class="calendar-controls-bar">
+        <!-- View Type Buttons -->
+        <div class="view-type-buttons">
+          <button class="view-type-btn" data-view="month">Month</button>
+          <button class="view-type-btn" data-view="week">Week</button>
+          <button class="view-type-btn" data-view="w-week">W.Week</button>
+          <button class="view-type-btn active" data-view="day">Day</button>
+        </div>
+
+        <!-- Date Navigation -->
+        <div class="date-navigation">
+          <label for="dateSelector">Go to:</label>
+          <select id="dateSelector" class="date-selector">
+            <option value="2025-12">2025 - December</option>
+            <option value="2025-11">2025 - November</option>
+            <option value="2025-10">2025 - October</option>
+            <option value="2026-01">2026 - January</option>
+            <option value="2026-02">2026 - February</option>
+          </select>
+          <button class="btn-go" id="goToDate">Go</button>
+          <button class="btn-print" id="printCalendar">🖨️ Print</button>
+          <label class="mobile-checkbox">
+            <input type="checkbox" id="mobileView" />
+            Mobile?
+          </label>
+        </div>
+      </div>
+
+      <!-- Filter Controls -->
+      <div class="filter-controls">
+        <div class="filter-checkboxes">
+          <label class="checkbox-label">
+            <input type="checkbox" id="onlyReservations" checked />
+            Only Reservations
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="onlyMyEvents" />
+            Only My Events
+          </label>
+        </div>
+
+        <div class="filter-selectors">
+          <div class="filter-group">
+            <label>Driver(s):</label>
+            <select class="filter-select" id="driverFilter">
+              <option value="">Select options</option>
+              <option value="all">All Drivers</option>
+              <option value="john">John Smith</option>
+              <option value="james">James Brown</option>
+              <option value="anna">Anna Wilson</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Car(s):</label>
+            <select class="filter-select" id="carFilter">
+              <option value="">Select options</option>
+              <option value="all">All Cars</option>
+              <option value="sedan1">Sedan - ABC123</option>
+              <option value="suv1">SUV - XYZ789</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Vehicle Type(s):</label>
+            <select class="filter-select" id="vehicleTypeFilter">
+              <option value="">Select options</option>
+              <option value="all">All Types</option>
+              <option value="sedan">Sedan</option>
+              <option value="suv">SUV</option>
+              <option value="limo">Limousine</option>
+              <option value="van">Van</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Status(es):</label>
+            <select class="filter-select" id="statusFilter">
+              <option value="">Select options</option>
+              <option value="all">All Status</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+
+          <button class="btn-launch" id="launchFilters">Launch</button>
+        </div>
+      </div>
+
+      <!-- Calendar Grid -->
+      <main class="calendar-main">
+        <div class="calendar-grid">
+          <!-- Calendar Header -->
+          <div class="calendar-header">
+            <div class="calendar-header-cell">Sunday</div>
+            <div class="calendar-header-cell">Monday</div>
+            <div class="calendar-header-cell">Tuesday</div>
+            <div class="calendar-header-cell">Wednesday</div>
+            <div class="calendar-header-cell">Thursday</div>
+            <div class="calendar-header-cell">Friday</div>
+            <div class="calendar-header-cell">Saturday</div>
+          </div>
+
+          <!-- Calendar Body -->
+          <div class="calendar-body" id="calendarBody">
+            <!-- Week 1 -->
+            <div class="calendar-cell">
+              <div class="cell-date">7</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">3:00 PM-01:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Suburb, Gato,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">1</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">2</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">3</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">4</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">5</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">6</div>
+            </div>
+
+            <!-- Week 2 -->
+            <div class="calendar-cell">
+              <div class="cell-date">14</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">1:00 AM-12:00 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Ross, Alison,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">01:15 PM-11:44 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Washington, Emily,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">8</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">9</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">10</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">11</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">12</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">3:00 PM-04:58 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Bethany*, Matt,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">07:00 PM-12:24 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Brown, Collette,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">08:30 PM-12:43 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Lava, Matt,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">13</div>
+              <div class="cell-content">
+                <div class="event-item event-orange">
+                  <div class="event-time">12:00 AM-01:30 AM</div>
+                  <div class="event-vehicle">PAX VAN, Wilco, Scott,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">02:30 PM-01:30 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Rose, Allison,</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Week 3 -->
+            <div class="calendar-cell">
+              <div class="cell-date">21</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">08:30 PM-12:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Marc, Landerer,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">09:30 PM-12:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Bricho, Annie,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">10:30 PM-12:38 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Lava, Matt,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">11:00 PM-01:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Carson*, Ryan,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">15</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">05:00 AM-06:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Brown, Collette,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">03:22 PM-04:21 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Joseph, John,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">16</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">03:30 PM-01:30 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Marc, Landerer,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">05:30 PM-11:52 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Brown, Collette,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">17</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">06:00 AM-12:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Robo, Anna,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">06:30 PM-01:30 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, Bethany*, Matt,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">18</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">19</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">07:00 AM-12:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Thomas, Tony,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">20</div>
+            </div>
+
+            <!-- Week 4 -->
+            <div class="calendar-cell">
+              <div class="cell-date">28</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">22</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">23</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">24</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">25</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">26</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">05:00 AM-12:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Carson*, Ryan,</div>
+                </div>
+              </div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">27</div>
+              <div class="cell-content">
+                <div class="event-item event-cyan">
+                  <div class="event-time">03:00 AM-04:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Riley, Ross,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">05:00 PM-06:05 PM</div>
+                  <div class="event-vehicle">BLACK_SUV, anthony, tanya,</div>
+                </div>
+                <div class="event-item event-cyan">
+                  <div class="event-time">09:15 PM-12:00 AM</div>
+                  <div class="event-vehicle">BLACK_SUV, Thomas, Tony,</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Week 5 -->
+            <div class="calendar-cell empty-cell"></div>
+            <div class="calendar-cell">
+              <div class="cell-date">29</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">30</div>
+            </div>
+            <div class="calendar-cell">
+              <div class="cell-date">31</div>
+            </div>
+            <div class="calendar-cell empty-cell"></div>
+            <div class="calendar-cell empty-cell"></div>
+            <div class="calendar-cell empty-cell"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script type="module" src="calendar.js"></script>
+  </body>
+</html>

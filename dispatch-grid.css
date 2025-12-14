@@ -1,0 +1,908 @@
+/* Reset and Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  color: #333;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  background: #fff;
+  border-bottom: 2px solid #ddd;
+}
+
+.header-content {
+  padding: 10px 20px;
+  background: #2c3e50;
+}
+
+.logo {
+  color: #fff;
+  font-size: 24px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.logo-bull {
+  width: 30px;
+  height: 30px;
+  vertical-align: middle;
+}
+
+/* Dispatch Tabs Bar */
+.dispatch-tabs-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background: #e9ecef;
+  border-bottom: 1px solid #ddd;
+}
+
+.dispatch-tabs {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.dispatch-tab {
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.dispatch-tab:hover {
+  background: #f8f9fa;
+}
+
+.dispatch-tab.active {
+  background: #17a2b8;
+  color: #fff;
+  border-color: #17a2b8;
+}
+
+.dispatch-link {
+  color: #17a2b8;
+  text-decoration: none;
+  font-size: 13px;
+  padding: 6px 12px;
+}
+
+.dispatch-link:hover {
+  text-decoration: underline;
+}
+
+.dispatch-print {
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 3px;
+}
+
+.dispatch-actions {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.dispatch-info {
+  font-size: 12px;
+  color: #333;
+}
+
+/* Filters Bar */
+.dispatch-filters {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex: 1;
+}
+
+.date-selector {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.dispatch-date-input {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.date-nav-btn {
+  background: #f8f9fa;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+.date-nav-btn:hover {
+  background: #e9ecef;
+}
+
+.checkbox-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.search-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.quick-search-input {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 13px;
+  width: 250px;
+}
+
+.search-btn {
+  background: #ff6600;
+  color: #fff;
+  border: none;
+  padding: 6px 20px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.search-btn:hover {
+  background: #e65c00;
+}
+
+.advanced-link {
+  color: #17a2b8;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.advanced-link:hover {
+  text-decoration: underline;
+}
+
+.refresh-btn {
+  background: #f8f9fa;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+.refresh-btn:hover {
+  background: #e9ecef;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  overflow: auto;
+}
+
+.dispatch-grid-container {
+  padding: 0;
+  overflow-x: auto;
+  background: #fff;
+}
+
+/* Dispatch Grid Table */
+.dispatch-grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 2400px;
+}
+
+.dispatch-grid-table thead {
+  background: #f8f9fa;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.dispatch-grid-table th {
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #dee2e6;
+  white-space: nowrap;
+  font-size: 11px;
+  background: #f8f9fa;
+}
+
+.dispatch-grid-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dispatch-grid-table th.sortable:hover {
+  background: #e9ecef;
+}
+
+.sort-arrow {
+  font-size: 10px;
+  color: #6c757d;
+  margin-left: 3px;
+}
+
+.dispatch-grid-table td {
+  padding: 8px;
+  border: 1px solid #dee2e6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.dispatch-grid-table tbody tr:hover {
+  background: #f1f3f5;
+}
+
+.assigned-row {
+  background: #fff;
+}
+
+.conf-link {
+  color: #17a2b8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.conf-link:hover {
+  text-decoration: underline;
+}
+
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-assigned {
+  background: #d4edda;
+  color: #155724;
+}
+
+.highlight-yellow {
+  background: #ffff99 !important;
+  font-weight: 600;
+}
+
+/* Map View Styles */
+.dispatch-map-container {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.dispatch-map {
+  height: 100%;
+  width: 100%;
+}
+
+.map-controls {
+  position: absolute;
+  top: 20px;
+  right: 420px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.map-control-btn {
+  background: #fff;
+  border: 2px solid #ccc;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: all 0.2s;
+}
+
+.map-control-btn:hover {
+  background: #f8f9fa;
+  border-color: #999;
+}
+
+.map-control-btn:active {
+  background: #e9ecef;
+}
+
+.map-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 400px;
+  height: 100%;
+  background: #fff;
+  border-left: 2px solid #ddd;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.map-reservations-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.map-reservations-table thead {
+  background: #17a2b8;
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.map-reservations-table th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #0d8ba8;
+}
+
+.map-reservations-table td {
+  padding: 8px;
+  border: 1px solid #dee2e6;
+}
+
+.map-reservation-row {
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.2s;
+}
+
+.map-reservation-row:hover {
+  background: #f8f9fa;
+}
+
+.map-reservation-row.active {
+  background: #fff3cd;
+}
+
+.map-reservation-detail {
+  display: none;
+}
+
+.map-reservation-detail.show {
+  display: table-row;
+}
+
+/* Custom Leaflet Marker Styles */
+.custom-marker {
+  background: #17a2b8;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.pickup-marker {
+  background: #28a745;
+}
+
+.dropoff-marker {
+  background: #dc3545;
+}
+
+/* Graph View Styles */
+.dispatch-graph-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: #f8f9fa;
+  border-bottom: 2px solid #ddd;
+}
+
+.graph-date-display {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.graph-view-toggle {
+  display: flex;
+  gap: 5px;
+}
+
+.graph-toggle-btn {
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 6px 20px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.graph-toggle-btn:hover {
+  background: #f8f9fa;
+}
+
+.graph-toggle-btn.active {
+  background: #17a2b8;
+  color: #fff;
+  border-color: #17a2b8;
+}
+
+.graph-grid-wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.graph-time-column {
+  width: 80px;
+  flex-shrink: 0;
+  background: #f8f9fa;
+  border-right: 2px solid #ddd;
+  overflow: hidden;
+}
+
+.graph-time-header {
+  height: 40px;
+  border-bottom: 1px solid #ddd;
+  background: #e9ecef;
+}
+
+.graph-time-slot {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #666;
+  border-bottom: 1px solid #e0e0e0;
+  font-weight: 600;
+}
+
+.graph-columns-wrapper {
+  flex: 1;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.graph-column {
+  min-width: 120px;
+  flex-shrink: 0;
+  border-right: 1px solid #ddd;
+}
+
+.graph-column-header {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9ecef;
+  border-bottom: 1px solid #ddd;
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  padding: 0 5px;
+  text-align: center;
+}
+
+.graph-timeline-area {
+  position: relative;
+  height: calc(24 * 50px);
+}
+
+.graph-hour-slot {
+  height: 50px;
+  border-bottom: 1px solid #e0e0e0;
+  position: relative;
+}
+
+.graph-hour-slot:nth-child(even) {
+  background: #f9f9f9;
+}
+
+.graph-reservation-block {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  background: #5dd3e8;
+  border: 1px solid #17a2b8;
+  border-radius: 3px;
+  padding: 4px;
+  font-size: 10px;
+  color: #000;
+  cursor: pointer;
+  overflow: hidden;
+  z-index: 10;
+  transition: all 0.2s;
+}
+
+.graph-reservation-block:hover {
+  background: #4ac7de;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 20;
+}
+
+.graph-res-time {
+  font-weight: 600;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graph-res-time-end {
+  font-weight: 600;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graph-res-info {
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* GPS View Styles */
+.dispatch-gps-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.gps-header {
+  padding: 12px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+}
+
+.gps-source-select {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.gps-map {
+  flex: 1;
+  position: relative;
+}
+
+.gps-map-controls {
+  position: absolute;
+  top: 80px;
+  right: 320px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gps-control-btn {
+  background: #fff;
+  border: 2px solid #ccc;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: all 0.2s;
+}
+
+.gps-control-btn:hover {
+  background: #f8f9fa;
+  border-color: #999;
+}
+
+.gps-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100%;
+  background: #fff;
+  border-left: 2px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.gps-sidebar-header {
+  padding: 15px;
+  background: #f8f9fa;
+  border-bottom: 2px solid #ddd;
+}
+
+.gps-vehicle-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gps-vehicle-icon {
+  font-size: 20px;
+}
+
+.gps-vehicle-name {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.gps-refresh-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.gps-refresh-btn:hover {
+  background: #e9ecef;
+}
+
+.gps-vehicle-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.gps-vehicle-card {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gps-vehicle-card:hover {
+  background: #f8f9fa;
+  border-color: #17a2b8;
+}
+
+.gps-vehicle-card.active {
+  background: #e8f4f8;
+  border-color: #17a2b8;
+  border-width: 2px;
+}
+
+.gps-vehicle-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.gps-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.gps-status-dot.status-available {
+  background: #28a745;
+}
+
+.gps-status-dot.status-busy {
+  background: #ffc107;
+}
+
+.gps-status-dot.status-offline {
+  background: #dc3545;
+}
+
+.gps-vehicle-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+}
+
+.gps-vehicle-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gps-detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.gps-label {
+  color: #666;
+  font-weight: 600;
+}
+
+.gps-value {
+  color: #333;
+}
+
+.gps-value.status-available {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.gps-value.status-busy {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+.gps-sidebar-footer {
+  padding: 15px;
+  background: #f8f9fa;
+  border-top: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gps-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.gps-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* Custom vehicle marker for GPS */
+.vehicle-marker {
+  background: #333;
+  color: #fff;
+  padding: 8px;
+  border-radius: 50%;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+  border: 3px solid #fff;
+}
+
+.vehicle-marker.available {
+  background: #28a745;
+}
+
+.vehicle-marker.busy {
+  background: #ffc107;
+}
+
+/* Placeholder Views */
+.dispatch-placeholder-container {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+}
+
+/* Responsive */
+@media (max-width: 1400px) {
+  .dispatch-filters {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .filter-group,
+  .search-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .map-sidebar {
+    width: 300px;
+  }
+
+  .map-controls {
+    right: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .map-sidebar {
+    width: 100%;
+    height: 40%;
+    bottom: 0;
+    top: auto;
+    border-left: none;
+    border-top: 2px solid #ddd;
+  }
+
+  .map-controls {
+    right: 20px;
+  }
+}

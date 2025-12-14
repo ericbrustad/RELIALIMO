@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dispatch Grid Setup - RELIA🐂LIMO™</title>
+    <link rel="stylesheet" href="dispatch-grid-setup.css" />
+  </head>
+  <body>
+    <div class="setup-modal-overlay" id="setupModal">
+      <div class="setup-modal">
+        <div class="setup-header">
+          <h2 class="setup-title">Dispatch Grid Field Configuration</h2>
+          <button class="setup-close-btn" onclick="closeSetupModal()">×</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="setup-tabs">
+          <button class="setup-tab active" data-tab="grid">Grid Setup</button>
+          <button class="setup-tab" data-tab="datetime">Date/Time</button>
+          <button class="setup-tab" data-tab="conflicts">Conflicts</button>
+          <button class="setup-tab" data-tab="prefs">My Prefs</button>
+          <button class="setup-tab" data-tab="company">Company Prefs</button>
+        </div>
+
+        <!-- Grid Setup Tab Content -->
+        <div class="setup-content" id="gridSetupContent">
+          <!-- Copy Configuration -->
+          <div class="setup-section">
+            <label class="setup-label">Copy Grid Configuration From:</label>
+            <div class="setup-row">
+              <select class="setup-select">
+                <option>admin (Master User)</option>
+                <option>Default Configuration</option>
+                <option>Eric B</option>
+                <option>Tony Arroyo</option>
+              </select>
+              <button class="setup-btn setup-btn-primary">Go</button>
+            </div>
+          </div>
+
+          <!-- Field Configuration Table -->
+          <div class="setup-table-container">
+            <table class="setup-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px;">Show</th>
+                  <th>Field Name</th>
+                  <th style="width: 120px;">Width</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Pick-up Routing -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td colspan="2" class="field-header">Pick-up Routing</td>
+                </tr>
+
+                <!-- Drop-off Routing -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td colspan="2" class="field-header">Drop-off Routing</td>
+                </tr>
+
+                <!-- Service Type -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Service Type</td>
+                  <td>
+                    <input type="number" value="100" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Confirmation Number -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Confirmation Number</td>
+                  <td>
+                    <input type="number" value="75" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Trip Status -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Trip Status</td>
+                  <td>
+                    <input type="number" value="80" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Trip Notes -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Trip Notes</td>
+                  <td>
+                    <input type="number" value="15" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Pick-up Date -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Pick-up Date</td>
+                  <td>
+                    <input type="number" value="75" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Pick-up Time -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Pick-up Time</td>
+                  <td>
+                    <input type="number" value="75" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Trip Type -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Trip Type (In-House/Farm-In/Farm-Out)</td>
+                  <td>
+                    <input type="number" value="45" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Pick-up Location -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Pick-up Location</td>
+                  <td>
+                    <input type="number" value="150" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Drop-off Location -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Drop-off Location</td>
+                  <td>
+                    <input type="number" value="150" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Vehicle Type -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Vehicle Type</td>
+                  <td>
+                    <input type="number" value="100" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Driver -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Driver</td>
+                  <td>
+                    <input type="number" value="100" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Car -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Car</td>
+                  <td>
+                    <input type="number" value="100" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Passenger Name -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Passenger Name</td>
+                  <td>
+                    <input type="number" value="120" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Passenger Count -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Pass#</td>
+                  <td>
+                    <input type="number" value="50" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Luggage -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Lug</td>
+                  <td>
+                    <input type="number" value="50" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+
+                <!-- Affiliate Name -->
+                <tr>
+                  <td>
+                    <input type="checkbox" checked class="setup-checkbox" />
+                  </td>
+                  <td>Affiliate Name</td>
+                  <td>
+                    <input type="number" value="120" class="setup-width-input" />
+                    <span class="unit-label">px</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="setup-actions">
+            <button class="setup-btn setup-btn-primary" onclick="saveGridSetup()">Update Dispatch Grid Fields</button>
+            <button class="setup-btn setup-btn-secondary" onclick="closeSetupModal()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Other Tab Contents (placeholders) -->
+        <div class="setup-content" id="dateTimeContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>Date/Time configuration options...</p>
+          </div>
+        </div>
+
+        <div class="setup-content" id="conflictsContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>Conflicts detection settings...</p>
+          </div>
+        </div>
+
+        <div class="setup-content" id="prefsContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>My preferences...</p>
+          </div>
+        </div>
+
+        <div class="setup-content" id="companyContent" style="display: none;">
+          <div style="padding: 40px; text-align: center; color: #666;">
+            <p>Company preferences...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="dispatch-grid-setup.js"></script>
+  </body>
+</html>

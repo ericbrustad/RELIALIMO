@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RELIA🐂LIMO™ - Reservation System</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script>
+      // Store company zip code for map initialization
+      window.COMPANY_ZIP_CODE = '55431'; // Minnesota
+      
+      // Hide only logo when loaded in iframe, keep buttons visible
+      if (window.self !== window.top) {
+        document.addEventListener('DOMContentLoaded', function() {
+          const logo = document.querySelector('.header-content .logo');
+          if (logo) {
+            logo.style.display = 'none';
+          }
+        });
+        
+        // Listen for view switch messages from parent
+        window.addEventListener('message', function(event) {
+          if (event.data.action === 'switchView') {
+            // Trigger the appropriate button click
+            if (event.data.view === 'userView') {
+              document.getElementById('userViewBtn')?.click();
+            } else if (event.data.view === 'driverView') {
+              document.getElementById('driverViewBtn')?.click();
+            } else if (event.data.view === 'farm-out_reservations_View') {
+              document.getElementById('farmOutBtn')?.click();
+            }
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-content">
+          <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™</h1>
+          <div class="header-controls">
+            <button id="userViewBtn" class="tab-btn active">User View</button>
+            <button id="driverViewBtn" class="tab-btn">Driver View</button>
+            <button id="reservationsBtn" class="tab-btn">Reservations</button>
+            <button id="farmOutBtn" class="tab-btn">Farm-out Reservations</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- User View -->
+        <section id="userView" class="view active">
+          <div class="split-layout">
+            <div class="form-panel">
+              <h2 class="panel-title">Dashboard</h2>
+              <form id="reservationForm" class="reservation-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Passenger / First Name</label>
+                    <input type="text" id="passengerFirstName" required placeholder="First name" />
+                  </div>
+                  <div class="form-group">
+                    <label>Last Name</label>
+                    <input type="text" id="passengerLastName" required placeholder="Last name" />
+                  </div>
+                </div>
+                
+                <div class="form-group">
+                  <label>Cell</label>
+                  <input type="tel" id="phone" required placeholder="(555) 555-5555" />
+                </div>
+
+                <div class="form-group">
+                  <label>Email</label>
+                  <input type="email" id="email" required placeholder="email@example.com" />
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Pickup Date</label>
+                    <input type="date" id="pickupDate" required />
+                  </div>
+                  <div class="form-group">
+                    <label>Pickup Time</label>
+                    <input type="time" id="pickupTime" required />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Pickup Location</label>
+                  <input type="text" id="pickupLocation" class="address-autocomplete" required placeholder="Enter pickup address" autocomplete="off" />
+                  <div id="pickupSuggestions" class="address-suggestions-dropdown"></div>
+                </div>
+
+                <div class="address-details">
+                  <div class="form-group">
+                    <label>Address</label>
+                    <input type="text" id="pickupAddress" placeholder="Address" readonly />
+                  </div>
+                  <div class="form-row-3">
+                    <div class="form-group">
+                      <label>City</label>
+                      <input type="text" id="pickupCity" placeholder="City" readonly />
+                    </div>
+                    <div class="form-group">
+                      <label>State</label>
+                      <input type="text" id="pickupState" placeholder="State" readonly />
+                    </div>
+                    <div class="form-group">
+                      <label>Zip</label>
+                      <input type="text" id="pickupZip" placeholder="Zip" readonly />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Dropoff Location</label>
+                  <input type="text" id="dropoffLocation" class="address-autocomplete" required placeholder="Enter dropoff address" autocomplete="off" />
+                  <div id="dropoffSuggestions" class="address-suggestions-dropdown"></div>
+                </div>
+
+                <div class="address-details">
+                  <div class="form-group">
+                    <label>Address</label>
+                    <input type="text" id="dropoffAddress" placeholder="Address" readonly />
+                  </div>
+                  <div class="form-row-3">
+                    <div class="form-group">
+                      <label>City</label>
+                      <input type="text" id="dropoffCity" placeholder="City" readonly />
+                    </div>
+                    <div class="form-group">
+                      <label>State</label>
+                      <input type="text" id="dropoffState" placeholder="State" readonly />
+                    </div>
+                    <div class="form-group">
+                      <label>Zip</label>
+                      <input type="text" id="dropoffZip" placeholder="Zip" readonly />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Number of Passengers</label>
+                  <input type="number" id="passengers" min="1" max="20" value="1" required />
+                </div>
+
+                <div class="form-group">
+                  <label>Vehicle Type</label>
+                  <select id="vehicleType" required>
+                    <option value="">Select vehicle</option>
+                    <option value="sedan">Sedan</option>
+                    <option value="suv">SUV Limousine</option>
+                    <option value="stretch">Stretch Limousine</option>
+                    <option value="luxury">Luxury Sedan</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>Special Instructions</label>
+                  <textarea id="specialInstructions" rows="3" placeholder="Any special requirements..."></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Create Reservation</button>
+              </form>
+            </div>
+            <div class="map-panel">
+              <div class="map-controls">
+                <label for="userMapView">Map View:</label>
+                <select id="userMapView" class="map-view-selector">
+                  <option value="OpenStreetMap">OpenStreetMap</option>
+                  <option value="OpenStreetMap Dark">OpenStreetMap Dark</option>
+                  <option value="Satellite">Satellite</option>
+                  <option value="Street (Carto Light)">Street (Carto Light)</option>
+                  <option value="Street (Carto Dark)">Street (Carto Dark)</option>
+                  <option value="Topographic">Topographic</option>
+                  <option value="Transport">Transport</option>
+                </select>
+              </div>
+              <div class="driver-status-panel">
+                <div class="driver-status-header">
+                  <span class="status-title">🚗 Live Drivers</span>
+                  <span class="status-count" id="driverCount">0</span>
+                </div>
+                <div id="driverStatusList" class="driver-status-list"></div>
+              </div>
+              <div id="userMap" class="map"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Driver View -->
+        <section id="driverView" class="view">
+          <div class="split-layout">
+            <div class="form-panel">
+              <h2 class="panel-title">Available Reservations</h2>
+              <div id="availableReservations" class="reservations-list"></div>
+            </div>
+            <div class="map-panel">
+              <div class="map-controls">
+                <label for="driverMapView">Map View:</label>
+                <select id="driverMapView" class="map-view-selector">
+                  <option value="OpenStreetMap">OpenStreetMap</option>
+                  <option value="OpenStreetMap Dark">OpenStreetMap Dark</option>
+                  <option value="Satellite">Satellite</option>
+                  <option value="Street (Carto Light)">Street (Carto Light)</option>
+                  <option value="Street (Carto Dark)">Street (Carto Dark)</option>
+                  <option value="Topographic">Topographic</option>
+                  <option value="Transport">Transport</option>
+                </select>
+              </div>
+              <div id="driverMap" class="map"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- All Reservations List View -->
+        <section id="reservationsView" class="view">
+          <div class="reservations-panel">
+            <h2 class="panel-title">All Reservations</h2>
+            <div class="filter-bar">
+              <button class="filter-btn active" data-filter="all">All</button>
+              <button class="filter-btn" data-filter="pending">Pending</button>
+              <button class="filter-btn" data-filter="accepted">Accepted</button>
+              <button class="filter-btn" data-filter="completed">Completed</button>
+            </div>
+            <div id="allReservationsList" class="reservations-table"></div>
+          </div>
+        </section>
+
+        <!-- Farm-out Reservations List View -->
+        <section id="farm-out_reservations_View" class="view">
+          <div class="reservations-panel">
+            <h2 class="panel-title">Farm-out Reservations</h2>
+            <div class="filter-bar">
+              <button class="filter-btn active" data-filter="all">All</button>
+              <button class="filter-btn" data-filter="pending">Pending</button>
+              <button class="filter-btn" data-filter="accepted">Accepted</button>
+              <button class="filter-btn" data-filter="completed">Completed</button>
+            </div>
+            <div id="allReservations" class="reservations-table"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module" src="main.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/ChatManager.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/ProgressLogger.js"></script>
+    <script src="https://storage.googleapis.com/rosebud_staticfiles/OGP.js"></script>
+  </body>
+</html>

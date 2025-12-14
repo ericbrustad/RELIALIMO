@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RELIA🐂LIMO™ - Management System</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🐂</text></svg>" />
+    <!-- Load environment variables first -->
+    <script src="env.js"></script>
+    <link rel="stylesheet" href="my-office.css" />
+    <link rel="stylesheet" href="accounts.css" />
+    <link rel="stylesheet" href="quotes.css" />
+    <link rel="stylesheet" href="calendar.css" />
+    <link rel="stylesheet" href="user-menu.css" />
+    <style>
+      /* Main section visibility control */
+      .app-main-section {
+        display: none !important;
+      }
+      .app-main-section.active {
+        display: block !important;
+      }
+      
+      /* Ensure only one header shows */
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <!-- UNIFIED HEADER -->
+      <header class="header">
+        <div class="header-content">
+          <div class="header-left">
+            <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™</h1>
+          </div>
+          <div class="main-nav">
+            <button class="nav-btn" data-section="new-reservation" onclick="openNewReservation()"><span>New Reservation</span><span style="font-size: 24px;">➕</span></button>
+            <button class="nav-btn" data-section="dashboard" onclick="switchMainSection('dashboard')"><span>Farmout Dashboard</span><span style="font-size: 24px;">🏠</span></button>
+            <button class="nav-btn active" data-section="office" onclick="switchMainSection('office')"><span>Office</span><span style="font-size: 24px;">🏢</span></button>
+            <button class="nav-btn" data-section="accounts" onclick="switchMainSection('accounts')"><span>Accounts</span><span style="font-size: 24px;">👤</span></button>
+            <button class="nav-btn" data-section="calendar" onclick="switchMainSection('calendar')"><span>Calendar</span><span style="font-size: 24px;">📅</span></button>
+            <button class="nav-btn" data-section="quotes" onclick="switchMainSection('quotes')"><span>Quotes</span><span style="font-size: 24px;">📋</span></button>
+            <button class="nav-btn" data-section="reservations" onclick="switchMainSection('reservations')"><span>Reservations</span><span style="font-size: 24px;">🚗</span></button>
+            <button class="nav-btn" data-section="dispatch" onclick="switchMainSection('dispatch')"><span>Dispatch</span><span style="font-size: 24px;">🚙</span></button>
+            <button class="nav-btn" data-section="network" onclick="switchMainSection('network')"><span>Network</span><span style="font-size: 24px;">🌐</span></button>
+            <button class="nav-btn" data-section="settle" onclick="switchMainSection('settle')"><span>Settle</span><span style="font-size: 24px;">💰</span></button>
+            <button class="nav-btn" data-section="receivables" onclick="switchMainSection('receivables')"><span>Receivables</span><span style="font-size: 24px;">📊</span></button>
+            <button class="nav-btn" data-section="payables" onclick="switchMainSection('payables')"><span>Payables</span><span style="font-size: 24px;">💳</span></button>
+            <button class="nav-btn" data-section="memos" onclick="switchMainSection('memos')"><span>Memos</span><span style="font-size: 24px;">📝</span></button>
+            <button class="nav-btn" data-section="files" onclick="switchMainSection('files')"><span>Files</span><span style="font-size: 24px;">📁</span></button>
+            <button class="nav-btn" data-section="tools" onclick="switchMainSection('tools')"><span>Tools</span><span style="font-size: 24px;">🔧</span></button>
+            <button class="nav-btn" data-section="reports" onclick="switchMainSection('reports')"><span>Reports</span><span style="font-size: 24px;">📈</span></button>
+          </div>
+        </div>
+      </header>
+
+      <!-- FARMOUT DASHBOARD SECTION (User View, Driver View, Farm-out) -->
+      <div id="dashboardSection" class="app-main-section">
+        <iframe src="index-reservations.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- OFFICE SECTION -->
+      <div id="officeSection" class="app-main-section active">
+        <iframe src="my-office.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- ACCOUNTS SECTION -->
+      <div id="accountsSection" class="app-main-section">
+        <iframe src="accounts.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- CALENDAR SECTION -->
+      <div id="calendarSection" class="app-main-section">
+        <iframe src="calendar.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- QUOTES SECTION -->
+      <div id="quotesSection" class="app-main-section">
+        <iframe src="quotes.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- RESERVATIONS SECTION -->
+      <div id="reservationsSection" class="app-main-section">
+        <iframe src="reservations-list.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- DISPATCH SECTION -->
+      <div id="dispatchSection" class="app-main-section">
+        <iframe src="dispatch-grid.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- NETWORK SECTION -->
+      <div id="networkSection" class="app-main-section">
+        <iframe src="network.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- SETTLE SECTION -->
+      <div id="settleSection" class="app-main-section">
+        <iframe src="settle.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- RECEIVABLES SECTION -->
+      <div id="receivablesSection" class="app-main-section">
+        <iframe src="receivables.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- PAYABLES SECTION -->
+      <div id="payablesSection" class="app-main-section">
+        <iframe src="payables.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- MEMOS SECTION -->
+      <div id="memosSection" class="app-main-section">
+        <iframe src="memos.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- FILES SECTION -->
+      <div id="filesSection" class="app-main-section">
+        <iframe src="files.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- TOOLS SECTION -->
+      <div id="toolsSection" class="app-main-section">
+        <iframe src="tools.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- REPORTS SECTION -->
+      <div id="reportsSection" class="app-main-section">
+        <iframe src="reports.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- NEW RESERVATION SECTION -->
+      <div id="new-reservationSection" class="app-main-section">
+        <iframe src="reservation-form.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+    </div>
+
+    <script>
+      function openNewReservation() {
+        switchMainSection('new-reservation');
+      }
+
+      function switchMainSection(section) {
+        console.log('Switching to section:', section);
+        
+        // Update nav button active state
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+          btn.classList.remove('active');
+          if (btn.dataset.section === section) {
+            btn.classList.add('active');
+          }
+        });
+
+        // Force hide all sections first - remove active class
+        document.querySelectorAll('.app-main-section').forEach(sec => {
+          sec.classList.remove('active');
+        });
+
+        // Show selected section
+        const sectionElement = document.getElementById(section + 'Section');
+        if (sectionElement) {
+          sectionElement.classList.add('active');
+          console.log('✓ Activated section:', section);
+        } else {
+          console.error('Section not found:', section + 'Section');
+        }
+      }
+
+      // Listen for messages from iframes
+      window.addEventListener('message', function(event) {
+        if (event.data.action === 'switchSection') {
+          switchMainSection(event.data.section);
+        } else if (event.data.action === 'switchToDashboard') {
+          // Switch to dashboard first
+          switchMainSection('dashboard');
+          // Then send message to dashboard iframe to switch view
+          setTimeout(() => {
+            const dashboardIframe = document.querySelector('#dashboardSection iframe');
+            if (dashboardIframe && dashboardIframe.contentWindow) {
+              dashboardIframe.contentWindow.postMessage({
+                action: 'switchView',
+                view: event.data.view
+              }, '*');
+            }
+          }, 100);
+        } else if (event.data.action === 'navigateToSystemMapping') {
+          // Switch to Office section
+          switchMainSection('office');
+          // Then send message to office iframe to navigate to System Settings > System Mapping
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({
+                action: 'navigateToSystemSettings',
+                page: 'system-mapping'
+              }, '*');
+            }
+          }, 100);
+        }
+      });
+    </script>
+
+    <!-- Authentication Protection & User Menu -->
+    <script type="module" src="auth-guard.js"></script>
+    <script type="module" src="user-menu.js"></script>
+  </body>
+</html>
