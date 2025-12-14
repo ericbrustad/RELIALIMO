@@ -1,18 +1,20 @@
 # 🔐 Authentication Quick Reference Card
 
 ## Sign-In Page
-**URL:** `https://relialimo.netlify.app/auth.html`
+**URL:** `https://relialimo.com/auth.html`
 
 ### Demo Accounts (One-Click Sign In)
 ```
 👨‍💼 Admin          📋 Dispatcher      🚗 Driver
 admin@...         dispatcher@...     driver@...
-G0dD@mnNutj08!     DemoDispatcher123! DemoDriver123!
+Newhouse2025!     DemoDispatcher123! DemoDriver123!
+admin@...         dispatcher@...     driver@...
+Newhouse2025!    DemoDispatcher123! DemoDriver123!
 ```
 Just click the colored button!
 
 ## Main App
-**URL:** `https://relialimo.netlify.app`
+**URL:** `https://relialimo.com`
 - Shows user menu in header
 - Protected by auth-guard.js
 - Auto-redirects if not signed in
@@ -72,8 +74,8 @@ window.ENV = {
 ### Supabase Auth URLs
 **Supabase Dashboard** → Settings → Authentication
 ```
-Site URL: https://relialimo.netlify.app
-Redirect: https://relialimo.netlify.app
+Site URL: https://relialimo.com
+Redirect: https://relialimo.com
 ```
 
 ## UI Structure
@@ -213,7 +215,7 @@ Open DevTools (F12) to:
 You have a fully functional authentication system. 
 
 **To use:**
-1. Go to `https://relialimo.netlify.app/auth.html`
+1. Go to `https://relialimo.netlify.com`
 2. Click a demo button
 3. You're signed in! 🎉
 

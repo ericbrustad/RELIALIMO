@@ -85,8 +85,8 @@ Three demo accounts for testing different roles:
 
 ### 👨‍💼 Admin
 ```
-Email: admin@relialimo.demo
-Password: G0dD@mnNutj08!
+Email: eric@relialimo.com
+Password: Newhouse2025!
 Role: admin
 Access: Full system control
 ```
