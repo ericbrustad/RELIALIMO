@@ -1,4 +1,5 @@
-# RELIA<img width="622" height="525" alt="image" src="https://github.com/user-attachments/assets/3309196b-d9c9-448b-89bb-10a359535f9f" />
+# RELIA<img width="424" height="484" alt="bull-icon" src="https://github.com/user-attachments/assets/af40d54d-fd45-420e-8236-e945a7c667b7" />
+
 LIMO™ Red Bull Logo Update
 
 ## Update Complete ✅
