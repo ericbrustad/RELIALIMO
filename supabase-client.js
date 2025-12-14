@@ -20,19 +20,93 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 console.log('✅ Supabase REST API client initialized');
 
+const SESSION_STORAGE_KEY = 'supabase_session';
+
+function loadStoredSession() {
+  try {
+    const session = localStorage.getItem(SESSION_STORAGE_KEY);
+    return session ? JSON.parse(session) : null;
+  } catch (error) {
+    console.error('❌ Failed to parse stored session:', error);
+    return null;
+  }
+}
+
+function persistSession(session) {
+  if (!session) return;
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+
+  if (session.access_token) {
+    localStorage.setItem('supabase_access_token', session.access_token);
+  }
+
+  notifySessionChange();
+}
+
+function notifySessionChange() {
+  const session = loadStoredSession();
+  window.dispatchEvent(new CustomEvent('supabase-session-change', { detail: session }));
+}
+
 // Mock Supabase client for buildless environment
 // This is a minimal mock that allows imports to work without throwing errors
 export const supabase = {
   url: supabaseUrl,
   key: supabaseAnonKey,
   auth: {
-    getUser: async () => ({ data: { user: null }, error: null }),
-    getSession: async () => ({ data: { session: null }, error: null }),
-    signInWithPassword: async () => ({ data: null, error: 'Use api-service.js' }),
-    signOut: async () => ({ error: null }),
+    getUser: async () => {
+      const session = loadStoredSession();
+      return { data: { user: session?.user || null }, error: null };
+    },
+    getSession: async () => {
+      const session = loadStoredSession();
+      return { data: { session: session || null }, error: null };
+    },
+    signInWithPassword: async ({ email, password }) => {
+      const result = await signInWithEmail(email, password);
+
+      if (!result.success) {
+        return { data: null, error: { message: result.error || 'Sign in failed' } };
+      }
+
+      const session = result.session || {
+        access_token: result.access_token,
+        user: result.user
+      };
+
+      persistSession(session);
+
+      return {
+        data: {
+          session,
+          user: result.user
+        },
+        error: null
+      };
+    },
+    signOut: async () => {
+      const result = await signOut();
+      return { error: result.success ? null : { message: result.error || 'Sign out failed' } };
+    },
     onAuthStateChange: (callback) => {
-      console.log('⚠️ Auth state listener: use api-service.js instead');
-      return () => {};
+      console.log('ℹ️ Auth state listener registered');
+
+      const handler = (event) => {
+        const session = event?.detail ?? loadStoredSession();
+        const eventName = session ? 'SIGNED_IN' : 'SIGNED_OUT';
+        callback?.(eventName, session);
+      };
+
+      // Fire once with the current state
+      handler({ detail: loadStoredSession() });
+
+      window.addEventListener('storage', handler);
+      window.addEventListener('supabase-session-change', handler);
+
+      return () => {
+        window.removeEventListener('storage', handler);
+        window.removeEventListener('supabase-session-change', handler);
+      };
     }
   },
   from: (table) => ({
@@ -69,12 +143,8 @@ export async function testSupabaseConnection() {
 // Get current user from localStorage (session-based auth)
 export async function getCurrentUser() {
   try {
-    const session = localStorage.getItem('supabase_session');
-    if (session) {
-      const sessionData = JSON.parse(session);
-      return sessionData.user || null;
-    }
-    return null;
+    const session = loadStoredSession();
+    return session?.user || null;
   } catch (error) {
     console.error('Error getting current user:', error);
     return null;
@@ -84,8 +154,7 @@ export async function getCurrentUser() {
 // Get current session from localStorage
 export async function getCurrentSession() {
   try {
-    const session = localStorage.getItem('supabase_session');
-    return session ? JSON.parse(session) : null;
+    return loadStoredSession();
   } catch (error) {
     console.error('Error getting current session:', error);
     return null;
@@ -115,8 +184,7 @@ export async function signInWithEmail(email, password) {
     }
     
     // Store session
-    localStorage.setItem('supabase_session', JSON.stringify(data));
-    localStorage.setItem('supabase_access_token', data.access_token);
+    persistSession(data);
     
     console.log('✅ Signed in:', email);
     return { 
@@ -135,8 +203,10 @@ export async function signInWithEmail(email, password) {
 export async function signOut() {
   try {
     // Clear session from localStorage
-    localStorage.removeItem('supabase_session');
+    localStorage.removeItem(SESSION_STORAGE_KEY);
     localStorage.removeItem('supabase_access_token');
+
+    notifySessionChange();
     
     console.log('✅ Signed out');
     return { success: true };

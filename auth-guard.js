@@ -55,10 +55,13 @@ export class AuthGuard {
 
 // Call on page load
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🔐 Auth guard disabled - allowing public access');
-  // Authentication disabled - allow public access
-  // await AuthGuard.protectPage();
-  // AuthGuard.setupAuthListener();
+  console.log('🔐 Auth guard enabled - protecting page');
+  try {
+    await AuthGuard.protectPage();
+    AuthGuard.setupAuthListener();
+  } catch (error) {
+    console.error('❌ Failed to initialize auth guard:', error);
+  }
 });
 
 export default AuthGuard;
