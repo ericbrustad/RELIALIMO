@@ -2,12 +2,66 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getSupabaseCredentials } from './supabase-config.js';
 
 const msg = document.getElementById('msg');
+const roleParam = new URLSearchParams(window.location.search).get('role');
+const userRole = roleParam || 'Super Admin';
+const isSuperAdmin = userRole === 'Super Admin';
+
+const magicForm = document.getElementById('magic-form');
+const magicLinkDescription = document.getElementById('magic-link-description');
+const magicLinkBadge = document.getElementById('magic-link-badge');
+const magicLinkRole = document.getElementById('magic-link-role');
 
 function setMessage(text, variant = '') {
   if (!msg) return;
   msg.textContent = text;
   msg.classList.toggle('error', variant === 'error');
   msg.classList.toggle('success', variant === 'success');
+}
+
+function magicLinkEnabledInSettings() {
+  const storedValue = localStorage.getItem('magicLinkEnabled');
+  if (storedValue === null) return true;
+  return storedValue === 'true';
+}
+
+function updateMagicLinkAvailability() {
+  const enabled = magicLinkEnabledInSettings();
+  const showMagicLink = enabled && isSuperAdmin;
+
+  if (magicForm) {
+    magicForm.hidden = !showMagicLink;
+    magicForm.classList.toggle('is-hidden', !showMagicLink);
+    magicForm.querySelectorAll('input, button').forEach((el) => {
+      el.disabled = !showMagicLink;
+    });
+  }
+
+  if (magicLinkRole) {
+    magicLinkRole.textContent = `Viewing as ${userRole}`;
+  }
+
+  if (!magicLinkBadge || !magicLinkDescription) return;
+
+  if (!enabled) {
+    magicLinkBadge.textContent = 'Magic link disabled';
+    magicLinkBadge.className = 'status-chip disabled';
+    magicLinkDescription.textContent =
+      'Magic link sign-in is turned off in System Settings. Contact a Super Admin to enable it again.';
+    return;
+  }
+
+  if (!isSuperAdmin) {
+    magicLinkBadge.textContent = 'Restricted';
+    magicLinkBadge.className = 'status-chip restricted';
+    magicLinkDescription.textContent =
+      'Magic link sign-in is available only to Super Admins. Please sign in with your password or ask an admin for help.';
+    return;
+  }
+
+  magicLinkBadge.textContent = 'Magic link available';
+  magicLinkBadge.className = 'status-chip enabled';
+  magicLinkDescription.textContent =
+    'Magic link sign-in is enabled for Super Admins. Use your Supabase email to request a link.';
 }
 
 let supabase;
@@ -69,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
   redirectIfSignedIn();
 
   const loginForm = document.getElementById('login-form');
-  const magicForm = document.getElementById('magic-form');
+  updateMagicLinkAvailability();
 
   if (loginForm) {
     loginForm.addEventListener('submit', handlePasswordSignIn);

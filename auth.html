@@ -22,6 +22,16 @@
         <button type="submit">Sign in</button>
       </form>
 
+      <section class="magic-link-availability" aria-live="polite">
+        <div class="magic-link-status">
+          <span id="magic-link-badge" class="status-chip enabled">Magic link available</span>
+          <span id="magic-link-role" class="role-chip">Viewing as Super Admin</span>
+        </div>
+        <p id="magic-link-description" class="auth-hint">
+          Magic link sign-in is enabled for Super Admins. Use your Supabase email to request a link.
+        </p>
+      </section>
+
       <form id="magic-form" class="auth-form auth-form--secondary">
         <label class="auth-label" for="magic-email">Email for magic link</label>
         <input id="magic-email" name="email" type="email" placeholder="Email for magic link" required />
