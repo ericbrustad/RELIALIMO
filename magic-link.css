@@ -1,0 +1,287 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  background: #f5f5f5;
+  color: #333;
+}
+
+.magic-link-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.settings-sidebar {
+  width: 220px;
+  background: #ffffff;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.embedded .settings-sidebar {
+  display: none;
+}
+
+.settings-nav {
+  padding: 15px 0;
+}
+
+.settings-nav-item {
+  display: block;
+  padding: 10px 20px;
+  color: #333;
+  text-decoration: none;
+  font-size: 13px;
+  transition: background 0.2s;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.settings-nav-item:hover {
+  background: #f5f5f5;
+}
+
+.settings-nav-section {
+  margin-top: 5px;
+}
+
+.settings-nav-item.active-section {
+  font-weight: 600;
+  color: #2c5282;
+  background: #e6f2ff;
+  border-left-color: #4a90e2;
+  cursor: default;
+}
+
+.settings-nav-subitem {
+  display: block;
+  padding: 8px 20px 8px 40px;
+  color: #666;
+  text-decoration: none;
+  font-size: 12px;
+  transition: all 0.2s;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.settings-nav-subitem:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.settings-nav-subitem.active {
+  background: #e6f2ff;
+  color: #2c5282;
+  font-weight: 500;
+  border-left-color: #4a90e2;
+}
+
+.magic-link-main {
+  flex: 1;
+  background: #ffffff;
+  padding: 24px 32px 40px;
+  min-height: 100vh;
+}
+
+.magic-link-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.breadcrumb {
+  margin: 0 0 4px 0;
+  font-size: 12px;
+  color: #6b7280;
+  letter-spacing: 0.2px;
+}
+
+.magic-link-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.magic-link-subtitle {
+  margin: 6px 0 0 0;
+  font-size: 13px;
+  color: #4b5563;
+  max-width: 640px;
+}
+
+.access-pill {
+  padding: 8px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.magic-card {
+  margin-top: 22px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-head h3 {
+  margin: 0;
+  font-size: 17px;
+  color: #111827;
+}
+
+.card-head p {
+  margin: 6px 0 0;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d1d5db;
+  transition: 0.3s;
+  border-radius: 999px;
+}
+
+.slider:before {
+  position: absolute;
+  content: '';
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .slider {
+  background-color: #10b981;
+}
+
+input:checked + .slider:before {
+  transform: translateX(22px);
+}
+
+input:disabled + .slider {
+  background-color: #e5e7eb;
+  cursor: not-allowed;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.enabled {
+  background: #ecfdf3;
+  color: #065f46;
+  border: 1px solid #bbf7d0;
+}
+
+.status-badge.disabled {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+
+.role-chip {
+  padding: 6px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.helper-text {
+  margin: 10px 0 0 0;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.note-card {
+  padding: 12px;
+  border-radius: 6px;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  font-size: 13px;
+  color: #374151;
+}
+
+.note-card strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #111827;
+}
+
+.embedded .magic-link-main {
+  min-height: 100%;
+}
+
+.embedded .magic-link-header {
+  padding-top: 8px;
+}
