@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Magic Link - RELIA🐂LIMO™</title>
+    <link rel="stylesheet" href="magic-link.css" />
+  </head>
+  <body>
+    <script>
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+        document.body.classList.add('embedded');
+      }
+    </script>
+    <div class="magic-link-container">
+      <aside class="settings-sidebar">
+        <nav class="settings-nav">
+          <a href="#" class="settings-nav-item">Contact Information</a>
+          <a href="#" class="settings-nav-item">Company Preferences</a>
+          <a href="#" class="settings-nav-item">System Users</a>
+          <a href="#" class="settings-nav-item">Policies</a>
+          <a href="#" class="settings-nav-item">ReadBack Script Templates</a>
+          <a href="#" class="settings-nav-item">Messaging & Template Settings</a>
+          <a href="#" class="settings-nav-item">Calendar Settings</a>
+          <a href="#" class="settings-nav-item">Online Reservations</a>
+          <a href="#" class="settings-nav-item">Payment Gateway</a>
+          <a href="#" class="settings-nav-item">Third-party Plug-ins</a>
+
+          <div class="settings-nav-section">
+            <div class="settings-nav-item active-section">System Settings</div>
+            <a href="service-types.html" class="settings-nav-subitem">Service Types</a>
+            <a href="#" class="settings-nav-subitem">Partner Settings</a>
+            <a href="system-mapping.html" class="settings-nav-subitem">System Mapping</a>
+            <a href="#" class="settings-nav-subitem">Data Reduction</a>
+            <a href="#" class="settings-nav-subitem">Electronic Fax</a>
+            <a href="magic-link.html" class="settings-nav-subitem active">Magic Link</a>
+            <a href="sms-provider.html" class="settings-nav-subitem">Sms Provider</a>
+            <a href="#" class="settings-nav-subitem">LimoAnywhere Pay</a>
+            <a href="#" class="settings-nav-subitem">Digital Marketing</a>
+            <a href="appearance.html" class="settings-nav-subitem">Appearance</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="magic-link-main">
+        <header class="magic-link-header">
+          <div>
+            <p class="breadcrumb">Office / Company Settings / System Settings</p>
+            <h1 class="magic-link-title">Magic Link Access</h1>
+            <p class="magic-link-subtitle">
+              Toggle Supabase magic link sign-in for your account. Only users with Super Admin access can change or enable this
+              option for the organization.
+            </p>
+          </div>
+          <div class="access-pill">🔒 Super Admin only</div>
+        </header>
+
+        <section class="magic-card">
+          <div class="card-head">
+            <div>
+              <h3>Magic link sign-in</h3>
+              <p>Control whether users can request Supabase magic link emails on the login page.</p>
+            </div>
+            <label class="switch" aria-label="Toggle magic link access">
+              <input type="checkbox" id="magic-link-toggle" />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="status-row">
+            <span id="magic-link-status" class="status-badge enabled">Magic links enabled</span>
+            <span id="role-chip" class="role-chip">Super Admin view</span>
+          </div>
+          <p id="magic-link-helper" class="helper-text">
+            Users with Super Admin access can continue to request Supabase magic link sign-in emails.
+          </p>
+
+          <div class="note-grid">
+            <div class="note-card">
+              <strong>Access control</strong>
+              Magic Link is restricted to Super Admins. Other roles can review settings but cannot change them.
+            </div>
+            <div class="note-card">
+              <strong>Applies to login</strong>
+              Use this switch to control whether the magic link option should be shown on <code>auth.html</code>. Wire it to your
+              backend when ready to enforce the preference for all users.
+            </div>
+            <div class="note-card">
+              <strong>Local preview</strong>
+              Changes save in your browser for demo purposes. Backend wiring can replace this with an API call when ready.
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="magic-link.js"></script>
+  </body>
+</html>
