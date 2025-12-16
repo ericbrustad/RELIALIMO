@@ -173,12 +173,8 @@
               <!-- Customer Accounts List -->
               <div class="sidebar-section" style="flex: 1;">
                 <label class="sidebar-label">Customer Accounts</label>
-                <select class="accounts-listbox" size="15">
-                  <option value="1">John Smith - ABC Corp</option>
-                  <option value="2">Sarah Johnson - Tech Solutions</option>
-                  <option value="3">Michael Brown - Enterprise Inc</option>
-                  <option value="4">Emily Davis - Global Services</option>
-                  <option value="5">David Wilson - Metro Group</option>
+                <select id="accountsListbox" class="accounts-listbox" size="15">
+                  <option value="">-- No accounts yet --</option>
                 </select>
               </div>
 
@@ -336,7 +332,7 @@
                   <div class="account-form-right">
                     <div class="form-row">
                       <label>Account Number</label>
-                      <input type="text" class="form-control" value="22379" />
+                      <input type="text" id="accountNumber" class="form-control" value="" readonly style="background-color: #f5f5f5;" />
                     </div>
 
                     <div class="form-row">

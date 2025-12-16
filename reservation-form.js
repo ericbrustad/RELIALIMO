@@ -36,6 +36,10 @@ class ReservationForm {
       this.initializeConfirmationNumber();
       console.log('✅ initializeConfirmationNumber complete');
       
+      // Load drivers from Supabase
+      this.loadDrivers();
+      console.log('✅ loadDrivers initiated');
+      
       this.setupEventListeners();
       console.log('✅ setupEventListeners complete');
       
@@ -51,6 +55,35 @@ class ReservationForm {
       console.log('✅ ReservationForm.init() finished successfully');
     } catch (error) {
       console.error('❌ Error during init:', error);
+    }
+  }
+  
+  async loadDrivers() {
+    try {
+      const apiModule = await import('./api-service.js');
+      await apiModule.setupAPI();
+      const drivers = await apiModule.fetchDrivers();
+      
+      const driverSelect = document.getElementById('driverSelect');
+      if (driverSelect && drivers && drivers.length > 0) {
+        driverSelect.innerHTML = '<option value="">-- Select Driver --</option>' +
+          drivers.map(driver => {
+            const driverName = `${driver.first_name} ${driver.last_name}`;
+            return `<option value="${driver.id}">${driverName}</option>`;
+          }).join('');
+        console.log(`✅ Loaded ${drivers.length} drivers from Supabase`);
+      } else {
+        if (driverSelect) {
+          driverSelect.innerHTML = '<option value="">-- No drivers found --</option>';
+        }
+        console.warn('⚠️ No drivers found in database');
+      }
+    } catch (error) {
+      console.error('❌ Error loading drivers:', error);
+      const driverSelect = document.getElementById('driverSelect');
+      if (driverSelect) {
+        driverSelect.innerHTML = '<option value="">-- Error loading drivers --</option>';
+      }
     }
   }
 
@@ -928,7 +961,7 @@ class ReservationForm {
     this.closeModal();
   }
 
-  createNewAccount(passengerInfo) {
+  async createNewAccount(passengerInfo) {
     // Get data from modal form fields
     const modal = document.getElementById('accountModal');
     const firstName = modal.querySelector('#accountFirstName')?.value?.trim() || '';
@@ -946,7 +979,7 @@ class ReservationForm {
     // Get next account number using db module
     const nextAccountNumber = db.getNextAccountNumber();
     
-    // Prepare account data for db module
+    // Prepare account data for db module with proper field mappings
     const accountData = {
       id: nextAccountNumber.toString(),
       account_number: nextAccountNumber.toString(),
@@ -954,14 +987,15 @@ class ReservationForm {
       last_name: lastName,
       company_name: company,
       phone: phone,
+      cell_phone: phone, // Map phone to cell_phone (Cellular Phone 1)
       email: email,
       type: 'individual',
       status: 'active',
       created_at: new Date().toISOString()
     };
 
-    // Save account using db module
-    const saved = db.saveAccount(accountData);
+    // Save account using db module (now syncs to Supabase)
+    const saved = await db.saveAccount(accountData);
     
     if (!saved) {
       alert('Error saving account. Please try again.');
@@ -981,7 +1015,7 @@ class ReservationForm {
     this.closeModal();
 
     // Show success message and ask if user wants to open account page
-    if (confirm(`New account created successfully!\nAccount Number: ${nextAccountNumber}\n\nWould you like to open the account page to add more details?`)) {
+    if (confirm(`New account created successfully!\nAccount Number: ${nextAccountNumber}\n\nAccount saved to Supabase database.\n\nWould you like to open the account page to add more details?`)) {
       // Store account ID for accounts page to load
       localStorage.setItem('currentAccountId', nextAccountNumber.toString());
       
@@ -1847,9 +1881,9 @@ class ReservationForm {
 
       console.log('💾 Reservation saved to db:', saved);
       
-      // Save passenger to passengers database
+      // Save passenger to passengers database (with Supabase sync)
       if (reservationData.passenger.firstName || reservationData.passenger.lastName) {
-        const passengerSaved = db.savePassenger({
+        const passengerSaved = await db.savePassenger({
           firstName: reservationData.passenger.firstName,
           lastName: reservationData.passenger.lastName,
           phone: reservationData.passenger.phone,
@@ -1858,19 +1892,38 @@ class ReservationForm {
           altContactPhone: reservationData.passenger.altContactPhone,
           notes: `From reservation ${currentConfNumber}`
         });
-        console.log('👤 Passenger saved to db:', passengerSaved);
+        console.log('👤 Passenger saved to db and Supabase:', passengerSaved);
       }
       
-      // Save booking agent to booking agents database
+      // Save booking agent to booking agents database (with Supabase sync)
       if (reservationData.bookedBy.firstName || reservationData.bookedBy.lastName) {
-        const bookingAgentSaved = db.saveBookingAgent({
+        const bookingAgentSaved = await db.saveBookingAgent({
           firstName: reservationData.bookedBy.firstName,
           lastName: reservationData.bookedBy.lastName,
           phone: reservationData.bookedBy.phone,
           email: reservationData.bookedBy.email,
           notes: `From reservation ${currentConfNumber}`
         });
-        console.log('📞 Booking agent saved to db:', bookingAgentSaved);
+        console.log('📞 Booking agent saved to db and Supabase:', bookingAgentSaved);
+      }
+      
+      // If passenger/booking agent matches billing, also update the account
+      if (this.passengerMatchesBilling || this.bookingMatchesBilling) {
+        const accountNumber = reservationData.billingAccount.account;
+        if (accountNumber && accountNumber.trim()) {
+          const account = db.getAllAccounts().find(a => a.id === accountNumber || a.account_number === accountNumber);
+          if (account) {
+            const updatedAccount = {
+              ...account,
+              phone: reservationData.billingAccount.cellPhone || account.phone,
+              cell_phone: reservationData.billingAccount.cellPhone || account.cell_phone,
+              email: reservationData.billingAccount.email || account.email,
+              updated_at: new Date().toISOString()
+            };
+            await db.saveAccount(updatedAccount);
+            console.log('✅ Account updated with latest info');
+          }
+        }
       }
 
       // Save route stops if available

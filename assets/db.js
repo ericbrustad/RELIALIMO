@@ -16,7 +16,7 @@ export const db = {
   // ACCOUNTS
   // ===================================
   
-  saveAccount(accountData) {
+  async saveAccount(accountData) {
     try {
       const accounts = this.getAllAccounts();
       
@@ -34,6 +34,16 @@ export const db = {
       }
       
       localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
+      
+      // Also sync to Supabase
+      try {
+        const apiModule = await import('../api-service.js');
+        await apiModule.saveAccountToSupabase(accountData);
+        console.log('✅ Account synced to Supabase');
+      } catch (error) {
+        console.warn('⚠️ Could not sync account to Supabase:', error.message);
+      }
+      
       return accountData;
     } catch (error) {
       console.error('Error saving account:', error);
@@ -272,7 +282,7 @@ export const db = {
   // PASSENGERS
   // ===================================
   
-  savePassenger(passenger) {
+  async savePassenger(passenger) {
     try {
       const passengers = this.getAllPassengers();
       
@@ -298,6 +308,16 @@ export const db = {
       }
       
       localStorage.setItem(STORAGE_KEYS.PASSENGERS, JSON.stringify(passengers));
+      
+      // Also sync to Supabase
+      try {
+        const apiModule = await import('../api-service.js');
+        await apiModule.savePassengerToSupabase(passenger);
+        console.log('✅ Passenger synced to Supabase');
+      } catch (error) {
+        console.warn('⚠️ Could not sync passenger to Supabase:', error.message);
+      }
+      
       return passenger;
     } catch (error) {
       console.error('Error saving passenger:', error);
@@ -332,7 +352,7 @@ export const db = {
   // BOOKING AGENTS
   // ===================================
   
-  saveBookingAgent(agent) {
+  async saveBookingAgent(agent) {
     try {
       const agents = this.getAllBookingAgents();
       
@@ -358,6 +378,16 @@ export const db = {
       }
       
       localStorage.setItem(STORAGE_KEYS.BOOKING_AGENTS, JSON.stringify(agents));
+      
+      // Also sync to Supabase
+      try {
+        const apiModule = await import('../api-service.js');
+        await apiModule.saveBookingAgentToSupabase(agent);
+        console.log('✅ Booking agent synced to Supabase');
+      } catch (error) {
+        console.warn('⚠️ Could not sync booking agent to Supabase:', error.message);
+      }
+      
       return agent;
     } catch (error) {
       console.error('Error saving booking agent:', error);

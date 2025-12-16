@@ -15,7 +15,13 @@ class Accounts {
       // Load database module
       await this.loadDbModule();
       
+      // Load API service for Supabase
+      await this.loadApiService();
+      
       this.setupEventListeners();
+      
+      // Load accounts list
+      await this.loadAccountsList();
       
       // Check if we should load a specific account
       const currentAccountId = localStorage.getItem('currentAccountId');
@@ -29,6 +35,46 @@ class Accounts {
       console.log('✅ Accounts initialization complete');
     } catch (error) {
       console.error('❌ Error initializing Accounts:', error);
+    }
+  }
+  
+  async loadApiService() {
+    try {
+      const module = await import('./api-service.js');
+      this.api = module;
+      await module.setupAPI();
+      console.log('✅ API service loaded');
+    } catch (error) {
+      console.warn('⚠️ Failed to load API service:', error);
+    }
+  }
+  
+  async loadAccountsList() {
+    try {
+      // Load from localStorage first
+      const localAccounts = this.db?.getAllAccounts() || [];
+      
+      // Try to load from Supabase
+      let supabaseAccounts = [];
+      if (this.api && this.api.fetchAccounts) {
+        supabaseAccounts = await this.api.fetchAccounts() || [];
+      }
+      
+      // Merge accounts (prefer Supabase if available)
+      const allAccounts = supabaseAccounts.length > 0 ? supabaseAccounts : localAccounts;
+      
+      // Populate the listbox
+      const listbox = document.getElementById('accountsListbox');
+      if (listbox && allAccounts.length > 0) {
+        listbox.innerHTML = allAccounts.map(acc => {
+          const displayName = `${acc.account_number || acc.id} - ${acc.first_name || ''} ${acc.last_name || ''} ${acc.company_name ? '- ' + acc.company_name : ''}`.trim();
+          return `<option value="${acc.account_number || acc.id}">${displayName}</option>`;
+        }).join('');
+      }
+      
+      console.log(`✅ Loaded ${allAccounts.length} accounts`);
+    } catch (error) {
+      console.error('❌ Error loading accounts list:', error);
     }
   }
   
@@ -57,23 +103,24 @@ class Accounts {
       
       console.log('✅ Loading account:', account);
       
-      // Populate form fields
+      // Populate form fields with proper mapping
       const accountNumberEl = document.getElementById('accountNumber');
       const firstNameEl = document.getElementById('acctFirstName');
       const lastNameEl = document.getElementById('acctLastName');
       const companyEl = document.getElementById('acctCompany');
-      const cellPhone1El = document.getElementById('acctCellPhone1');
-      const emailEl = document.getElementById('acctEmail2');
+      const cellPhone1El = document.getElementById('acctCellPhone1'); // Maps to cell_phone
+      const emailEl = document.getElementById('acctEmail2'); // Maps to email
       
       if (accountNumberEl) {
         accountNumberEl.value = account.account_number || account.id;
         accountNumberEl.setAttribute('readonly', true);
+        accountNumberEl.style.backgroundColor = '#f5f5f5';
       }
       if (firstNameEl) firstNameEl.value = account.first_name || '';
       if (lastNameEl) lastNameEl.value = account.last_name || '';
       if (companyEl) companyEl.value = account.company_name || '';
-      if (cellPhone1El) cellPhone1El.value = account.phone || '';
-      if (emailEl) emailEl.value = account.email || '';
+      if (cellPhone1El) cellPhone1El.value = account.cell_phone || account.phone || ''; // Cellular Phone 1
+      if (emailEl) emailEl.value = account.email || ''; // Accounts Email
       
       // Switch to accounts tab
       this.switchAccountTab('info');
@@ -389,68 +436,73 @@ class Accounts {
     alert(`Edit company: ${companyName}\n\nFull company editing form will be available here.`);
   }
 
-  saveAccount() {
+  async saveAccount() {
     console.log('💾 saveAccount() called');
     
     try {
-      // Collect form data from the Account Info tab
+      // Get account number (readonly field)
+      const accountNumber = document.getElementById('accountNumber')?.value?.trim();
+      
+      // Collect form data with proper field mappings
       const accountData = {
+        id: accountNumber || Date.now().toString(),
+        account_number: accountNumber || Date.now().toString(),
         first_name: document.getElementById('acctFirstName')?.value?.trim() || '',
         last_name: document.getElementById('acctLastName')?.value?.trim() || '',
         company_name: document.getElementById('acctCompany')?.value?.trim() || '',
         phone: document.getElementById('acctPhone')?.value?.trim() || '',
-        email: document.getElementById('acctEmail')?.value?.trim() || '',
+        cell_phone: document.getElementById('acctCellPhone1')?.value?.trim() || '', // Cellular Phone 1
+        email: document.getElementById('acctEmail2')?.value?.trim() || '', // Accounts Email
         status: 'active',
-        type: 'individual'
+        type: 'individual',
+        updated_at: new Date().toISOString()
       };
 
       console.log('📝 Account data to save:', accountData);
 
       // Validate required fields
-      if (!accountData.first_name || !accountData.last_name) {
-        console.warn('⚠️ First Name and Last Name are required');
+      if (!accountData.first_name || !accountData.last_name || !accountData.email) {
+        alert('First Name, Last Name, and Email are required');
+        console.warn('⚠️ Required fields missing');
         return;
       }
 
-      // Import db module and save
-      import('./assets/db.js').then(module => {
-        try {
-          const db = module.db;
-          
-          if (!db) {
-            console.error('❌ db module not found');
-            return;
-          }
-          
-          console.log('✅ db module loaded:', db);
-          const saved = db.saveAccount(accountData);
-          
-          if (!saved) {
-            console.error('❌ saveAccount returned null/false');
-            return;
-          }
-          
-          console.log('✅ Account saved successfully:', saved);
+      // Use existing db module
+      if (!this.db) {
+        console.error('❌ Database module not loaded');
+        alert('Database module not available. Please refresh the page.');
+        return;
+      }
+      
+      console.log('✅ Saving account with Supabase sync...');
+      const saved = await this.db.saveAccount(accountData);
+      
+      if (!saved) {
+        console.error('❌ saveAccount returned null/false');
+        alert('Error saving account. Please try again.');
+        return;
+      }
+      
+      console.log('✅ Account saved successfully:', saved);
+      alert('Account saved successfully!\nData synced to Supabase database.');
 
-          // Show success feedback
-          const btn = document.getElementById('saveAccountBtn');
-          if (btn) {
-            const originalText = btn.textContent;
-            btn.textContent = '✓ Saved!';
-            btn.style.background = '#28a745';
-            btn.disabled = true;
+      // Show success feedback
+      const btn = document.getElementById('saveAccountBtn');
+      if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Saved!';
+        btn.style.background = '#28a745';
+        btn.disabled = true;
 
-            setTimeout(() => {
-              btn.textContent = originalText;
-              btn.style.background = '';
-              btn.disabled = false;
-            }, 2000);
-          }
-        } catch (innerError) {
-          console.error('❌ Error in save handler:', innerError);
-        }
-      }).catch(error => {
-        console.error('❌ Error importing db module:', error);
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '';
+          btn.disabled = false;
+        }, 2000);
+      }
+      
+      // Reload accounts list
+      await this.loadAccountsList();
       });
     } catch (error) {
       console.error('❌ Error saving account:', error);

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabase Integration Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+    }
+    h2 {
+      color: #555;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 10px;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .success {
+      background: #28a745;
+    }
+    .error {
+      background: #dc3545;
+    }
+    .result {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+    .status.pending {
+      background: #ffc107;
+      color: #000;
+    }
+    .status.success {
+      background: #28a745;
+      color: white;
+    }
+    .status.failed {
+      background: #dc3545;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>🐂 RELIA LIMO - Supabase Integration Test</h1>
+  
+  <div class="test-section">
+    <h2>1. Connection Test <span id="status1" class="status pending">Pending</span></h2>
+    <button onclick="testConnection()">Test Supabase Connection</button>
+    <div id="result1" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>2. Account Creation Test <span id="status2" class="status pending">Pending</span></h2>
+    <button onclick="testAccountCreation()">Create Test Account (Bob Smith)</button>
+    <div id="result2" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>3. Fetch Accounts Test <span id="status3" class="status pending">Pending</span></h2>
+    <button onclick="testFetchAccounts()">Fetch All Accounts</button>
+    <div id="result3" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>4. Passenger Creation Test <span id="status4" class="status pending">Pending</span></h2>
+    <button onclick="testPassengerCreation()">Create Test Passenger (Jane Doe)</button>
+    <div id="result4" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>5. Booking Agent Creation Test <span id="status5" class="status pending">Pending</span></h2>
+    <button onclick="testBookingAgentCreation()">Create Test Booking Agent (Mike Agent)</button>
+    <div id="result5" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>6. Fetch Drivers Test <span id="status6" class="status pending">Pending</span></h2>
+    <button onclick="testFetchDrivers()">Fetch All Drivers</button>
+    <div id="result6" class="result"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>Test Summary</h2>
+    <div id="summary" class="result">
+      Click buttons above to run tests...
+    </div>
+  </div>
+
+  <script type="module">
+    import { setupAPI, saveAccountToSupabase, fetchAccounts, savePassengerToSupabase, saveBookingAgentToSupabase, fetchDrivers } from './api-service.js';
+    
+    let apiReady = false;
+    
+    // Initialize API
+    window.initializeAPI = async function() {
+      try {
+        await setupAPI();
+        apiReady = true;
+        console.log('✅ API initialized');
+        return true;
+      } catch (error) {
+        console.error('❌ API initialization failed:', error);
+        return false;
+      }
+    };
+    
+    // Test 1: Connection
+    window.testConnection = async function() {
+      const result = document.getElementById('result1');
+      const status = document.getElementById('status1');
+      
+      result.textContent = 'Testing connection...';
+      status.className = 'status pending';
+      
+      try {
+        const success = await window.initializeAPI();
+        if (success) {
+          result.textContent = '✅ SUCCESS!\n\nSupabase connection established.\nAPI client initialized successfully.';
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else {
+          throw new Error('Failed to initialize API');
+        }
+      } catch (error) {
+        result.textContent = `❌ FAILED\n\nError: ${error.message}\n\nCheck:\n- env.js has correct SUPABASE_URL and SUPABASE_ANON_KEY\n- You are logged in to Supabase\n- Network connection is working`;
+        status.className = 'status failed';
+        status.textContent = 'Failed';
+      }
+      
+      updateSummary();
+    };
+    
+    // Test 2: Create Account
+    window.testAccountCreation = async function() {
+      const result = document.getElementById('result2');
+      const status = document.getElementById('status2');
+      
+      if (!apiReady) {
+        await window.initializeAPI();
+      }
+      
+      result.textContent = 'Creating test account...';
+      status.className = 'status pending';
+      
+      try {
+        const testAccount = {
+          account_number: '30000',
+          first_name: 'Bob',
+          last_name: 'Smith',
+          email: 'bob.smith@test.com',
+          cell_phone: '555-1234',
+          company_name: 'Test Company',
+          status: 'active'
+        };
+        
+        const saved = await saveAccountToSupabase(testAccount);
+        
+        if (saved) {
+          result.textContent = `✅ SUCCESS!\n\nAccount created in Supabase:\n${JSON.stringify(saved, null, 2)}`;
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else {
+          throw new Error('saveAccountToSupabase returned null');
+        }
+      } catch (error) {
+        result.textContent = `❌ FAILED\n\nError: ${error.message}\n\nPossible causes:\n- Schema not deployed to Supabase\n- RLS policies blocking insert\n- No organization membership\n- Missing required fields`;
+        status.className = 'status failed';
+        status.textContent = 'Failed';
+      }
+      
+      updateSummary();
+    };
+    
+    // Test 3: Fetch Accounts
+    window.testFetchAccounts = async function() {
+      const result = document.getElementById('result3');
+      const status = document.getElementById('status3');
+      
+      if (!apiReady) {
+        await window.initializeAPI();
+      }
+      
+      result.textContent = 'Fetching accounts...';
+      status.className = 'status pending';
+      
+      try {
+        const accounts = await fetchAccounts();
+        
+        if (accounts && accounts.length > 0) {
+          result.textContent = `✅ SUCCESS!\n\nFound ${accounts.length} account(s):\n${JSON.stringify(accounts, null, 2)}`;
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else if (accounts && accounts.length === 0) {
+          result.textContent = '⚠️ No accounts found.\n\nDatabase is empty. Run Test 2 to create an account.';
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else {
+          throw new Error('fetchAccounts returned null');
+        }
+      } catch (error) {
+        result.textContent = `❌ FAILED\n\nError: ${error.message}`;
+        status.className = 'status failed';
+        status.textContent = 'Failed';
+      }
+      
+      updateSummary();
+    };
+    
+    // Test 4: Create Passenger
+    window.testPassengerCreation = async function() {
+      const result = document.getElementById('result4');
+      const status = document.getElementById('status4');
+      
+      if (!apiReady) {
+        await window.initializeAPI();
+      }
+      
+      result.textContent = 'Creating test passenger...';
+      status.className = 'status pending';
+      
+      try {
+        const testPassenger = {
+          firstName: 'Jane',
+          lastName: 'Doe',
+          email: 'jane.doe@test.com',
+          phone: '555-5678',
+          altContactName: 'John Doe',
+          altContactPhone: '555-9999'
+        };
+        
+        const saved = await savePassengerToSupabase(testPassenger);
+        
+        if (saved) {
+          result.textContent = `✅ SUCCESS!\n\nPassenger created in Supabase:\n${JSON.stringify(saved, null, 2)}`;
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else {
+          throw new Error('savePassengerToSupabase returned null');
+        }
+      } catch (error) {
+        result.textContent = `❌ FAILED\n\nError: ${error.message}`;
+        status.className = 'status failed';
+        status.textContent = 'Failed';
+      }
+      
+      updateSummary();
+    };
+    
+    // Test 5: Create Booking Agent
+    window.testBookingAgentCreation = async function() {
+      const result = document.getElementById('result5');
+      const status = document.getElementById('status5');
+      
+      if (!apiReady) {
+        await window.initializeAPI();
+      }
+      
+      result.textContent = 'Creating test booking agent...';
+      status.className = 'status pending';
+      
+      try {
+        const testAgent = {
+          firstName: 'Mike',
+          lastName: 'Agent',
+          email: 'mike.agent@agency.com',
+          phone: '555-7777'
+        };
+        
+        const saved = await saveBookingAgentToSupabase(testAgent);
+        
+        if (saved) {
+          result.textContent = `✅ SUCCESS!\n\nBooking agent created in Supabase:\n${JSON.stringify(saved, null, 2)}`;
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else {
+          throw new Error('saveBookingAgentToSupabase returned null');
+        }
+      } catch (error) {
+        result.textContent = `❌ FAILED\n\nError: ${error.message}`;
+        status.className = 'status failed';
+        status.textContent = 'Failed';
+      }
+      
+      updateSummary();
+    };
+    
+    // Test 6: Fetch Drivers
+    window.testFetchDrivers = async function() {
+      const result = document.getElementById('result6');
+      const status = document.getElementById('status6');
+      
+      if (!apiReady) {
+        await window.initializeAPI();
+      }
+      
+      result.textContent = 'Fetching drivers...';
+      status.className = 'status pending';
+      
+      try {
+        const drivers = await fetchDrivers();
+        
+        if (drivers && drivers.length > 0) {
+          result.textContent = `✅ SUCCESS!\n\nFound ${drivers.length} driver(s):\n${JSON.stringify(drivers, null, 2)}`;
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else if (drivers && drivers.length === 0) {
+          result.textContent = '⚠️ No drivers found.\n\nAdd a driver in Supabase:\n\nINSERT INTO drivers (organization_id, first_name, last_name, email, status)\nVALUES (\n  (SELECT id FROM organizations LIMIT 1),\n  \'Test\',\n  \'Driver\',\n  \'test.driver@example.com\',\n  \'ACTIVE\'\n);';
+          status.className = 'status success';
+          status.textContent = 'Success';
+        } else {
+          throw new Error('fetchDrivers returned null');
+        }
+      } catch (error) {
+        result.textContent = `❌ FAILED\n\nError: ${error.message}`;
+        status.className = 'status failed';
+        status.textContent = 'Failed';
+      }
+      
+      updateSummary();
+    };
+    
+    // Update Summary
+    function updateSummary() {
+      const statuses = document.querySelectorAll('.status');
+      let total = statuses.length;
+      let passed = 0;
+      let failed = 0;
+      let pending = 0;
+      
+      statuses.forEach(s => {
+        if (s.classList.contains('success')) passed++;
+        else if (s.classList.contains('failed')) failed++;
+        else if (s.classList.contains('pending')) pending++;
+      });
+      
+      const summary = document.getElementById('summary');
+      summary.textContent = `Total Tests: ${total}\n✅ Passed: ${passed}\n❌ Failed: ${failed}\n⏳ Pending: ${pending}\n\n${passed === total ? '🎉 ALL TESTS PASSED!' : failed > 0 ? '⚠️ Some tests failed. Check errors above.' : '⏳ Run all tests to see results.'}`;
+    }
+  </script>
+</body>
+</html>
