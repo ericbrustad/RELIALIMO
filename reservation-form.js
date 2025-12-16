@@ -1014,20 +1014,11 @@ class ReservationForm {
 
     this.closeModal();
 
-    // Show success message and ask if user wants to open account page
-    if (confirm(`New account created successfully!\nAccount Number: ${nextAccountNumber}\n\nAccount saved to Supabase database.\n\nWould you like to open the account page to add more details?`)) {
-      // Store account ID for accounts page to load
-      localStorage.setItem('currentAccountId', nextAccountNumber.toString());
-      
-      // Open accounts page in parent window or new tab
-      if (window.parent && window.parent !== window) {
-        // If in iframe, tell parent to navigate
-        window.parent.postMessage({ action: 'navigate', url: 'accounts.html' }, '*');
-      } else {
-        // Otherwise open in new tab
-        window.open('accounts.html', '_blank');
-      }
-    }
+    // Store account ID for accounts page to load
+    localStorage.setItem('currentAccountId', nextAccountNumber.toString());
+    
+    // Navigate directly to accounts page with all data
+    window.location.href = 'accounts.html';
   }
 
   closeModal() {
