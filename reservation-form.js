@@ -1224,11 +1224,11 @@ class ReservationForm {
     });
   }
 
-  createAccountFromBilling() {
+  async createAccountFromBilling() {
     console.log('🚀 createAccountFromBilling() called');
     
     try {
-      // Get billing data
+      // Get ALL billing data
       const firstName = document.getElementById('billingFirstName')?.value?.trim() || '';
       const lastName = document.getElementById('billingLastName')?.value?.trim() || '';
       const phone = document.getElementById('billingPhone')?.value?.trim() || '';
@@ -1242,28 +1242,44 @@ class ReservationForm {
         return;
       }
 
-      // Open the account modal for editing
-      this.openAddAccountModal();
+      // Get next account number using db module
+      const nextAccountNumber = db.getNextAccountNumber();
+      
+      // Prepare account data for db module with proper field mappings
+      const accountData = {
+        id: nextAccountNumber.toString(),
+        account_number: nextAccountNumber.toString(),
+        first_name: firstName,
+        last_name: lastName,
+        company_name: company,
+        phone: phone,
+        cell_phone: phone, // Map phone to cell_phone (Cellular Phone 1)
+        email: email,
+        type: 'individual',
+        status: 'active',
+        created_at: new Date().toISOString()
+      };
 
-      // Pre-fill the modal with billing data
-      setTimeout(() => {
-        const modal = document.getElementById('accountModal');
-        if (modal) {
-          const modalFirstName = modal.querySelector('#accountFirstName');
-          const modalLastName = modal.querySelector('#accountLastName');
-          const modalPhone = modal.querySelector('#accountPhone');
-          const modalEmail = modal.querySelector('#accountEmail');
-          const modalCompany = modal.querySelector('#accountCompany');
+      // Save account using db module (now syncs to Supabase)
+      const saved = await db.saveAccount(accountData);
+      
+      if (!saved) {
+        alert('Error saving account. Please try again.');
+        return;
+      }
 
-          if (modalFirstName) modalFirstName.value = firstName;
-          if (modalLastName) modalLastName.value = lastName;
-          if (modalPhone) modalPhone.value = phone;
-          if (modalEmail) modalEmail.value = email;
-          if (modalCompany) modalCompany.value = company;
+      // Increment account number for next account
+      db.setNextAccountNumber(nextAccountNumber + 1);
 
-          console.log('✅ Account modal pre-filled with billing data');
-        }
-      }, 100);
+      // Update billing account search field with account number
+      const billingAccountSearch = document.getElementById('billingAccountSearch');
+      billingAccountSearch.value = nextAccountNumber.toString();
+
+      // Store account ID for accounts page to load
+      localStorage.setItem('currentAccountId', nextAccountNumber.toString());
+      
+      // Navigate directly to accounts page with all data
+      window.location.href = 'accounts.html';
     } catch (error) {
       console.error('❌ Error in createAccountFromBilling:', error);
       alert('Error creating account: ' + error.message);
