@@ -150,6 +150,23 @@
             }
           });
         }
+
+        // Support deep-links and standalone redirects: index.html?section=...&url=...
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const section = params.get('section');
+          const url = params.get('url');
+          if (section) {
+            if (url) {
+              const decoded = decodeURIComponent(url);
+              const frame = document.querySelector(`#${CSS.escape(section)}Section iframe`);
+              if (frame && decoded) frame.src = decoded;
+            }
+            switchMainSection(section);
+          }
+        } catch {
+          // ignore
+        }
       });
 
       function switchMainSection(section) {
@@ -177,6 +194,9 @@
           console.error('Section not found:', section + 'Section');
         }
       }
+
+      // Expose for modules/pages that want to call into the shell
+      window.switchMainSection = switchMainSection;
 
       // Listen for messages from iframes
       window.addEventListener('message', function(event) {

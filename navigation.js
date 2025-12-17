@@ -1,8 +1,10 @@
 const SECTION_ROUTES = {
+  dashboard: 'index-reservations.html',
   office: 'my-office.html',
   accounts: 'accounts.html',
   quotes: 'quotes.html',
   calendar: 'calendar.html',
+  'new-reservation': 'reservation-form.html',
   reservations: 'reservations-list.html',
   dispatch: 'dispatch-grid.html',
   network: 'network.html',
@@ -26,12 +28,27 @@ export function navigateToSection(section) {
     return false;
   }
 
-  const currentPath = (window.location.pathname || '').toLowerCase();
-  if (currentPath.endsWith(`/${route}`.toLowerCase()) || currentPath.endsWith(`\\${route}`.toLowerCase())) {
-    return true; // already here
+  // Index-only entrypoint:
+  // - If inside an iframe, ask the parent shell to switch sections.
+  // - If standalone, route back to index.html and load this page inside the correct iframe.
+  if (window.self !== window.top) {
+    window.parent.postMessage({ action: 'switchSection', section }, '*');
+    return true;
   }
 
-  window.location.href = route;
+  const currentFile = String(window.location.pathname || '').split(/[\\/]/).pop()?.toLowerCase() || '';
+  if (currentFile === 'index.html' || currentFile === '') {
+    // If index.html defines switchMainSection, use it. Otherwise fall back to query routing.
+    if (typeof window.switchMainSection === 'function') {
+      window.switchMainSection(section);
+      return true;
+    }
+    window.location.href = `index.html?section=${encodeURIComponent(section)}`;
+    return true;
+  }
+
+  const url = `${route}${window.location.search || ''}${window.location.hash || ''}`;
+  window.location.href = `index.html?section=${encodeURIComponent(section)}&url=${encodeURIComponent(url)}`;
   return true;
 }
 
