@@ -395,6 +395,16 @@ class Accounts {
     } else {
       console.warn('⚠️ saveAccountBtn not found');
     }
+
+    // Clear Account form button (next to SAVE)
+    const clearAccountFormBtn = document.getElementById('clearAccountFormBtn');
+    if (clearAccountFormBtn) {
+      clearAccountFormBtn.addEventListener('click', () => {
+        console.log('🧹 Clear Account form button clicked');
+        this.addNewAccount();
+      });
+      console.log('✅ Clear Account form button listener attached');
+    }
     
     // Main navigation buttons
     wireMainNav();
