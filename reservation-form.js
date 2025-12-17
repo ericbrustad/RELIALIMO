@@ -2309,6 +2309,9 @@ class ReservationForm {
       return;
     }
 
+    const getValue = (id) => document.getElementById(id)?.value ?? '';
+    const getText = (id) => document.getElementById(id)?.textContent ?? '';
+
     const topSaveBtn = document.querySelector('.btn-save') || document.getElementById('saveBtn');
     const bottomSaveBtn = document.getElementById('saveReservationBtn');
     const saveButtons = [topSaveBtn, bottomSaveBtn].filter(Boolean);
@@ -2330,42 +2333,42 @@ class ReservationForm {
       // Collect all form data
       const reservationData = {
         billingAccount: {
-          account: document.getElementById('billingAccountSearch').value,
-          company: document.getElementById('billingCompany').value,
-          firstName: document.getElementById('billingFirstName').value,
-          lastName: document.getElementById('billingLastName').value,
-          cellPhone: document.getElementById('billingPhone').value,
-          email: document.getElementById('billingEmail').value
+          account: getValue('billingAccountSearch'),
+          company: getValue('billingCompany'),
+          firstName: getValue('billingFirstName'),
+          lastName: getValue('billingLastName'),
+          cellPhone: getValue('billingPhone'),
+          email: getValue('billingEmail')
         },
         bookedBy: {
-          firstName: document.getElementById('bookedByFirstName').value,
-          lastName: document.getElementById('bookedByLastName').value,
-          phone: document.getElementById('bookedByPhone').value,
-          email: document.getElementById('bookedByEmail').value
+          firstName: getValue('bookedByFirstName'),
+          lastName: getValue('bookedByLastName'),
+          phone: getValue('bookedByPhone'),
+          email: getValue('bookedByEmail')
         },
         passenger: {
-          firstName: document.getElementById('passengerFirstName').value,
-          lastName: document.getElementById('passengerLastName').value,
-          phone: document.getElementById('passengerPhone').value,
-          email: document.getElementById('passengerEmail').value,
-          altContactName: document.getElementById('altContactName').value,
-          altContactPhone: document.getElementById('altContactPhone').value
+          firstName: getValue('passengerFirstName'),
+          lastName: getValue('passengerLastName'),
+          phone: getValue('passengerPhone'),
+          email: getValue('passengerEmail'),
+          altContactName: getValue('altContactName'),
+          altContactPhone: getValue('altContactPhone')
         },
         routing: {
           stops: this.getStops(),
-          tripNotes: document.getElementById('tripNotes').value,
-          billPaxNotes: document.getElementById('billPaxNotes').value,
-          dispatchNotes: document.getElementById('dispatchNotes').value,
-          partnerNotes: document.getElementById('partnerNotes').value
+          tripNotes: getValue('tripNotes'),
+          billPaxNotes: getValue('billPaxNotes'),
+          dispatchNotes: getValue('dispatchNotes'),
+          partnerNotes: getValue('partnerNotes')
         },
         details: {
-          efarmStatus: document.getElementById('efarmStatus').value,
-          affiliate: document.getElementById('affiliate').value,
-          referenceNum: document.getElementById('referenceNum').value,
-          driver: document.getElementById('driverAssignment').value
+          efarmStatus: getValue('efarmStatus') || getValue('eFarmStatus'),
+          affiliate: getValue('affiliate'),
+          referenceNum: getValue('referenceNum') || getValue('referenceNumber'),
+          driver: getValue('driverAssignment') || getValue('driverSelect')
         },
         costs: this.getCostData(),
-        grandTotal: parseFloat(document.getElementById('grandTotal').textContent)
+        grandTotal: parseFloat(getText('grandTotal'))
       };
 
       // Get current confirmation number
@@ -2552,8 +2555,12 @@ class ReservationForm {
         throw new Error('Failed to save reservation');
       }
     } catch (error) {
+      const message = error?.message || (typeof error === 'string' ? error : 'Unknown error');
       console.error('❌ Error saving reservation:', error);
-      alert(`Error saving reservation: ${error.message}`);
+      if (error?.stack) {
+        console.error('Stack:', error.stack);
+      }
+      alert(`Error saving reservation: ${message}`);
       
       // Reset buttons
       originalButtonState.forEach(s => {
@@ -2663,27 +2670,28 @@ class ReservationForm {
   }
 
   getCostData() {
+    const v = (id, fallback = '0') => document.getElementById(id)?.value ?? fallback;
     return {
-      flat: { qty: document.getElementById('flatQty').value, rate: document.getElementById('flatRate').value },
-      hour: { qty: document.getElementById('hourQty').value, rate: document.getElementById('hourRate').value },
-      unit: { qty: document.getElementById('unitQty').value, rate: document.getElementById('unitRate').value },
-      ot: { qty: document.getElementById('otQty').value, rate: document.getElementById('otRate').value },
-      stops: { qty: document.getElementById('stopsQty').value, rate: document.getElementById('stopsRate').value },
-      gratuity: document.getElementById('gratuityQty').value,
-      fuel: document.getElementById('fuelQty').value,
-      discount: document.getElementById('discountQty').value,
-      pass: { qty: document.getElementById('passQty').value, rate: document.getElementById('passRate').value },
-      mile: { qty: document.getElementById('mileQty').value, rate: document.getElementById('mileRate').value },
-      surface: document.getElementById('surfaceQty').value,
-      baseRate: document.getElementById('baseRateQty').value,
-      admin: { qty: document.getElementById('adminQty').value, rate: document.getElementById('adminRate').value }
+      flat: { qty: v('flatQty'), rate: v('flatRate') },
+      hour: { qty: v('hourQty'), rate: v('hourRate') },
+      unit: { qty: v('unitQty'), rate: v('unitRate') },
+      ot: { qty: v('otQty'), rate: v('otRate') },
+      stops: { qty: v('stopsQty'), rate: v('stopsRate') },
+      gratuity: v('gratuityQty'),
+      fuel: v('fuelQty'),
+      discount: v('discountQty'),
+      pass: { qty: v('passQty'), rate: v('passRate') },
+      mile: { qty: v('mileQty'), rate: v('mileRate') },
+      surface: v('surfaceQty'),
+      baseRate: v('baseRateQty'),
+      admin: { qty: v('adminQty'), rate: v('adminRate') }
     };
   }
 
   validateForm() {
     // Check required fields
-    const passengerFirstName = document.getElementById('passengerFirstName').value;
-    const passengerLastName = document.getElementById('passengerLastName').value;
+    const passengerFirstName = document.getElementById('passengerFirstName')?.value || '';
+    const passengerLastName = document.getElementById('passengerLastName')?.value || '';
 
     if (!passengerFirstName || !passengerLastName) {
       alert('Please enter passenger name.');
@@ -2919,7 +2927,10 @@ class ReservationForm {
             ${notes ? '<div style="font-size: 11px; color: #666; margin-top: 3px; font-style: italic;">📝 ' + notes + '</div>' : ''}
           </td>
           <td>${timeIn || 'N/A'}</td>
-          <td><button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="(typeof removeStop === 'function' ? removeStop('${stopId}') : this.closest('tr').remove())">✕ Remove</button></td>
+          <td>
+            <button class="btn-edit" style="padding: 4px 8px; font-size: 12px; cursor: pointer; margin-right: 6px;" onclick="(typeof editStop === 'function' ? editStop('${stopId}') : null)">Edit</button>
+            <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="(typeof removeStop === 'function' ? removeStop('${stopId}') : this.closest('tr').remove())">✕ Remove</button>
+          </td>
         `;
 
         tableBody.appendChild(row);

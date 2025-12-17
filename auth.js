@@ -10,12 +10,25 @@ const magicForm = document.getElementById('magic-form');
 const magicLinkDescription = document.getElementById('magic-link-description');
 const magicLinkBadge = document.getElementById('magic-link-badge');
 const magicLinkRole = document.getElementById('magic-link-role');
+const forgotForm = document.getElementById('forgot-form');
+const forgotToggle = document.getElementById('forgot-toggle');
 
 function setMessage(text, variant = '') {
   if (!msg) return;
   msg.textContent = text;
   msg.classList.toggle('error', variant === 'error');
   msg.classList.toggle('success', variant === 'success');
+}
+
+function isValidEmail(email) {
+  // Practical validation (not RFC-perfect) to prevent obvious bad input.
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email);
+}
+
+function showForgotForm(show) {
+  if (!forgotForm) return;
+  forgotForm.hidden = !show;
+  forgotForm.classList.toggle('is-hidden', !show);
 }
 
 function magicLinkEnabledInSettings() {
@@ -90,6 +103,11 @@ async function handlePasswordSignIn(event) {
   const email = form.email.value.trim();
   const password = form.password.value;
 
+  if (!isValidEmail(email)) {
+    setMessage('Please enter a valid email address.', 'error');
+    return;
+  }
+
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
@@ -109,6 +127,11 @@ async function handleMagicLink(event) {
   const email = form.email.value.trim();
   const redirectTo = `${window.location.origin}/auth/callback.html`;
 
+  if (!isValidEmail(email)) {
+    setMessage('Please enter a valid email address.', 'error');
+    return;
+  }
+
   const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
 
   if (error) {
@@ -119,6 +142,31 @@ async function handleMagicLink(event) {
   setMessage('Check your email for the sign-in link.', 'success');
 }
 
+async function handleForgotPassword(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const email = form.email.value.trim();
+
+  if (!isValidEmail(email)) {
+    setMessage('Please enter a valid email address.', 'error');
+    return;
+  }
+
+  setMessage('Sending reset email…');
+
+  const redirectTo = `${window.location.origin}/auth/reset.html`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+
+  if (error) {
+    setMessage(error.message, 'error');
+    return;
+  }
+
+  setMessage('If that email exists, a reset link has been sent.', 'success');
+  showForgotForm(false);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   redirectIfSignedIn();
 
@@ -127,6 +175,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (loginForm) {
     loginForm.addEventListener('submit', handlePasswordSignIn);
+  }
+
+  if (forgotToggle) {
+    forgotToggle.addEventListener('click', () => {
+      const show = forgotForm?.hidden ?? true;
+
+      // Pre-fill forgot email from login if present.
+      if (show) {
+        const loginEmail = document.getElementById('login-email')?.value?.trim();
+        const forgotEmail = document.getElementById('forgot-email');
+        if (forgotEmail && loginEmail) forgotEmail.value = loginEmail;
+      }
+
+      showForgotForm(show);
+      if (show) document.getElementById('forgot-email')?.focus();
+    });
+  }
+
+  if (forgotForm) {
+    forgotForm.addEventListener('submit', handleForgotPassword);
   }
 
   if (magicForm) {

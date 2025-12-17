@@ -10,6 +10,7 @@ class ReservationsList {
     this.setupEventListeners();
     this.setupTabSwitching();
     await this.loadReservations();
+    this.handleOpenConfFromCalendar();
   }
   
   async loadDbModule() {
@@ -75,6 +76,61 @@ class ReservationsList {
     
     // Re-attach event listeners to new elements
     this.attachRowListeners();
+  }
+
+  activateTab(tabName) {
+    // Update active state
+    document.querySelectorAll('.window-tab').forEach(t => t.classList.remove('active'));
+    const tabBtn = document.querySelector(`.window-tab[data-tab="${tabName}"]`);
+    if (tabBtn) tabBtn.classList.add('active');
+
+    // Hide all tab content
+    const ids = ['newReservationsTab', 'onlineEfarmInTab', 'unfinalizedTab', 'deletedTab', 'importTab'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+
+    // Show selected tab
+    if (tabName === 'new-reservations') {
+      const el = document.getElementById('newReservationsTab');
+      if (el) el.style.display = 'flex';
+    } else if (tabName === 'online-efarm-in') {
+      const el = document.getElementById('onlineEfarmInTab');
+      if (el) el.style.display = 'block';
+    } else if (tabName === 'unfinalized') {
+      const el = document.getElementById('unfinalizedTab');
+      if (el) el.style.display = 'block';
+    } else if (tabName === 'deleted') {
+      const el = document.getElementById('deletedTab');
+      if (el) el.style.display = 'block';
+    } else if (tabName === 'import') {
+      const el = document.getElementById('importTab');
+      if (el) el.style.display = 'block';
+    }
+  }
+
+  handleOpenConfFromCalendar() {
+    try {
+      const url = new URL(window.location.href);
+      const openConf = url.searchParams.get('openConf');
+      if (!openConf) return;
+
+      // Always activate the normal list tab first (matches the user's workflow)
+      this.activateTab('new-reservations');
+
+      // Try to open via the same click path the table uses
+      const link = document.querySelector(`#newReservationsTab .conf-link[data-conf="${CSS.escape(openConf)}"]`);
+      if (link) {
+        link.click();
+        return;
+      }
+
+      // Fallback if the row isn't rendered
+      window.location.href = `reservation-form.html?conf=${encodeURIComponent(openConf)}`;
+    } catch (e) {
+      console.warn('⚠️ Failed to open reservation from calendar:', e);
+    }
   }
   
   attachRowListeners() {

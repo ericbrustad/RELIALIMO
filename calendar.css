@@ -258,6 +258,43 @@ body {
   background: #e55a2b;
 }
 
+/* Holidays / Observances ticker */
+.holiday-ticker {
+  background: #f5f5f5;
+  border-bottom: 1px solid #ccc;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 6px 0;
+}
+
+.holiday-ticker-track {
+  display: inline-block;
+  padding-left: 100%;
+  animation: holiday-ticker-scroll 45s linear infinite;
+  font-size: 12px;
+  color: #333;
+}
+
+.holiday-ticker-item {
+  display: inline-block;
+  padding: 0 18px;
+}
+
+.holiday-ticker-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #999;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+@keyframes holiday-ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
 /* Calendar Main */
 .calendar-main {
   padding: 0;
@@ -369,6 +406,100 @@ body {
 .event-vehicle {
   font-size: 10px;
   line-height: 1.2;
+}
+
+/* Tooltip (sneak peek on hover) */
+.calendar-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 340px;
+  white-space: pre-line;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #333;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+/* Modal (popup on click) */
+.calendar-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+
+.calendar-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.calendar-modal-content {
+  position: relative;
+  z-index: 1;
+  width: min(700px, calc(100vw - 40px));
+  max-height: calc(100vh - 60px);
+  overflow: auto;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
+  margin: 30px auto;
+}
+
+.calendar-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #2c3e50;
+  color: white;
+}
+
+.calendar-modal-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.calendar-modal-close {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.calendar-modal-body {
+  padding: 12px;
+}
+
+.calendar-modal-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.calendar-modal-row:last-child {
+  border-bottom: none;
+}
+
+.calendar-modal-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+}
+
+.calendar-modal-value {
+  font-size: 12px;
+  color: #333;
+  word-break: break-word;
 }
 
 /* Responsive adjustments */

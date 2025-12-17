@@ -517,15 +517,13 @@
                 <div class="address-entry">
                   <div class="form-group" style="position: relative; z-index: 100;">
                     <label>Location Description/ Name</label>
-                    <input type="text" id="locationName" class="form-control location-name" placeholder="Search landmark, business, or enter name..." autocomplete="off" 
-                           oninput="handleLocationSearch(this.value)" />
+                          <input type="text" id="locationName" class="form-control location-name" placeholder="Search landmark, business, or enter name..." autocomplete="off" />
                     <div id="locationNameSuggestions" class="location-suggestions"></div>
                   </div>
 
                   <div class="form-group" style="position: relative; z-index: 100;">
                     <label>Address 1</label>
-                    <input type="text" id="address1" class="form-control address-input" placeholder="Start typing address..." 
-                           oninput="handleAddressSearch(this.value)" />
+                          <input type="text" id="address1" class="form-control address-input" placeholder="Start typing address..." />
                     <div id="addressSuggestions" class="address-suggestions"></div>
                   </div>
 
@@ -543,11 +541,57 @@
                       <label>State/Prov</label>
                       <select id="state" class="form-control">
                         <option value="">Select state</option>
+                        <option value="AL">AL</option>
+                        <option value="AK">AK</option>
+                        <option value="AZ">AZ</option>
+                        <option value="AR">AR</option>
                         <option value="CA">CA</option>
-                        <option value="NY">NY</option>
-                        <option value="TX">TX</option>
+                        <option value="CO">CO</option>
+                        <option value="CT">CT</option>
+                        <option value="DE">DE</option>
+                        <option value="DC">DC</option>
                         <option value="FL">FL</option>
-                        <!-- Add more states as needed -->
+                        <option value="GA">GA</option>
+                        <option value="HI">HI</option>
+                        <option value="ID">ID</option>
+                        <option value="IL">IL</option>
+                        <option value="IN">IN</option>
+                        <option value="IA">IA</option>
+                        <option value="KS">KS</option>
+                        <option value="KY">KY</option>
+                        <option value="LA">LA</option>
+                        <option value="ME">ME</option>
+                        <option value="MD">MD</option>
+                        <option value="MA">MA</option>
+                        <option value="MI">MI</option>
+                        <option value="MN">MN</option>
+                        <option value="MS">MS</option>
+                        <option value="MO">MO</option>
+                        <option value="MT">MT</option>
+                        <option value="NE">NE</option>
+                        <option value="NV">NV</option>
+                        <option value="NH">NH</option>
+                        <option value="NJ">NJ</option>
+                        <option value="NM">NM</option>
+                        <option value="NY">NY</option>
+                        <option value="NC">NC</option>
+                        <option value="ND">ND</option>
+                        <option value="OH">OH</option>
+                        <option value="OK">OK</option>
+                        <option value="OR">OR</option>
+                        <option value="PA">PA</option>
+                        <option value="RI">RI</option>
+                        <option value="SC">SC</option>
+                        <option value="SD">SD</option>
+                        <option value="TN">TN</option>
+                        <option value="TX">TX</option>
+                        <option value="UT">UT</option>
+                        <option value="VT">VT</option>
+                        <option value="VA">VA</option>
+                        <option value="WA">WA</option>
+                        <option value="WV">WV</option>
+                        <option value="WI">WI</option>
+                        <option value="WY">WY</option>
                       </select>
                     </div>
                     <div class="form-group">
@@ -1805,6 +1849,10 @@
       }
 
       // Create stop handler - saves address, airport, and FBO to trip table
+      // Global edit state for stop editing (used by Edit buttons in the table)
+      if (typeof window.editingStopId === 'undefined') {
+        window.editingStopId = null;
+      }
       function handleCreateStop() {
         console.log('➕ Creating stop...');
         
@@ -1850,8 +1898,9 @@
         if (zipCode) fullAddress += ` ${zipCode}`;
         if (country) fullAddress += `, ${country}`;
 
-        // Create stop object with ALL details including airport and FBO
-        const stopId = 'stop_' + Date.now();
+        // Create / update stop object with ALL details including airport and FBO
+        const isEditing = !!window.editingStopId;
+        const stopId = isEditing ? window.editingStopId : ('stop_' + Date.now());
         const stopData = {
           id: stopId,
           stopType: stopType,
@@ -1880,7 +1929,13 @@
         };
 
         // Save to global trips array
-        tripStops.push(stopData);
+        if (isEditing) {
+          const idx = tripStops.findIndex(stop => stop && stop.id === stopId);
+          if (idx >= 0) tripStops[idx] = stopData;
+          else tripStops.push(stopData);
+        } else {
+          tripStops.push(stopData);
+        }
         console.log('💾 Stop saved to tripStops:', tripStops);
 
         // Get table body
@@ -1892,8 +1947,9 @@
           emptyRow.remove();
         }
 
-        // Create new row with stop type badge
-        const row = document.createElement('tr');
+        // Create or update row with stop type badge
+        const existingRow = document.getElementById(stopId);
+        const row = existingRow || document.createElement('tr');
         row.id = stopId;
         row.dataset.stopId = stopId;
         // Store full stop data for reliable save/load
@@ -1954,10 +2010,15 @@
             ${notes ? '<div style="font-size: 11px; color: #666; margin-top: 3px; font-style: italic;">📝 ' + notes + '</div>' : ''}
           </td>
           <td>${timeIn || 'N/A'}</td>
-          <td><button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="removeStop('${stopId}')">✕ Remove</button></td>
+          <td>
+            <button class="btn-edit" style="padding: 4px 8px; font-size: 12px; cursor: pointer; margin-right: 6px;" onclick="editStop('${stopId}')">Edit</button>
+            <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="removeStop('${stopId}')">✕ Remove</button>
+          </td>
         `;
-        
-        tableBody.appendChild(row);
+
+        if (!existingRow) {
+          tableBody.appendChild(row);
+        }
         console.log('✅ Stop added to trip table with airport/FBO info');
 
         // Clear the form
@@ -1981,10 +2042,13 @@
         document.getElementById('fboSelect').value = '';
         document.querySelector('input[name="stopType"][value="pickup"]').checked = true;
 
+        // Clear edit state
+        window.editingStopId = null;
+
         // Show success feedback
         const createBtn = document.getElementById('createStopBtn');
-        const originalText = createBtn.textContent;
-        createBtn.textContent = '✓ Added!';
+        const originalText = 'CREATE';
+        createBtn.textContent = existingRow ? '✓ Updated!' : '✓ Added!';
         createBtn.style.background = '#28a745';
         createBtn.style.color = 'white';
         
@@ -1997,9 +2061,92 @@
         console.log('✅ Form cleared and ready for next stop');
       }
 
+      // Edit stop: load saved row data back into the address entry form
+      function editStop(stopId) {
+        console.log('✏️ Editing stop:', stopId);
+        window.editingStopId = stopId;
+
+        const row = document.getElementById(stopId);
+        if (!row) return;
+
+        const get = (k) => (row.dataset?.[k] || '').toString();
+
+        const stopType = (get('stopType') || 'stop').toLowerCase().trim();
+        const typeEl = document.querySelector(`input[name="stopType"][value="${stopType}"]`);
+        if (typeEl) typeEl.checked = true;
+
+        const setVal = (id, value) => {
+          const el = document.getElementById(id);
+          if (el) el.value = value || '';
+        };
+
+        setVal('locationName', get('locationName'));
+        setVal('address1', get('address1'));
+        setVal('address2', get('address2'));
+        setVal('city', get('city'));
+        setVal('state', get('state'));
+        setVal('zipCode', get('zipCode'));
+        setVal('country', get('country') || 'US');
+        setVal('locationPhone', get('phone'));
+        setVal('locationNotes', get('notes'));
+        setVal('timeIn', get('timeIn'));
+
+        // Airport fields (best effort)
+        const airportCode = get('airportCode');
+        if (airportCode) {
+          try {
+            const radio = document.getElementById('airport');
+            if (radio) radio.checked = true;
+            if (typeof handleLocationTypeChange === 'function') handleLocationTypeChange('airport');
+          } catch { /* ignore */ }
+          setVal('airportSelect', airportCode);
+          setVal('airportSearch', `${airportCode} - Airport`);
+          const airlineSection = document.getElementById('airlineSection');
+          if (airlineSection) airlineSection.style.display = 'block';
+          setVal('airlineCode', get('airline'));
+          setVal('airlineSearch', get('airline'));
+          setVal('flightNumber', get('flightNumber'));
+          setVal('terminalGate', get('terminalGate'));
+          setVal('flightStatus', get('flightStatus'));
+        }
+
+        // FBO fields (best effort)
+        const fboId = get('fboId');
+        if (fboId) {
+          try {
+            const radio = document.getElementById('fbo');
+            if (radio) radio.checked = true;
+            if (typeof handleLocationTypeChange === 'function') handleLocationTypeChange('fbo');
+          } catch { /* ignore */ }
+          setVal('fboSelect', fboId);
+          try {
+            if (typeof handleFBOSelection === 'function') handleFBOSelection(fboId);
+          } catch { /* ignore */ }
+        }
+
+        // Switch button to UPDATE mode
+        const createBtn = document.getElementById('createStopBtn');
+        if (createBtn) {
+          createBtn.textContent = 'UPDATE';
+          createBtn.style.background = '#ffc107';
+          createBtn.style.color = '#333';
+        }
+      }
+
       // Remove stop from table and data array
       function removeStop(stopId) {
         console.log('🗑️ Removing stop:', stopId);
+
+        // Cancel edit mode if we're deleting the row being edited
+        if (window.editingStopId === stopId) {
+          window.editingStopId = null;
+          const createBtn = document.getElementById('createStopBtn');
+          if (createBtn) {
+            createBtn.textContent = 'CREATE';
+            createBtn.style.background = '';
+            createBtn.style.color = '';
+          }
+        }
         
         // Remove from DOM
         const row = document.getElementById(stopId);

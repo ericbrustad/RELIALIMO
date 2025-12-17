@@ -1627,6 +1627,21 @@ textarea.form-control {
   transition: all 0.2s;
 }
 
+.address-table .btn-edit {
+  padding: 4px 8px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.address-table .btn-edit:hover {
+  background: #5a6268;
+}
+
 .address-table .btn-remove:hover {
   background: #c82333;
 }
