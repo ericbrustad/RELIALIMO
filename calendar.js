@@ -122,6 +122,31 @@ class Calendar {
       });
     }
 
+    const showTicker = document.getElementById('showTicker');
+    if (showTicker) {
+      showTicker.addEventListener('change', () => {
+        this.applyTickerVisibilityFromUi();
+        this.updateHolidayTicker();
+        this.saveSettingsFromUi();
+      });
+    }
+
+    const showFederal = document.getElementById('showFederalHolidays');
+    if (showFederal) {
+      showFederal.addEventListener('change', () => {
+        this.render();
+        this.saveSettingsFromUi();
+      });
+    }
+
+    const showMajor = document.getElementById('showMajorObservances');
+    if (showMajor) {
+      showMajor.addEventListener('change', () => {
+        this.render();
+        this.saveSettingsFromUi();
+      });
+    }
+
     // Launch filters button
     const launchBtn = document.getElementById('launchFilters');
     if (launchBtn) {
@@ -286,9 +311,15 @@ class Calendar {
     calendarBody.innerHTML = '';
     calendarBody.appendChild(fragment);
 
-    // Add holidays
-    const holidays = this.getUSHolidays(year).filter(h => h.date.getMonth() === monthIndex);
-    for (const h of holidays) {
+    // Add holidays / observances
+    const showFederal = document.getElementById('showFederalHolidays')?.checked ?? true;
+    const showMajor = document.getElementById('showMajorObservances')?.checked ?? false;
+    const holidayEvents = [
+      ...(showFederal ? this.getUSHolidays(year) : []),
+      ...(showMajor ? this.getMajorObservances(year) : [])
+    ].filter(h => h?.date?.getMonth?.() === monthIndex);
+
+    for (const h of holidayEvents) {
       const key = this.dateKey(h.date);
       const container = dayCellMap.get(key);
       if (!container) continue;
@@ -327,6 +358,15 @@ class Calendar {
       if (onlyRes && typeof s.onlyReservations === 'boolean') onlyRes.checked = s.onlyReservations;
       const onlyMy = document.getElementById('onlyMyEvents');
       if (onlyMy && typeof s.onlyMyEvents === 'boolean') onlyMy.checked = s.onlyMyEvents;
+
+      const showTicker = document.getElementById('showTicker');
+      if (showTicker && typeof s.showTicker === 'boolean') showTicker.checked = s.showTicker;
+      const showFed = document.getElementById('showFederalHolidays');
+      if (showFed && typeof s.showFederalHolidays === 'boolean') showFed.checked = s.showFederalHolidays;
+      const showMajor = document.getElementById('showMajorObservances');
+      if (showMajor && typeof s.showMajorObservances === 'boolean') showMajor.checked = s.showMajorObservances;
+
+      this.applyTickerVisibilityFromUi();
       const mobile = document.getElementById('mobileView');
       if (mobile && typeof s.mobileView === 'boolean') {
         mobile.checked = s.mobileView;
@@ -361,6 +401,9 @@ class Calendar {
         monthValue: dateSelector?.value || null,
         onlyReservations: document.getElementById('onlyReservations')?.checked ?? true,
         onlyMyEvents: document.getElementById('onlyMyEvents')?.checked ?? false,
+        showTicker: document.getElementById('showTicker')?.checked ?? false,
+        showFederalHolidays: document.getElementById('showFederalHolidays')?.checked ?? true,
+        showMajorObservances: document.getElementById('showMajorObservances')?.checked ?? false,
         mobileView: document.getElementById('mobileView')?.checked ?? false,
         driverFilter: document.getElementById('driverFilter')?.value ?? '',
         carFilter: document.getElementById('carFilter')?.value ?? '',
@@ -373,19 +416,33 @@ class Calendar {
     }
   }
 
+  applyTickerVisibilityFromUi() {
+    const enabled = document.getElementById('showTicker')?.checked ?? false;
+    document.body.classList.toggle('show-holiday-ticker', !!enabled);
+  }
+
   updateHolidayTicker() {
     const track = document.getElementById('holidayTickerTrack');
     if (!track) return;
+
+    const enabled = document.getElementById('showTicker')?.checked ?? false;
+    if (!enabled) {
+      track.innerHTML = '';
+      return;
+    }
+
+    const showFederal = document.getElementById('showFederalHolidays')?.checked ?? true;
+    const showMajor = document.getElementById('showMajorObservances')?.checked ?? false;
 
     const now = new Date();
     const horizon = new Date(now);
     horizon.setDate(horizon.getDate() + 120);
 
     const events = [
-      ...this.getUSHolidays(now.getFullYear()),
-      ...this.getMajorObservances(now.getFullYear()),
-      ...this.getUSHolidays(now.getFullYear() + 1),
-      ...this.getMajorObservances(now.getFullYear() + 1)
+      ...(showFederal ? this.getUSHolidays(now.getFullYear()) : []),
+      ...(showMajor ? this.getMajorObservances(now.getFullYear()) : []),
+      ...(showFederal ? this.getUSHolidays(now.getFullYear() + 1) : []),
+      ...(showMajor ? this.getMajorObservances(now.getFullYear() + 1) : [])
     ]
       .filter(e => e?.date instanceof Date && !isNaN(e.date.getTime()))
       .filter(e => e.date >= this.startOfDay(now) && e.date <= horizon)

@@ -211,6 +211,56 @@ body {
   cursor: pointer;
 }
 
+/* Toggle switches */
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle-ui {
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid #bbb;
+  background: #e6e6e6;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.toggle-ui::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #bbb;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-ui {
+  background: #3498db;
+  border-color: #3498db;
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-ui::after {
+  transform: translateX(16px);
+  border-color: #3498db;
+}
+
 .filter-selectors {
   display: flex;
   align-items: center;
@@ -260,11 +310,16 @@ body {
 
 /* Holidays / Observances ticker */
 .holiday-ticker {
+  display: none;
   background: #f5f5f5;
   border-bottom: 1px solid #ccc;
   overflow: hidden;
   white-space: nowrap;
   padding: 6px 0;
+}
+
+body.show-holiday-ticker .holiday-ticker {
+  display: block;
 }
 
 .holiday-ticker-track {
