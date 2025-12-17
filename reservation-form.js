@@ -4,6 +4,9 @@ import { MapboxService } from './MapboxService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
 import { db } from './assets/db.js';
+import { wireMainNav } from './navigation.js';
+
+const RESERVATION_DRAFT_KEY = 'relia_reservation_draft';
 
 class ReservationForm {
   constructor() {
@@ -16,6 +19,9 @@ class ReservationForm {
     this.selectedAirline = null;
     this.selectedFlight = null;
     this.selectedAffiliate = null;
+
+    this.isEditMode = false;
+    this.editConfNumber = null;
     
     this.init();
   }
@@ -32,6 +38,13 @@ class ReservationForm {
         console.log('  - Radio button:', rb.id, rb.value);
       });
       
+      // Detect edit mode (?conf=...)
+      const conf = this.getConfFromUrl();
+      if (conf) {
+        this.isEditMode = true;
+        this.editConfNumber = conf;
+      }
+
       // Initialize confirmation number
       this.initializeConfirmationNumber();
       console.log('✅ initializeConfirmationNumber complete');
@@ -51,11 +64,91 @@ class ReservationForm {
       
       this.setupTabSwitching();
       console.log('✅ setupTabSwitching complete');
+
+      // Make Stored Routing rows movable
+      try {
+        this.setupStoredRoutingDragAndDrop();
+      } catch (e) {
+        console.warn('⚠️ setupStoredRoutingDragAndDrop failed:', e);
+      }
+
+      // Listen for Account saves (popup or iframe) so we can return and fill Billing Account#
+      window.addEventListener('message', (event) => {
+        if (event?.data?.action !== 'relia:accountSaved') return;
+        const accountId = (event.data.accountId || '').toString().trim();
+        if (!accountId) return;
+
+        const billingAccountSearch = document.getElementById('billingAccountSearch');
+        if (billingAccountSearch) {
+          billingAccountSearch.value = accountId;
+        }
+
+        // Also update the displayed account number if the account exists
+        try {
+          const account = db.getAllAccounts()?.find(a => (a?.account_number ?? a?.id)?.toString() === accountId || (a?.id ?? '').toString() === accountId);
+          if (account) this.updateBillingAccountNumberDisplay(account);
+          else this.setBillingAccountNumberDisplay(accountId);
+        } catch {
+          this.setBillingAccountNumberDisplay(accountId);
+        }
+
+        // If we returned via same-window redirect, also clear the return URL
+        try { localStorage.removeItem('relia_return_to_reservation_url'); } catch { /* ignore */ }
+        try { window.focus(); } catch { /* ignore */ }
+      });
+
+      // Restore existing reservation or apply a draft copy
+      if (this.isEditMode && this.editConfNumber) {
+        this.loadExistingReservation(this.editConfNumber);
+      } else {
+        this.applyReservationDraftIfPresent();
+      }
       
       console.log('✅ ReservationForm.init() finished successfully');
     } catch (error) {
       console.error('❌ Error during init:', error);
     }
+  }
+
+  setBillingAccountNumberDisplay(value) {
+    const el = document.getElementById('billingAccountNumberDisplay');
+    if (!el) return;
+    el.textContent = (value ?? '').toString().trim();
+  }
+
+  updateBillingAccountNumberDisplay(account) {
+    const accountNumber = (account?.account_number || account?.id || '').toString().trim();
+    this.setBillingAccountNumberDisplay(accountNumber);
+  }
+
+  tryResolveBillingAccountAndUpdateDisplay() {
+    const input = document.getElementById('billingAccountSearch');
+    if (!input) return;
+    const raw = (input.value || '').toString().trim();
+    if (!raw) {
+      this.setBillingAccountNumberDisplay('');
+      return;
+    }
+
+    // Extract leading account number if the field contains "12345 - Name"
+    const candidate = raw.split('-')[0]?.trim() || raw;
+
+    try {
+      const account = db.getAllAccounts()?.find(a => {
+        const id = (a?.id ?? '').toString();
+        const acct = (a?.account_number ?? '').toString();
+        return id === candidate || acct === candidate;
+      });
+      if (account) {
+        this.updateBillingAccountNumberDisplay(account);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
+    // If we can't resolve the account, show the candidate (still useful when user manually typed it)
+    this.setBillingAccountNumberDisplay(candidate);
   }
   
   async loadDrivers() {
@@ -90,6 +183,14 @@ class ReservationForm {
   initializeConfirmationNumber() {
     const confNumberField = document.getElementById('confNumber');
     if (confNumberField) {
+      const confFromUrl = this.getConfFromUrl();
+      if (confFromUrl) {
+        confNumberField.value = confFromUrl;
+        confNumberField.setAttribute('readonly', 'true');
+        console.log('🔢 Confirmation number loaded from URL:', confFromUrl);
+        return;
+      }
+
       const nextConfNumber = db.getNextConfirmationNumber();
       confNumberField.value = nextConfNumber;
       confNumberField.setAttribute('readonly', 'true');
@@ -166,31 +267,25 @@ class ReservationForm {
       });
     }
 
-    // Save button - wire both old and new selectors
-    const saveBtn = document.querySelector('.btn-save') || document.getElementById('saveBtn');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', (e) => {
+    // Save buttons
+    const topSaveBtn = document.querySelector('.btn-save') || document.getElementById('saveBtn');
+    if (topSaveBtn) {
+      topSaveBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        this.saveReservation();
+        this.saveReservation({ sourceButton: topSaveBtn });
+      });
+    }
+
+    const bottomSaveBtn = document.getElementById('saveReservationBtn');
+    if (bottomSaveBtn) {
+      bottomSaveBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.saveReservation({ sourceButton: bottomSaveBtn });
       });
     }
 
     // Main navigation buttons
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        // Get the button element (in case emoji was clicked)
-        const button = e.target.closest('.nav-btn');
-        const section = button.dataset.section;
-        
-        if (section === 'office') {
-          window.location.href = 'my-office.html';
-        } else if (section === 'reservations') {
-          window.location.href = 'reservations-list.html';
-        } else {
-          alert(`${section} section coming soon!`);
-        }
-      });
-    });
+    wireMainNav();
 
     // View buttons (window-actions)
     document.querySelectorAll('.view-btn').forEach(btn => {
@@ -211,6 +306,47 @@ class ReservationForm {
       });
     });
 
+    // Action buttons
+    const paymentsBtn = document.querySelector('.btn-payments');
+    if (paymentsBtn) {
+      paymentsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.openBillingPaymentTab();
+      });
+    }
+
+    const printBtn = document.querySelector('.btn-print');
+    if (printBtn) {
+      printBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.print();
+      });
+    }
+
+    const copyBtn = document.querySelector('.btn-copy-action');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.copyToDraftAndNavigate('copy');
+      });
+    }
+
+    const roundTripBtn = document.querySelector('.btn-roundtrip');
+    if (roundTripBtn) {
+      roundTripBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.copyToDraftAndNavigate('roundtrip');
+      });
+    }
+
+    const emailBtn = document.querySelector('.btn-email');
+    if (emailBtn) {
+      emailBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.composeEmail();
+      });
+    }
+
     // Safety wrapper for DOM access
     const safeAddListener = (id, event, callback) => {
       const elem = document.getElementById(id);
@@ -228,9 +364,34 @@ class ReservationForm {
     });
 
     // Create stop button
-    safeAddListener('createStopBtn', 'click', () => {
-      this.createAddressRow();
-    });
+    // Bind exactly once to prevent duplicate rows (some browsers fire multiple handlers when mixing inline + JS).
+    const createStopBtn = document.getElementById('createStopBtn');
+    if (createStopBtn) {
+      if (!createStopBtn.dataset.bound) {
+        createStopBtn.dataset.bound = 'true';
+        createStopBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+
+          if (typeof window.handleCreateStop === 'function') {
+            window.handleCreateStop();
+          } else {
+            this.createAddressRow();
+          }
+
+          // Safety: ensure the button returns to CREATE even if two handlers ever slipped in.
+          setTimeout(() => {
+            if (createStopBtn.textContent && createStopBtn.textContent.toLowerCase().includes('added')) {
+              createStopBtn.textContent = 'CREATE';
+              createStopBtn.style.background = '';
+              createStopBtn.style.color = '';
+            }
+          }, 1800);
+        });
+        console.log('✅ Listener attached to createStopBtn');
+      }
+    } else {
+      console.warn('⚠️ Element createStopBtn not found, skipping listener');
+    }
 
     // Location type radio buttons
     const radioButtons = document.querySelectorAll('input[name="locationType"]');
@@ -250,8 +411,13 @@ class ReservationForm {
         this.searchAccounts(e.target.value);
       });
 
+      billingAccountInput.addEventListener('focus', () => {
+        this.tryResolveBillingAccountAndUpdateDisplay();
+      });
+
       // Auto-fill other billing fields when account is selected
       billingAccountInput.addEventListener('blur', () => {
+        this.tryResolveBillingAccountAndUpdateDisplay();
         const suggestions = document.getElementById('accountSuggestions');
         if (suggestions) {
           setTimeout(() => {
@@ -260,6 +426,24 @@ class ReservationForm {
         }
       });
     }
+
+    // Billing autofill (3+ chars) from Accounts DB for ANY billing field
+    ['billingCompany', 'billingFirstName', 'billingLastName', 'billingPhone', 'billingEmail'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', (e) => {
+        this.searchAccounts(e.target.value);
+      });
+      el.addEventListener('blur', () => {
+        const suggestions = document.getElementById('accountSuggestions');
+        if (!suggestions) return;
+        setTimeout(() => suggestions.classList.remove('active'), 200);
+      });
+    });
+
+    // Passenger + Booking Agent autofill (3+ chars)
+    this.setupPassengerDbAutocomplete();
+    this.setupBookingAgentDbAutocomplete();
 
     // Setup address autocomplete for initial stops
     try {
@@ -383,6 +567,77 @@ class ReservationForm {
     document.getElementById('affiliateModal').addEventListener('click', (e) => {
       if (e.target.id === 'affiliateModal') {
         this.closeAffiliateModal();
+      }
+    });
+  }
+
+  setupStoredRoutingDragAndDrop() {
+    const tableBody = document.getElementById('addressTableBody');
+    if (!tableBody) return;
+
+    const ensureDraggable = (row) => {
+      if (!row || row.nodeType !== 1) return;
+      if (row.classList.contains('empty-row')) return;
+      row.setAttribute('draggable', 'true');
+      if (!row.style.cursor) row.style.cursor = 'move';
+    };
+
+    tableBody.querySelectorAll('tr').forEach(ensureDraggable);
+
+    // Ensure new rows added later (via handleCreateStop) become draggable
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach(m => {
+        (m.addedNodes || []).forEach(node => {
+          if (node && node.nodeType === 1 && node.tagName === 'TR') {
+            ensureDraggable(node);
+          }
+        });
+      });
+    });
+    observer.observe(tableBody, { childList: true });
+
+    let draggingRow = null;
+
+    const getDragAfterElement = (container, y) => {
+      const draggableElements = [...container.querySelectorAll('tr[draggable="true"]:not(.dragging)')];
+
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset, element: child };
+        }
+        return closest;
+      }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+    };
+
+    tableBody.addEventListener('dragstart', (e) => {
+      const row = e.target?.closest?.('tr');
+      if (!row || row.classList.contains('empty-row')) return;
+      ensureDraggable(row);
+      draggingRow = row;
+      row.classList.add('dragging');
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', row.dataset.stopId || row.id || '');
+      } catch {
+        // ignore
+      }
+    });
+
+    tableBody.addEventListener('dragend', () => {
+      if (draggingRow) draggingRow.classList.remove('dragging');
+      draggingRow = null;
+    });
+
+    tableBody.addEventListener('dragover', (e) => {
+      if (!draggingRow) return;
+      e.preventDefault();
+      const afterElement = getDragAfterElement(tableBody, e.clientY);
+      if (afterElement == null) {
+        tableBody.appendChild(draggingRow);
+      } else {
+        tableBody.insertBefore(draggingRow, afterElement);
       }
     });
   }
@@ -951,12 +1206,15 @@ class ReservationForm {
 
   useExistingAccount(account) {
     // Populate Billing Accounts section with existing account (using db field names)
-    document.getElementById('billingAccountSearch').value = `${account.id} - ${account.first_name} ${account.last_name}`;
+    const acctNum = account.account_number || account.id;
+    document.getElementById('billingAccountSearch').value = `${acctNum} - ${account.first_name} ${account.last_name}`;
     document.getElementById('billingCompany').value = account.company_name || '';
     document.getElementById('billingFirstName').value = account.first_name;
     document.getElementById('billingLastName').value = account.last_name;
     document.getElementById('billingPhone').value = account.phone;
     document.getElementById('billingEmail').value = account.email;
+
+    this.updateBillingAccountNumberDisplay(account);
 
     this.closeModal();
   }
@@ -1011,6 +1269,8 @@ class ReservationForm {
     billingAccountSearch.setAttribute('readonly', true);
     billingAccountSearch.style.backgroundColor = '#f5f5f5';
     billingAccountSearch.style.cursor = 'not-allowed';
+
+    this.setBillingAccountNumberDisplay(nextAccountNumber.toString());
 
     this.closeModal();
 
@@ -1228,58 +1488,112 @@ class ReservationForm {
     console.log('🚀 createAccountFromBilling() called');
     
     try {
-      // Get ALL billing data
+      // Collect billing section fields
       const firstName = document.getElementById('billingFirstName')?.value?.trim() || '';
       const lastName = document.getElementById('billingLastName')?.value?.trim() || '';
       const phone = document.getElementById('billingPhone')?.value?.trim() || '';
       const email = document.getElementById('billingEmail')?.value?.trim() || '';
       const company = document.getElementById('billingCompany')?.value?.trim() || '';
 
-      console.log('📝 Billing data:', { firstName, lastName, phone, email, company });
+      // Determine which tickers should be checked
+      const passengerHasInfo = [
+        document.getElementById('passengerFirstName')?.value?.trim(),
+        document.getElementById('passengerLastName')?.value?.trim(),
+        document.getElementById('passengerPhone')?.value?.trim(),
+        document.getElementById('passengerEmail')?.value?.trim()
+      ].some(v => !!v);
 
-      if (!firstName || !lastName || !email) {
-        alert('Please enter First Name, Last Name, and Email in the billing section before creating an account.');
+      const bookingHasInfo = [
+        document.getElementById('bookedByFirstName')?.value?.trim(),
+        document.getElementById('bookedByLastName')?.value?.trim(),
+        document.getElementById('bookedByPhone')?.value?.trim(),
+        document.getElementById('bookedByEmail')?.value?.trim()
+      ].some(v => !!v);
+
+      // Collect any address-like fields on the reservation form (if present)
+      const contactAddress1 = document.getElementById('contactAddress')?.value?.trim() || '';
+      const contactCity = document.getElementById('contactCity')?.value?.trim() || '';
+      const contactState = document.getElementById('contactState')?.value?.trim() || '';
+      const contactZip = document.getElementById('contactZip')?.value?.trim() || '';
+      const contactCountry = document.getElementById('contactCountry')?.value?.trim() || '';
+
+      const address1 = document.getElementById('address1')?.value?.trim() || '';
+      const address2 = document.getElementById('address2')?.value?.trim() || '';
+      const city = document.getElementById('city')?.value?.trim() || '';
+      const state = document.getElementById('state')?.value?.trim() || '';
+      const zip = document.getElementById('zipCode')?.value?.trim() || '';
+      const country = document.getElementById('country')?.value?.trim() || '';
+
+      const draftAddress1 = contactAddress1 || address1;
+      const draftCity = contactCity || city;
+      const draftState = contactState || state;
+      const draftZip = contactZip || zip;
+      const draftCountry = contactCountry || country;
+      const draftAddress2 = address2;
+
+      console.log('📝 Billing → Account draft:', {
+        firstName,
+        lastName,
+        phone,
+        email,
+        company,
+        draftAddress1,
+        draftAddress2,
+        draftCity,
+        draftState,
+        draftZip,
+        draftCountry
+      });
+
+      if ((!firstName || !lastName) && !company) {
+        alert('Please enter Billing First/Last Name or Company before creating an account.');
         return;
       }
 
-      // Get next account number using db module
-      const nextAccountNumber = db.getNextAccountNumber();
-      
-      // Prepare account data for db module with proper field mappings
-      const accountData = {
-        id: nextAccountNumber.toString(),
-        account_number: nextAccountNumber.toString(),
+      // Store draft for Accounts page to apply (Account # is assigned on SAVE in accounts)
+      const draft = {
         first_name: firstName,
         last_name: lastName,
         company_name: company,
         phone: phone,
-        cell_phone: phone, // Map phone to cell_phone (Cellular Phone 1)
+        cell_phone: phone,
         email: email,
         type: 'individual',
         status: 'active',
-        created_at: new Date().toISOString()
+        types: {
+          billing: true,
+          passenger: passengerHasInfo,
+          booking: bookingHasInfo
+        },
+        address: {
+          address_type: 'billing',
+          address_name: 'Billing',
+          address_line1: draftAddress1,
+          address_line2: draftAddress2,
+          city: draftCity,
+          state: draftState,
+          zip: draftZip,
+          country: draftCountry
+        }
       };
 
-      // Save account using db module (now syncs to Supabase)
-      const saved = await db.saveAccount(accountData);
-      
-      if (!saved) {
-        alert('Error saving account. Please try again.');
-        return;
+      localStorage.setItem('relia_account_draft', JSON.stringify(draft));
+
+      // Remember where to return if popup isn't available
+      try {
+        localStorage.setItem('relia_return_to_reservation_url', window.location.href);
+      } catch {
+        // ignore
       }
 
-      // Increment account number for next account
-      db.setNextAccountNumber(nextAccountNumber + 1);
-
-      // Update billing account search field with account number
-      const billingAccountSearch = document.getElementById('billingAccountSearch');
-      billingAccountSearch.value = nextAccountNumber.toString();
-
-      // Store account ID for accounts page to load
-      localStorage.setItem('currentAccountId', nextAccountNumber.toString());
-      
-      // Navigate directly to accounts page with all data
-      window.location.href = 'accounts.html';
+      // Open Accounts in a popup (preferred). Fallback to same window.
+      const url = 'accounts.html?mode=new&from=reservation';
+      const popup = window.open(url, 'ReliaAccounts', 'width=1200,height=900,resizable=yes,scrollbars=yes');
+      if (popup) {
+        try { popup.focus(); } catch { /* ignore */ }
+      } else {
+        window.location.href = url;
+      }
     } catch (error) {
       console.error('❌ Error in createAccountFromBilling:', error);
       alert('Error creating account: ' + error.message);
@@ -1359,7 +1673,7 @@ class ReservationForm {
   }
 
   searchAccounts(query) {
-    if (!query || query.length < 2) {
+    if (!query || query.length < 3) {
       document.getElementById('accountSuggestions').classList.remove('active');
       return;
     }
@@ -1391,6 +1705,114 @@ class ReservationForm {
           container.classList.remove('active');
         }
       });
+    });
+  }
+
+  setupPassengerDbAutocomplete() {
+    this.setupDbAutocomplete({
+      fieldIds: ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail'],
+      containerId: 'passengerSuggestions',
+      minChars: 3,
+      searchFn: (query) => (db.searchPassengers(query) || []).slice(0, 10),
+      renderItem: (p) => {
+        const firstName = p.firstName || p.first_name || '';
+        const lastName = p.lastName || p.last_name || '';
+        const email = p.email || '';
+        const phone = p.phone || '';
+        const label = `${firstName} ${lastName}`.trim() || '(Unnamed)';
+        const meta = [email, phone].filter(Boolean).join(' • ');
+        return `${label}${meta ? ` <span style="color:#666;font-size:12px;">${meta}</span>` : ''}`;
+      },
+      onSelect: (p) => {
+        document.getElementById('passengerFirstName').value = p.firstName || p.first_name || '';
+        document.getElementById('passengerLastName').value = p.lastName || p.last_name || '';
+        document.getElementById('passengerPhone').value = p.phone || '';
+        document.getElementById('passengerEmail').value = p.email || '';
+      }
+    });
+  }
+
+  setupBookingAgentDbAutocomplete() {
+    this.setupDbAutocomplete({
+      fieldIds: ['bookedByFirstName', 'bookedByLastName', 'bookedByPhone', 'bookedByEmail'],
+      containerId: 'bookingAgentSuggestions',
+      minChars: 3,
+      searchFn: (query) => (db.searchBookingAgents(query) || []).slice(0, 10),
+      renderItem: (a) => {
+        const firstName = a.firstName || a.first_name || '';
+        const lastName = a.lastName || a.last_name || '';
+        const email = a.email || '';
+        const phone = a.phone || '';
+        const label = `${firstName} ${lastName}`.trim() || '(Unnamed)';
+        const meta = [email, phone].filter(Boolean).join(' • ');
+        return `${label}${meta ? ` <span style="color:#666;font-size:12px;">${meta}</span>` : ''}`;
+      },
+      onSelect: (a) => {
+        document.getElementById('bookedByFirstName').value = a.firstName || a.first_name || '';
+        document.getElementById('bookedByLastName').value = a.lastName || a.last_name || '';
+        document.getElementById('bookedByPhone').value = a.phone || '';
+        document.getElementById('bookedByEmail').value = a.email || '';
+      }
+    });
+  }
+
+  setupDbAutocomplete({ fieldIds, containerId, minChars, searchFn, renderItem, onSelect }) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    let debounceTimer;
+    const hide = () => {
+      container.classList.remove('active');
+      container.innerHTML = '';
+    };
+
+    const showResults = (results) => {
+      if (!results || results.length === 0) {
+        hide();
+        return;
+      }
+
+      container.innerHTML = results.map((item, idx) => {
+        const html = renderItem(item);
+        return `<div class="suggestion-item" data-index="${idx}">${html}</div>`;
+      }).join('');
+      container.classList.add('active');
+
+      container.querySelectorAll('.suggestion-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.dataset.index, 10);
+          const picked = results[idx];
+          if (!picked) return;
+          onSelect(picked);
+          hide();
+        });
+      });
+    };
+
+    const handleInput = (value) => {
+      const query = (value || '').toString().trim();
+      if (query.length < minChars) {
+        hide();
+        return;
+      }
+
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        try {
+          showResults(searchFn(query));
+        } catch (e) {
+          console.warn('⚠️ Autocomplete search failed:', e);
+          hide();
+        }
+      }, 120);
+    };
+
+    fieldIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', (e) => handleInput(e.target.value));
+      el.addEventListener('blur', () => setTimeout(hide, 200));
+      el.addEventListener('focus', (e) => handleInput(e.target.value));
     });
   }
 
@@ -1662,7 +2084,7 @@ class ReservationForm {
 
   addStop() {
     const container = document.getElementById('stopsContainer');
-    const stopIndex = this.stops.length;
+    const stopIndex = document.querySelectorAll('.stop-row').length;
     const stopRow = document.createElement('div');
     stopRow.className = 'stop-row';
     stopRow.dataset.stopIndex = stopIndex;
@@ -1686,6 +2108,9 @@ class ReservationForm {
       </div>
     `;
     container.appendChild(stopRow);
+
+    // Keep internal stops array in sync for any route/calc features
+    this.stops.push(null);
     
     // Setup autocomplete for the new input
     const newInput = stopRow.querySelector('.address-input');
@@ -1805,17 +2230,28 @@ class ReservationForm {
     document.getElementById('payments').textContent = '0.00'; // Would come from payment system
   }
 
-  async saveReservation() {
+  async saveReservation(opts = {}) {
     // Validate required fields
     if (!this.validateForm()) {
       return;
     }
 
-    // Show loading state
-    const saveBtn = document.querySelector('.btn-save');
-    const originalText = saveBtn.textContent;
-    saveBtn.disabled = true;
-    saveBtn.textContent = '⏳ Saving...';
+    const topSaveBtn = document.querySelector('.btn-save') || document.getElementById('saveBtn');
+    const bottomSaveBtn = document.getElementById('saveReservationBtn');
+    const saveButtons = [topSaveBtn, bottomSaveBtn].filter(Boolean);
+
+    // Show loading state on all save buttons
+    const originalButtonState = saveButtons.map(btn => ({
+      btn,
+      text: btn.textContent,
+      disabled: btn.disabled,
+      background: btn.style.background,
+      color: btn.style.color
+    }));
+    saveButtons.forEach(btn => {
+      btn.disabled = true;
+      btn.textContent = '⏳ Saving...';
+    });
 
     try {
       // Collect all form data
@@ -1859,19 +2295,51 @@ class ReservationForm {
         grandTotal: parseFloat(document.getElementById('grandTotal').textContent)
       };
 
-      // Get current confirmation number and increment for next reservation
+      // Get current confirmation number
       const currentConfNumber = document.getElementById("confNumber")?.value || db.getNextConfirmationNumber();
-      db.setNextConfirmationNumber(parseInt(currentConfNumber) + 1);
+
+      const puDate = document.getElementById('puDate')?.value || '';
+      const puTime = document.getElementById('puTime')?.value || '';
+      const pickupAt = puDate ? (puTime ? `${puDate}T${puTime}` : puDate) : null;
+
+      // Only increment the next confirmation number if this is a new reservation
+      const existingReservation = db.getReservationById(currentConfNumber);
+      const isNewReservation = !existingReservation;
+      if (isNewReservation) {
+        db.setNextConfirmationNumber(parseInt(currentConfNumber) + 1);
+      }
       
+      // Get account_id from billing account search (if an account number is entered)
+      const accountSearchValue = reservationData.billingAccount.account?.trim();
+      let accountId = null;
+      if (accountSearchValue) {
+        // Try to find account by account number
+        const account = db.getAllAccounts().find(a => 
+          a.account_number === accountSearchValue || 
+          a.id === accountSearchValue ||
+          `${a.account_number} - ${a.first_name} ${a.last_name}`.includes(accountSearchValue)
+        );
+        if (account) {
+          accountId = account.id;
+          console.log('✅ Found account for reservation:', account.account_number);
+        }
+      }
+      
+      const formSnapshot = this.collectReservationSnapshot();
+
       // Save to LocalStorage via db module
       const saved = db.saveReservation({
+        id: currentConfNumber,
         status: "confirmed",
+        account_id: accountId, // Link reservation to account
         passenger_name: `${reservationData.passenger.firstName} ${reservationData.passenger.lastName}`,
         company_name: reservationData.billingAccount.company,
         confirmation_number: currentConfNumber,
+        stops: reservationData.routing.stops,
+        form_snapshot: formSnapshot,
         service_type: document.getElementById("serviceType")?.value || "",
         vehicle_type: document.getElementById("vehicleTypeRes")?.value || "",
-        pickup_at: document.getElementById("puDate")?.value || null,
+        pickup_at: pickupAt,
         time_zone: "America/Chicago",
         currency_abbr: "USD",
         passengers_count: parseInt(document.getElementById("numPax")?.value || "1") || 1,
@@ -1882,7 +2350,7 @@ class ReservationForm {
         bill_pax_notes: reservationData.routing.billPaxNotes || "",
         dispatch_notes: reservationData.routing.dispatchNotes || "",
         farm_option: document.querySelector('input[name="farmOption"]:checked')?.value || "in_house",
-        efarm_status: document.getElementById("eFarmStatus")?.value || "NOT FARMED OUT",
+        efarm_status: document.getElementById("efarmStatus")?.value || document.getElementById("eFarmStatus")?.value || "NOT FARMED OUT",
         affiliate_reference: reservationData.details.affiliate || "",
       });
 
@@ -1933,10 +2401,12 @@ class ReservationForm {
         }
       }
 
-      // Save route stops if available
+      // Save route stops if available (optional feature; db may not implement this)
       if (reservationData.routing.stops && reservationData.routing.stops.length > 0) {
-        db.saveRouteStops(saved.id, reservationData.routing.stops);
-        console.log('✅ Route stops saved to db');
+        if (typeof db.saveRouteStops === 'function') {
+          db.saveRouteStops(saved.id, reservationData.routing.stops);
+          console.log('✅ Route stops saved to db');
+        }
         
         // Save addresses to account if account number exists
         const accountNumber = reservationData.billingAccount.account;
@@ -1982,8 +2452,11 @@ class ReservationForm {
       
       if (saved) {
         console.log('✅ Reservation saved successfully:', saved);
-        saveBtn.textContent = '✓ Saved!';
-        saveBtn.style.background = '#28a745';
+        saveButtons.forEach(btn => {
+          btn.textContent = '✓ Saved!';
+          btn.style.background = '#28a745';
+          btn.style.color = 'white';
+        });
         
         // Wait and redirect to reservations list
         setTimeout(() => {
@@ -1991,10 +2464,15 @@ class ReservationForm {
             window.location.href = 'reservations-list.html';
           } else {
             // Reset button and initialize new confirmation number for next reservation
-            this.initializeConfirmationNumber();
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalText;
-            saveBtn.style.background = '';
+            if (!this.isEditMode) {
+              this.initializeConfirmationNumber();
+            }
+            originalButtonState.forEach(s => {
+              s.btn.disabled = s.disabled;
+              s.btn.textContent = s.text;
+              s.btn.style.background = s.background;
+              s.btn.style.color = s.color;
+            });
           }
         }, 1500);
       } else {
@@ -2004,20 +2482,106 @@ class ReservationForm {
       console.error('❌ Error saving reservation:', error);
       alert(`Error saving reservation: ${error.message}`);
       
-      // Reset button
-      saveBtn.disabled = false;
-      saveBtn.textContent = originalText;
-      saveBtn.style.background = '';
+      // Reset buttons
+      originalButtonState.forEach(s => {
+        s.btn.disabled = s.disabled;
+        s.btn.textContent = s.text;
+        s.btn.style.background = s.background;
+        s.btn.style.color = s.color;
+      });
     }
   }
 
   getStops() {
+    // Preferred: Stored Routing table (Pick-up / Drop-off / Stops / Wait)
+    const tableBody = document.getElementById('addressTableBody');
+    if (tableBody) {
+      const rows = Array.from(tableBody.querySelectorAll('tr')).filter(r => !r.classList.contains('empty-row'));
+      const parsed = rows.map((row, index) => {
+        const stopId = row.dataset.stopId || row.id || `stop_${Date.now()}_${index}`;
+        const stopTypeRaw = (row.dataset.stopType || '').toLowerCase().trim();
+
+        // If dataset wasn't present, attempt to infer from cell text.
+        let inferredType = stopTypeRaw;
+        if (!inferredType) {
+          const typeText = (row.querySelector('td')?.textContent || '').toLowerCase();
+          if (typeText.includes('pickup')) inferredType = 'pickup';
+          else if (typeText.includes('dropoff')) inferredType = 'dropoff';
+          else if (typeText.includes('wait')) inferredType = 'wait';
+          else inferredType = 'stop';
+        }
+
+        const tds = row.querySelectorAll('td');
+        const locationNameFromCells = (tds[1]?.innerText || '').trim();
+        const addressCell = tds[2];
+        const addressFirstLine = (addressCell?.querySelector('div')?.innerText || '').trim();
+        const addressFromCells = (addressFirstLine || addressCell?.innerText || '').trim();
+        const timeInFromCells = (tds[3]?.innerText || '').trim();
+
+        const locationName = (row.dataset.locationName || '').trim() || locationNameFromCells;
+        const address1 = (row.dataset.address1 || '').trim();
+        const address2 = row.dataset.address2 || '';
+        const city = row.dataset.city || '';
+        const state = row.dataset.state || '';
+        const zipCode = row.dataset.zipCode || '';
+        const country = row.dataset.country || '';
+        const phone = row.dataset.phone || '';
+        const notes = row.dataset.notes || '';
+        const timeIn = row.dataset.timeIn || timeInFromCells || '';
+        const fullAddress = row.dataset.fullAddress || addressFromCells || '';
+
+        const airportCode = row.dataset.airportCode || '';
+        const airline = row.dataset.airline || '';
+        const flightNumber = row.dataset.flightNumber || '';
+        const terminalGate = row.dataset.terminalGate || '';
+        const flightStatus = row.dataset.flightStatus || '';
+
+        const fboId = row.dataset.fboId || '';
+        const fboName = row.dataset.fboName || '';
+        const fboEmail = row.dataset.fboEmail || '';
+
+        // Provide both the legacy keys and richer routing keys.
+        return {
+          id: stopId,
+          stopType: inferredType,
+          type: inferredType,
+          locationName,
+          location: locationName,
+          address1,
+          address2,
+          city,
+          state,
+          zipCode,
+          country,
+          phone,
+          notes,
+          timeIn,
+          fullAddress,
+          address: fullAddress || address1,
+          airportCode,
+          airline,
+          flightNumber,
+          terminalGate,
+          flightStatus,
+          fboId,
+          fboName,
+          fboEmail
+        };
+      }).filter(s => {
+        // Keep rows that have either a location, an address, or any airport/FBO info.
+        return !!(s.locationName || s.address1 || s.fullAddress || s.airportCode || s.fboId);
+      });
+
+      if (parsed.length > 0) return parsed;
+    }
+
+    // Fallback: legacy stop-row UI
     const stops = [];
     document.querySelectorAll('.stop-row').forEach(row => {
-      const type = row.querySelector('.stop-type').value;
-      const location = row.querySelectorAll('.form-control')[0].value;
-      const address = row.querySelectorAll('.form-control')[1].value;
-      
+      const type = row.querySelector('.stop-type')?.value;
+      const location = row.querySelector('.location-name')?.value;
+      const address = row.querySelector('.address-input')?.value;
+
       if (location || address) {
         stops.push({ type, location, address });
       }
@@ -2061,6 +2625,332 @@ class ReservationForm {
     }
 
     return true;
+  }
+
+  getConfFromUrl() {
+    try {
+      const conf = new URLSearchParams(window.location.search).get('conf');
+      return conf ? conf.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  loadExistingReservation(confNumber) {
+    try {
+      const record = db.getReservationById(confNumber);
+      if (!record) {
+        console.warn('⚠️ No reservation found for conf:', confNumber);
+        return;
+      }
+
+      // Prefer the full snapshot if present
+      if (record.form_snapshot) {
+        this.applyReservationSnapshot(record.form_snapshot);
+      } else {
+        // Fallback fill for older saved records
+        this.safeSetValue('billingCompany', record.company_name || '');
+        if (record.passenger_name) {
+          const parts = record.passenger_name.split(' ');
+          this.safeSetValue('passengerFirstName', parts[0] || '');
+          this.safeSetValue('passengerLastName', parts.slice(1).join(' ') || '');
+        }
+        this.safeSetValue('serviceType', record.service_type || '');
+        this.safeSetValue('vehicleTypeRes', record.vehicle_type || '');
+        this.safeSetValue('puDate', record.pickup_at || '');
+        if (Array.isArray(record.stops)) {
+          this.loadStops(record.stops);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading existing reservation:', error);
+    }
+  }
+
+  collectReservationSnapshot() {
+    const snapshot = {
+      billing: {
+        account: document.getElementById('billingAccountSearch')?.value || '',
+        company: document.getElementById('billingCompany')?.value || '',
+        firstName: document.getElementById('billingFirstName')?.value || '',
+        lastName: document.getElementById('billingLastName')?.value || '',
+        phone: document.getElementById('billingPhone')?.value || '',
+        email: document.getElementById('billingEmail')?.value || ''
+      },
+      bookedBy: {
+        firstName: document.getElementById('bookedByFirstName')?.value || '',
+        lastName: document.getElementById('bookedByLastName')?.value || '',
+        phone: document.getElementById('bookedByPhone')?.value || '',
+        email: document.getElementById('bookedByEmail')?.value || ''
+      },
+      passenger: {
+        firstName: document.getElementById('passengerFirstName')?.value || '',
+        lastName: document.getElementById('passengerLastName')?.value || '',
+        phone: document.getElementById('passengerPhone')?.value || '',
+        email: document.getElementById('passengerEmail')?.value || '',
+        altContactName: document.getElementById('altContactName')?.value || '',
+        altContactPhone: document.getElementById('altContactPhone')?.value || ''
+      },
+      routing: {
+        tripNotes: document.getElementById('tripNotes')?.value || '',
+        billPaxNotes: document.getElementById('billPaxNotes')?.value || '',
+        dispatchNotes: document.getElementById('dispatchNotes')?.value || '',
+        partnerNotes: document.getElementById('partnerNotes')?.value || '',
+        stops: this.getStops()
+      },
+      details: {
+        serviceType: document.getElementById('serviceType')?.value || '',
+        vehicleType: document.getElementById('vehicleTypeRes')?.value || '',
+        puDate: document.getElementById('puDate')?.value || '',
+        numPax: document.getElementById('numPax')?.value || '',
+        luggage: document.getElementById('luggage')?.value || '',
+        accessible: document.getElementById('accessible')?.checked || false
+      },
+      costs: this.getCostData()
+    };
+
+    return snapshot;
+  }
+
+  applyReservationSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+
+    this.safeSetValue('billingAccountSearch', snapshot.billing?.account || '');
+    this.safeSetValue('billingCompany', snapshot.billing?.company || '');
+    this.safeSetValue('billingFirstName', snapshot.billing?.firstName || '');
+    this.safeSetValue('billingLastName', snapshot.billing?.lastName || '');
+    this.safeSetValue('billingPhone', snapshot.billing?.phone || '');
+    this.safeSetValue('billingEmail', snapshot.billing?.email || '');
+
+    this.safeSetValue('bookedByFirstName', snapshot.bookedBy?.firstName || '');
+    this.safeSetValue('bookedByLastName', snapshot.bookedBy?.lastName || '');
+    this.safeSetValue('bookedByPhone', snapshot.bookedBy?.phone || '');
+    this.safeSetValue('bookedByEmail', snapshot.bookedBy?.email || '');
+
+    this.safeSetValue('passengerFirstName', snapshot.passenger?.firstName || '');
+    this.safeSetValue('passengerLastName', snapshot.passenger?.lastName || '');
+    this.safeSetValue('passengerPhone', snapshot.passenger?.phone || '');
+    this.safeSetValue('passengerEmail', snapshot.passenger?.email || '');
+    this.safeSetValue('altContactName', snapshot.passenger?.altContactName || '');
+    this.safeSetValue('altContactPhone', snapshot.passenger?.altContactPhone || '');
+
+    this.safeSetValue('tripNotes', snapshot.routing?.tripNotes || '');
+    this.safeSetValue('billPaxNotes', snapshot.routing?.billPaxNotes || '');
+    this.safeSetValue('dispatchNotes', snapshot.routing?.dispatchNotes || '');
+    this.safeSetValue('partnerNotes', snapshot.routing?.partnerNotes || '');
+
+    this.safeSetValue('serviceType', snapshot.details?.serviceType || '');
+    this.safeSetValue('vehicleTypeRes', snapshot.details?.vehicleType || '');
+    this.safeSetValue('puDate', snapshot.details?.puDate || '');
+    this.safeSetValue('numPax', snapshot.details?.numPax || '');
+    this.safeSetValue('luggage', snapshot.details?.luggage || '');
+    const accessible = document.getElementById('accessible');
+    if (accessible) accessible.checked = !!snapshot.details?.accessible;
+
+    if (Array.isArray(snapshot.routing?.stops)) {
+      this.loadStops(snapshot.routing.stops);
+    }
+
+    if (snapshot.costs && typeof snapshot.costs === 'object') {
+      this.safeSetValue('flatQty', snapshot.costs.flat?.qty ?? '');
+      this.safeSetValue('flatRate', snapshot.costs.flat?.rate ?? '');
+      this.safeSetValue('hourQty', snapshot.costs.hour?.qty ?? '');
+      this.safeSetValue('hourRate', snapshot.costs.hour?.rate ?? '');
+      this.safeSetValue('unitQty', snapshot.costs.unit?.qty ?? '');
+      this.safeSetValue('unitRate', snapshot.costs.unit?.rate ?? '');
+      this.safeSetValue('otQty', snapshot.costs.ot?.qty ?? '');
+      this.safeSetValue('otRate', snapshot.costs.ot?.rate ?? '');
+      this.safeSetValue('stopsQty', snapshot.costs.stops?.qty ?? '');
+      this.safeSetValue('stopsRate', snapshot.costs.stops?.rate ?? '');
+      this.safeSetValue('gratuityQty', snapshot.costs.gratuity ?? '');
+      this.safeSetValue('fuelQty', snapshot.costs.fuel ?? '');
+      this.safeSetValue('discountQty', snapshot.costs.discount ?? '');
+      this.safeSetValue('passQty', snapshot.costs.pass?.qty ?? '');
+      this.safeSetValue('passRate', snapshot.costs.pass?.rate ?? '');
+      this.safeSetValue('mileQty', snapshot.costs.mile?.qty ?? '');
+      this.safeSetValue('mileRate', snapshot.costs.mile?.rate ?? '');
+      this.safeSetValue('surfaceQty', snapshot.costs.surface ?? '');
+      this.safeSetValue('baseRateQty', snapshot.costs.baseRate ?? '');
+      this.safeSetValue('adminQty', snapshot.costs.admin?.qty ?? '');
+      this.safeSetValue('adminRate', snapshot.costs.admin?.rate ?? '');
+
+      this.calculateCosts();
+    }
+  }
+
+  loadStops(stops) {
+    if (!Array.isArray(stops)) return;
+
+    // Preferred: Stored Routing table
+    const tableBody = document.getElementById('addressTableBody');
+    if (tableBody) {
+      tableBody.innerHTML = '';
+
+      if (stops.length === 0) {
+        const emptyRow = document.createElement('tr');
+        emptyRow.className = 'empty-row';
+        emptyRow.innerHTML = '<td colspan="5" class="empty-message">No addresses added yet. Use the form above to add addresses.</td>';
+        tableBody.appendChild(emptyRow);
+        return;
+      }
+
+      stops.forEach((stop, index) => {
+        const stopType = (stop.stopType || stop.type || 'stop').toString().toLowerCase();
+        const stopId = stop.id || `stop_${Date.now()}_${index}`;
+
+        const row = document.createElement('tr');
+        row.id = stopId;
+        row.dataset.stopId = stopId;
+        row.dataset.stopType = stopType;
+        row.dataset.locationName = stop.locationName || stop.location || '';
+        row.dataset.address1 = stop.address1 || '';
+        row.dataset.address2 = stop.address2 || '';
+        row.dataset.city = stop.city || '';
+        row.dataset.state = stop.state || '';
+        row.dataset.zipCode = stop.zipCode || '';
+        row.dataset.country = stop.country || '';
+        row.dataset.phone = stop.phone || '';
+        row.dataset.notes = stop.notes || '';
+        row.dataset.timeIn = stop.timeIn || '';
+        row.dataset.fullAddress = stop.fullAddress || stop.address || '';
+        row.dataset.airportCode = stop.airportCode || '';
+        row.dataset.airline = stop.airline || '';
+        row.dataset.flightNumber = stop.flightNumber || '';
+        row.dataset.terminalGate = stop.terminalGate || '';
+        row.dataset.flightStatus = stop.flightStatus || '';
+        row.dataset.fboId = stop.fboId || '';
+        row.dataset.fboName = stop.fboName || '';
+        row.dataset.fboEmail = stop.fboEmail || '';
+
+        const badgeColor =
+          stopType === 'pickup' ? '#28a745' :
+          stopType === 'dropoff' ? '#dc3545' :
+          stopType === 'stop' ? '#ffc107' :
+          '#17a2b8';
+
+        const displayName = stop.locationName || stop.location || (stopType === 'wait' ? 'Wait' : 'Address');
+        const displayAddress = stop.fullAddress || stop.address || stop.address1 || '';
+        const timeIn = stop.timeIn || '';
+        const phone = stop.phone || '';
+        const notes = stop.notes || '';
+
+        row.innerHTML = `
+          <td><span class="stop-type-badge" style="background: ${badgeColor}; color: white; padding: 4px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">${stopType.toUpperCase()}</span></td>
+          <td><strong>${displayName}</strong></td>
+          <td>
+            <div>${displayAddress}</div>
+            <div style="font-size: 11px; color: #666; margin-top: 3px;">
+              ${phone ? '📞 ' + phone + ' | ' : ''}
+              ${timeIn ? '⏰ ' + timeIn : ''}
+            </div>
+            ${notes ? '<div style="font-size: 11px; color: #666; margin-top: 3px; font-style: italic;">📝 ' + notes + '</div>' : ''}
+          </td>
+          <td>${timeIn || 'N/A'}</td>
+          <td><button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="(typeof removeStop === 'function' ? removeStop('${stopId}') : this.closest('tr').remove())">✕ Remove</button></td>
+        `;
+
+        tableBody.appendChild(row);
+      });
+
+      return;
+    }
+
+    // Fallback: legacy stop-row UI
+    document.querySelectorAll('.stop-row').forEach(r => r.remove());
+    this.stops = [];
+
+    if (stops.length === 0) return;
+
+    stops.forEach(stop => {
+      this.addStop();
+      const rows = document.querySelectorAll('.stop-row');
+      const row = rows[rows.length - 1];
+      if (!row) return;
+
+      const typeEl = row.querySelector('.stop-type');
+      const locationEl = row.querySelector('.location-name');
+      const addressEl = row.querySelector('.address-input');
+
+      if (typeEl && stop.type) typeEl.value = stop.type;
+      if (locationEl) locationEl.value = stop.location || '';
+      if (addressEl) addressEl.value = stop.address || '';
+    });
+  }
+
+  safeSetValue(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = value ?? '';
+  }
+
+  applyReservationDraftIfPresent() {
+    try {
+      const raw = localStorage.getItem(RESERVATION_DRAFT_KEY);
+      if (!raw) return;
+
+      const draft = JSON.parse(raw);
+      localStorage.removeItem(RESERVATION_DRAFT_KEY);
+
+      // Always create a new confirmation number for drafts
+      this.initializeConfirmationNumber();
+      this.applyReservationSnapshot(draft);
+      console.log('✅ Reservation draft applied and cleared');
+    } catch (error) {
+      console.error('❌ Failed to apply reservation draft:', error);
+      localStorage.removeItem(RESERVATION_DRAFT_KEY);
+    }
+  }
+
+  copyToDraftAndNavigate(mode) {
+    const snapshot = this.collectReservationSnapshot();
+
+    if (mode === 'roundtrip' && Array.isArray(snapshot.routing?.stops) && snapshot.routing.stops.length >= 2) {
+      const reversed = [...snapshot.routing.stops].reverse().map(s => {
+        let type = s.type;
+        if (type === 'pickup') type = 'dropoff';
+        else if (type === 'dropoff') type = 'pickup';
+        return { ...s, type };
+      });
+      snapshot.routing.stops = reversed;
+    }
+
+    localStorage.setItem(RESERVATION_DRAFT_KEY, JSON.stringify(snapshot));
+    window.location.href = 'reservation-form.html';
+  }
+
+  openBillingPaymentTab() {
+    const paymentTab = document.querySelector('.billing-tab[data-billing-tab="payment"]');
+    if (paymentTab) {
+      paymentTab.click();
+      return;
+    }
+    // Fallback: attempt to show payment tab directly
+    const paymentContent = document.getElementById('paymentTab');
+    if (paymentContent) {
+      paymentContent.classList.add('active');
+    }
+  }
+
+  composeEmail() {
+    const to = document.getElementById('passengerEmail')?.value?.trim() || document.getElementById('billingEmail')?.value?.trim();
+    if (!to) {
+      alert('No email address found (Passenger or Billing).');
+      return;
+    }
+
+    const conf = document.getElementById('confNumber')?.value || '';
+    const passengerName = `${document.getElementById('passengerFirstName')?.value || ''} ${document.getElementById('passengerLastName')?.value || ''}`.trim();
+    const pickupAt = document.getElementById('puDate')?.value || '';
+
+    const subject = conf ? `Reservation ${conf}` : 'Reservation';
+    const bodyLines = [
+      conf ? `Confirmation: ${conf}` : null,
+      passengerName ? `Passenger: ${passengerName}` : null,
+      pickupAt ? `Pickup: ${pickupAt}` : null
+    ].filter(Boolean);
+
+    const body = bodyLines.join('\n');
+    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 }
 

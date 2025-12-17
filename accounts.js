@@ -1,3 +1,5 @@
+import { wireMainNav, navigateToSection } from './navigation.js';
+
 class Accounts {
   constructor() {
     this.currentTab = 'accounts';
@@ -7,6 +9,135 @@ class Accounts {
     } else {
       this.init();
     }
+  }
+
+  clearDres4LoginFields() {
+    const emailEl = document.getElementById('dres4LoginEmail');
+    const passwordEl = document.getElementById('dres4LoginPassword');
+    if (emailEl) emailEl.value = '';
+    if (passwordEl) passwordEl.value = '';
+  }
+
+  getSelectedAccountId() {
+    // Prefer the currently loaded account number (readonly field)
+    const fromForm = document.getElementById('accountNumber')?.value?.trim();
+    if (fromForm) return fromForm;
+    // Fallback to listbox selection
+    const fromList = document.getElementById('accountsListbox')?.value?.trim();
+    return fromList || null;
+  }
+
+  getCurrentAccountDisplayName() {
+    const first = document.getElementById('acctFirstName')?.value?.trim() || '';
+    const last = document.getElementById('acctLastName')?.value?.trim() || '';
+    const company = document.getElementById('acctCompany')?.value?.trim() || '';
+
+    const person = `${first} ${last}`.trim();
+    return company || person || 'this account';
+  }
+
+  isAccountLinkedToReservations(accountId) {
+    if (!this.db) return false;
+
+    try {
+      const reservations = this.db.getAllReservations?.() || [];
+      const id = (accountId ?? '').toString();
+      return reservations.some(r => {
+        // Primary supported linkage
+        if ((r?.account_id ?? '').toString() === id) return true;
+
+        // Back-compat / other storage patterns
+        if ((r?.billing_account ?? '').toString() === id) return true;
+        if ((r?.form_snapshot?.billing?.account ?? '').toString() === id) return true;
+
+        return false;
+      });
+    } catch (e) {
+      console.warn('⚠️ Failed to check reservation linkage:', e);
+      return false;
+    }
+  }
+
+  async makeAccountInactive(accountId) {
+    if (!this.db) return false;
+    try {
+      const existing = this.db.getAccountById?.(accountId);
+      if (!existing) return false;
+
+      const updated = {
+        ...existing,
+        status: 'inactive',
+        updated_at: new Date().toISOString()
+      };
+
+      await this.db.saveAccount(updated);
+      return true;
+    } catch (e) {
+      console.error('❌ Failed to make account inactive:', e);
+      return false;
+    }
+  }
+
+  async deleteSelectedAccount() {
+    if (!this.db) {
+      alert('Database module not available. Please refresh the page.');
+      return;
+    }
+
+    const accountId = this.getSelectedAccountId();
+    if (!accountId) {
+      alert('Please select an account to delete.');
+      return;
+    }
+
+    // Are-you-sure confirmation
+    const confirmDelete = confirm(`Are you sure you want to delete account ${accountId}?`);
+    if (!confirmDelete) return;
+
+    // If linked to reservations, block delete and offer to mark inactive
+    if (this.isAccountLinkedToReservations(accountId)) {
+      const name = this.getCurrentAccountDisplayName();
+      const makeInactive = confirm(
+        `We can not delete due to this account being attached to a reservation.\n` +
+        `You may make the account inactive.\n\n` +
+        `Make "${name}" inactive?\n\nOK = Yes\nCancel = No`
+      );
+
+      if (!makeInactive) return;
+
+      const ok = await this.makeAccountInactive(accountId);
+      if (!ok) {
+        alert('Unable to mark account inactive.');
+        return;
+      }
+
+      await this.loadAccountsList();
+      alert('Account marked inactive.');
+      return;
+    }
+
+    const deleted = this.db.deleteAccount(accountId);
+    if (!deleted) {
+      alert('Failed to delete account.');
+      return;
+    }
+
+    // Also remove locally stored addresses for this account
+    try {
+      localStorage.removeItem(`relia_account_${accountId}_addresses`);
+    } catch (e) {
+      console.warn('⚠️ Failed to remove account addresses storage:', e);
+    }
+
+    // Clear form fields (best-effort)
+    try {
+      this.addNewAccount();
+    } catch {
+      // no-op
+    }
+
+    await this.loadAccountsList();
+    alert('Account deleted.');
   }
 
   async init() {
@@ -28,9 +159,16 @@ class Accounts {
       if (currentAccountId) {
         this.loadAccount(currentAccountId);
         localStorage.removeItem('currentAccountId'); // Clear after loading
-      } else {
-        this.applyDraftIfPresent();
       }
+
+      // Always apply any draft (used by Reservation "Create Account" and similar flows)
+      this.applyDraftIfPresent();
+
+      // Never prefill DRES4 / Passenger App login credentials (even if browser tries)
+      this.clearDres4LoginFields();
+      setTimeout(() => this.clearDres4LoginFields(), 0);
+      setTimeout(() => this.clearDres4LoginFields(), 250);
+      setTimeout(() => this.clearDres4LoginFields(), 1000);
       
       console.log('✅ Accounts initialization complete');
     } catch (error) {
@@ -67,7 +205,8 @@ class Accounts {
       const listbox = document.getElementById('accountsListbox');
       if (listbox && allAccounts.length > 0) {
         listbox.innerHTML = allAccounts.map(acc => {
-          const displayName = `${acc.account_number || acc.id} - ${acc.first_name || ''} ${acc.last_name || ''} ${acc.company_name ? '- ' + acc.company_name : ''}`.trim();
+          const inactiveLabel = (acc.status || '').toString().toLowerCase() === 'inactive' ? ' (INACTIVE)' : '';
+          const displayName = `${acc.account_number || acc.id}${inactiveLabel} - ${acc.first_name || ''} ${acc.last_name || ''} ${acc.company_name ? '- ' + acc.company_name : ''}`.trim();
           return `<option value="${acc.account_number || acc.id}">${displayName}</option>`;
         }).join('');
       }
@@ -108,7 +247,8 @@ class Accounts {
       const firstNameEl = document.getElementById('acctFirstName');
       const lastNameEl = document.getElementById('acctLastName');
       const companyEl = document.getElementById('acctCompany');
-      const cellPhone1El = document.getElementById('acctCellPhone1'); // Maps to cell_phone
+      const cellPhone1El = document.getElementById('acctCellPhone1'); // Top-left cell field
+      const cellularPhone1El = document.getElementById('acctCellularPhone1'); // Contact Info > Cellular Phone 1
       const emailEl = document.getElementById('acctEmail2'); // Maps to email
       
       if (accountNumberEl) {
@@ -119,8 +259,13 @@ class Accounts {
       if (firstNameEl) firstNameEl.value = account.first_name || '';
       if (lastNameEl) lastNameEl.value = account.last_name || '';
       if (companyEl) companyEl.value = account.company_name || '';
-      if (cellPhone1El) cellPhone1El.value = account.cell_phone || account.phone || ''; // Cellular Phone 1
+      const cellValue = account.cell_phone || '';
+      if (cellPhone1El) cellPhone1El.value = cellValue;
+      if (cellularPhone1El) cellularPhone1El.value = cellValue;
       if (emailEl) emailEl.value = account.email || ''; // Accounts Email
+
+      // Ensure DRES4 fields never prefill from account data
+      this.clearDres4LoginFields();
       
       // Switch to accounts tab
       this.switchAccountTab('info');
@@ -139,6 +284,14 @@ class Accounts {
       const draft = JSON.parse(raw);
       console.log('✅ Draft account found, prefilling fields:', draft);
 
+      const setIfEmpty = (el, value) => {
+        if (!el) return;
+        const current = (el.value ?? '').toString().trim();
+        const next = (value ?? '').toString();
+        if (!next) return;
+        if (!current) el.value = next;
+      };
+
       // Switch to Accounts tab (in case we're not already there)
       this.switchTab('accounts');
 
@@ -147,22 +300,72 @@ class Accounts {
       const lastNameEl = document.getElementById('acctLastName');
       const companyEl = document.getElementById('acctCompany');
       const cellPhone1El = document.getElementById('acctCellPhone1');
+      const cellularPhone1El = document.getElementById('acctCellularPhone1');
       const emailEl = document.getElementById('acctEmail2');
+      const phoneEl = document.getElementById('acctPhone');
 
-      // Fill basic info
-      if (firstNameEl) firstNameEl.value = draft.first_name || '';
-      if (lastNameEl) lastNameEl.value = draft.last_name || '';
-      if (companyEl) companyEl.value = draft.company_name || '';
-      
-      // Auto-fill cell phone 1 from phone/cell phone
-      if (cellPhone1El) cellPhone1El.value = draft.phone || draft.cell_phone || '';
-      
-      // Auto-fill email from email field
-      if (emailEl) emailEl.value = draft.email || '';
+      // Fill basic info (do not overwrite existing values)
+      setIfEmpty(firstNameEl, draft.first_name);
+      setIfEmpty(lastNameEl, draft.last_name);
+      setIfEmpty(companyEl, draft.company_name);
+
+      // Auto-fill phone fields
+      // Reservation/Billing "phone" should be treated as CELL and go into Cellular Phone 1.
+      // Do not auto-fill Office Phone from the draft.
+      const draftCell = draft.cell_phone || draft.phone;
+      setIfEmpty(cellPhone1El, draftCell);
+      setIfEmpty(cellularPhone1El, draftCell);
+
+      // If Office Phone is empty, keep it empty (never fill from draft)
+      if (phoneEl && !(phoneEl.value ?? '').toString().trim()) {
+        // no-op
+      }
+
+      // Auto-fill email fields
+      setIfEmpty(emailEl, draft.email);
 
       // Also fill the Contact Info email section (if it exists)
       const acctEmailContactEl = document.getElementById('acctEmail');
-      if (acctEmailContactEl) acctEmailContactEl.value = draft.email || '';
+      setIfEmpty(acctEmailContactEl, draft.email);
+
+      // Prefill account type tickers
+      const types = draft.types || {};
+      const billingTicker = document.getElementById('acctTypeBilling');
+      const passengerTicker = document.getElementById('acctTypePassenger');
+      const bookingTicker = document.getElementById('acctTypeBooking');
+
+      if (billingTicker && types.billing) billingTicker.checked = true;
+      if (passengerTicker && types.passenger) passengerTicker.checked = true;
+      if (bookingTicker && types.booking) bookingTicker.checked = true;
+
+      // Prefill address tab fields if present
+      const addr = draft.address || {};
+      const addressTypeEl = document.getElementById('addressType');
+      const addressNameEl = document.getElementById('addressName');
+      const primaryAddressEl = document.getElementById('primaryAddress');
+      const addressCityEl = document.getElementById('addressCity');
+      const addressStateEl = document.getElementById('addressState');
+      const addressZipEl = document.getElementById('addressZip');
+      const addressAptEl = document.getElementById('addressApt');
+      const addressCountryEl = document.getElementById('addressCountry');
+
+      if (addr && typeof addr === 'object') {
+        // For selects, only set if empty/current default
+        if (addressTypeEl && (addressTypeEl.value ?? '').toString().trim() === '') {
+          addressTypeEl.value = addr.address_type || addressTypeEl.value;
+        }
+        setIfEmpty(addressNameEl, addr.address_name);
+        setIfEmpty(primaryAddressEl, addr.address_line1);
+        setIfEmpty(addressAptEl, addr.address_line2);
+        setIfEmpty(addressCityEl, addr.city);
+        if (addressStateEl && (addressStateEl.value ?? '').toString().trim() === '') {
+          addressStateEl.value = addr.state || addressStateEl.value;
+        }
+        setIfEmpty(addressZipEl, addr.zip);
+        if (addressCountryEl && (addressCountryEl.value ?? '').toString().trim() === '') {
+          addressCountryEl.value = addr.country || addressCountryEl.value;
+        }
+      }
 
       // Clear the draft so it doesn't keep refilling
       localStorage.removeItem('relia_account_draft');
@@ -194,11 +397,15 @@ class Accounts {
     }
     
     // Main navigation buttons
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const section = e.target.dataset.section;
-        this.navigateToSection(section);
-      });
+    wireMainNav();
+
+    // Sidebar buttons: Delete / Reservation / Edit
+    const sidebarButtons = document.querySelectorAll('.sidebar-buttons button');
+    sidebarButtons.forEach((btn) => {
+      const label = (btn.textContent || '').trim().toLowerCase();
+      if (label === 'delete') {
+        btn.addEventListener('click', () => this.deleteSelectedAccount());
+      }
     });
 
     // Window tabs (Companies, Accounts, Export Customers, Email Lists)
@@ -244,6 +451,43 @@ class Accounts {
       });
     }
 
+    // Add New Account link
+    const addNewAccountLink = document.querySelector('.link-add');
+    if (addNewAccountLink) {
+      addNewAccountLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.addNewAccount();
+      });
+      console.log('✅ Add New Account link listener attached');
+    }
+
+    // Accounts listbox selection
+    const accountsListbox = document.getElementById('accountsListbox');
+    if (accountsListbox) {
+      accountsListbox.addEventListener('change', (e) => {
+        const accountId = e.target.value;
+        if (accountId) {
+          this.loadAccount(accountId);
+        }
+      });
+      console.log('✅ Accounts listbox listener attached');
+    }
+
+    // Sidebar search
+    const searchInput = document.querySelector('.sidebar-input');
+    const searchBtn = document.querySelector('.btn-go');
+    if (searchInput && searchBtn) {
+      searchBtn.addEventListener('click', () => {
+        this.searchAccounts(searchInput.value);
+      });
+      searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          this.searchAccounts(searchInput.value);
+        }
+      });
+      console.log('✅ Search listeners attached');
+    }
+
     // Companies list selection
     const companiesList = document.getElementById('companiesList');
     if (companiesList) {
@@ -252,13 +496,27 @@ class Accounts {
       });
     }
 
-    // Account sub-tabs (Account Info / Financial Data)
+    // Account sub-tabs (Account Info / Financial Data / Addresses / Booking / Misc)
     document.querySelectorAll('.account-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const accountTab = e.target.dataset.accountTab;
+        const btn = e.target.closest('.account-tab');
+        const accountTab = btn?.dataset?.accountTab;
+        if (!accountTab) return;
         this.switchAccountTab(accountTab);
       });
     });
+
+    // Financial tab SAVE button (no id in HTML)
+    const financialSaveBtn = document.querySelector('#financialDataTab button.btn.btn-primary');
+    if (financialSaveBtn && financialSaveBtn.textContent.trim().toUpperCase() === 'SAVE') {
+      financialSaveBtn.addEventListener('click', () => this.saveAccount());
+    }
+
+    // Addresses tab ADD button
+    const addAddressBtn = document.getElementById('addAddressBtn');
+    if (addAddressBtn) {
+      addAddressBtn.addEventListener('click', () => this.addAddress());
+    }
 
     // Email Lists - Include All Dates checkbox
     const emailIncludeAllDates = document.getElementById('emailIncludeAllDates');
@@ -300,29 +558,118 @@ class Accounts {
 
     // Hide all account tab contents
     document.querySelectorAll('.account-tab-content').forEach(content => {
+      content.classList.remove('active');
       content.style.display = 'none';
     });
 
     // Show the appropriate content
     if (tabName === 'info') {
-      document.getElementById('accountInfoTab').style.display = 'block';
+      const el = document.getElementById('accountInfoTab');
+      if (el) {
+        el.classList.add('active');
+        el.style.display = '';
+      }
+      // DRES4 login fields should never prefill (some browsers autofill on tab reveal)
+      this.clearDres4LoginFields();
+      setTimeout(() => this.clearDres4LoginFields(), 0);
+      setTimeout(() => this.clearDres4LoginFields(), 250);
     } else if (tabName === 'financial') {
-      document.getElementById('financialDataTab').style.display = 'block';
+      const el = document.getElementById('financialDataTab');
+      if (el) {
+        el.classList.add('active');
+        el.style.display = '';
+      }
     } else if (tabName === 'addresses') {
-      document.getElementById('addressesTab').style.display = 'block';
+      const el = document.getElementById('addressesTab');
+      if (el) {
+        el.classList.add('active');
+        el.style.display = '';
+      }
       this.loadStoredAddresses();
     } else if (tabName === 'booking') {
-      document.getElementById('bookingTab').style.display = 'block';
+      const el = document.getElementById('bookingTab');
+      if (el) {
+        el.classList.add('active');
+        el.style.display = '';
+      }
       this.loadBookingContacts();
     } else if (tabName === 'misc') {
-      document.getElementById('miscTab').style.display = 'block';
+      const el = document.getElementById('miscTab');
+      if (el) {
+        el.classList.add('active');
+        el.style.display = '';
+      }
       this.loadMiscInfo();
     }
   }
   
   loadStoredAddresses() {
-    // TODO: Load stored addresses from db
-    console.log('Loading stored addresses...');
+    const accountId = this.getCurrentAccountId();
+    const container = document.getElementById('storedAddressesList');
+    if (!container) return;
+
+    if (!accountId) {
+      container.innerHTML = '<p style="color: #999; text-align: center;">Save the account first to store addresses</p>';
+      return;
+    }
+
+    const addresses = this.db?.getAccountAddresses(accountId) || [];
+    if (!addresses.length) {
+      container.innerHTML = '<p style="color: #999; text-align: center;">No stored addresses yet</p>';
+      return;
+    }
+
+    container.innerHTML = addresses
+      .slice()
+      .sort((a, b) => (b.last_used_at || '').localeCompare(a.last_used_at || ''))
+      .map(a => {
+        const line2 = a.address_line2 ? ` ${a.address_line2}` : '';
+        const city = a.city ? `, ${a.city}` : '';
+        const state = a.state ? `, ${a.state}` : '';
+        const zip = a.zip_code ? ` ${a.zip_code}` : '';
+        const label = `${a.address_name || a.address_type || 'Address'}: ${a.address_line1 || ''}${line2}${city}${state}${zip}`;
+        return `<div style="padding: 6px 8px; border-bottom: 1px solid #eee;">${label}</div>`;
+      })
+      .join('');
+  }
+
+  getCurrentAccountId() {
+    const accountNumber = document.getElementById('accountNumber')?.value?.trim();
+    if (accountNumber) return accountNumber;
+    const selected = document.getElementById('accountsListbox')?.value?.trim();
+    return selected || null;
+  }
+
+  async addAddress() {
+    const accountId = this.getCurrentAccountId();
+    if (!accountId) {
+      alert('Please SAVE the account first (to get an Account#), then add addresses.');
+      return;
+    }
+
+    const addressData = {
+      address_type: document.getElementById('addressType')?.value?.trim() || 'primary',
+      address_name: document.getElementById('addressName')?.value?.trim() || '',
+      address_line1: document.getElementById('primaryAddress')?.value?.trim() || '',
+      address_line2: document.getElementById('addressApt')?.value?.trim() || '',
+      city: document.getElementById('addressCity')?.value?.trim() || '',
+      state: document.getElementById('addressState')?.value?.trim() || '',
+      zip_code: document.getElementById('addressZip')?.value?.trim() || '',
+      country: document.getElementById('addressCountry')?.value?.trim() || 'United States'
+    };
+
+    if (!addressData.address_line1) {
+      alert('Primary Address is required.');
+      return;
+    }
+
+    const saved = this.db?.saveAccountAddress(accountId, addressData);
+    if (!saved) {
+      alert('Failed to save address.');
+      return;
+    }
+
+    this.loadStoredAddresses();
   }
   
   loadBookingContacts() {
@@ -335,22 +682,91 @@ class Accounts {
     console.log('Loading misc info...');
   }
 
-  navigateToSection(section) {
-    // Navigate to different main sections
-    if (section === 'office') {
-      window.location.href = 'my-office.html';
-    } else if (section === 'accounts') {
-      window.location.href = 'accounts.html';
-    } else if (section === 'quotes') {
-      window.location.href = 'quotes.html';
-    } else if (section === 'calendar') {
-      window.location.href = 'calendar.html';
-    } else if (section === 'reservations') {
-      window.location.href = 'reservations-list.html';
-    } else {
-      // Placeholder for other sections
-      alert(`${section} section coming soon`);
+  addNewAccount() {
+    console.log('🆕 Add New Account clicked');
+    
+    // Clear all form fields
+    document.getElementById('acctFirstName').value = '';
+    document.getElementById('acctLastName').value = '';
+    document.getElementById('acctCompany').value = '';
+    document.getElementById('acctCellPhone1').value = '';
+    document.getElementById('acctEmail2').value = '';
+
+    // Never carry DRES4 login fields between accounts
+    this.clearDres4LoginFields();
+    
+    // Clear account number (will be assigned on save)
+    const accountNumberEl = document.getElementById('accountNumber');
+    if (accountNumberEl) {
+      accountNumberEl.value = '';
+      accountNumberEl.placeholder = 'Will be assigned on save';
+      accountNumberEl.setAttribute('readonly', true);
+      accountNumberEl.style.backgroundColor = '#f5f5f5';
     }
+    
+    // Clear misc account number too
+    const miscAccountNumberEl = document.getElementById('miscAccountNumber');
+    if (miscAccountNumberEl) {
+      miscAccountNumberEl.value = '';
+      miscAccountNumberEl.placeholder = 'Will be assigned on save';
+    }
+    
+    // Switch to Account Info tab
+    this.switchAccountTab('info');
+    
+    // Focus first name field
+    setTimeout(() => {
+      document.getElementById('acctFirstName')?.focus();
+    }, 100);
+    
+    console.log('✅ New account form ready - account number will be assigned on save');
+  }
+
+  searchAccounts(query) {
+    if (!query || !query.trim()) {
+      // Show all accounts if no query
+      this.loadAccountsList();
+      return;
+    }
+    
+    const searchTerm = query.toLowerCase().trim();
+    console.log('🔍 Searching accounts for:', searchTerm);
+    
+    // Get all accounts
+    const allAccounts = this.db?.getAllAccounts() || [];
+    
+    // Search across ALL fields
+    const filtered = allAccounts.filter(acc => {
+      const searchableText = [
+        acc.account_number,
+        acc.first_name,
+        acc.last_name,
+        acc.company_name,
+        acc.email,
+        acc.phone,
+        acc.cell_phone
+      ].filter(Boolean).join(' ').toLowerCase();
+      
+      return searchableText.includes(searchTerm);
+    });
+    
+    // Update listbox
+    const listbox = document.getElementById('accountsListbox');
+    if (listbox && filtered.length > 0) {
+      listbox.innerHTML = filtered.map(acc => {
+        const inactiveLabel = (acc.status || '').toString().toLowerCase() === 'inactive' ? ' (INACTIVE)' : '';
+        const displayName = `${acc.account_number || acc.id}${inactiveLabel} - ${acc.first_name || ''} ${acc.last_name || ''} ${acc.company_name ? '- ' + acc.company_name : ''}`.trim();
+        return `<option value="${acc.account_number || acc.id}">${displayName}</option>`;
+      }).join('');
+    } else if (listbox) {
+      listbox.innerHTML = '<option value="">-- No matches found --</option>';
+    }
+    
+    console.log(`✅ Found ${filtered.length} matching accounts`);
+  }
+
+  navigateToSection(section) {
+    navigateToSection(section);
   }
 
   switchTab(tabName) {
@@ -440,18 +856,63 @@ class Accounts {
     console.log('💾 saveAccount() called');
     
     try {
-      // Get account number (readonly field)
-      const accountNumber = document.getElementById('accountNumber')?.value?.trim();
+      // Auto-fill: Email → Account Emails
+      const email = document.getElementById('acctEmail2')?.value?.trim();
+
+      // Use Contact Info "Cellular Phone 1" if present; otherwise use the top-left cell field
+      const cellPhone =
+        document.getElementById('acctCellularPhone1')?.value?.trim() ||
+        document.getElementById('acctCellPhone1')?.value?.trim() ||
+        '';
+
+      // Keep the two cell fields in sync (best-effort)
+      const topCellEl = document.getElementById('acctCellPhone1');
+      const contactCellEl = document.getElementById('acctCellularPhone1');
+      if (cellPhone) {
+        if (topCellEl && !topCellEl.value) topCellEl.value = cellPhone;
+        if (contactCellEl && !contactCellEl.value) contactCellEl.value = cellPhone;
+      }
+      
+      // Auto-fill contact info email if empty
+      const acctEmailContactEl = document.getElementById('acctEmail');
+      if (acctEmailContactEl && email && !acctEmailContactEl.value) {
+        acctEmailContactEl.value = email;
+      }
+      
+      // Get account number (readonly field) or assign new one
+      let accountNumber = document.getElementById('accountNumber')?.value?.trim();
+      
+      // If no account number, this is a NEW account - assign next number
+      if (!accountNumber) {
+        accountNumber = this.db.getNextAccountNumber().toString();
+        console.log('🆕 New account - assigning account number:', accountNumber);
+        
+        // Increment for next account
+        this.db.setNextAccountNumber(parseInt(accountNumber) + 1);
+        
+        // Update the form with the new account number
+        const accountNumberEl = document.getElementById('accountNumber');
+        if (accountNumberEl) {
+          accountNumberEl.value = accountNumber;
+          accountNumberEl.style.backgroundColor = '#f5f5f5';
+        }
+        
+        // Update misc account number too
+        const miscAccountNumberEl = document.getElementById('miscAccountNumber');
+        if (miscAccountNumberEl) {
+          miscAccountNumberEl.value = accountNumber;
+        }
+      }
       
       // Collect form data with proper field mappings
       const accountData = {
-        id: accountNumber || Date.now().toString(),
-        account_number: accountNumber || Date.now().toString(),
+        id: accountNumber,
+        account_number: accountNumber,
         first_name: document.getElementById('acctFirstName')?.value?.trim() || '',
         last_name: document.getElementById('acctLastName')?.value?.trim() || '',
         company_name: document.getElementById('acctCompany')?.value?.trim() || '',
         phone: document.getElementById('acctPhone')?.value?.trim() || '',
-        cell_phone: document.getElementById('acctCellPhone1')?.value?.trim() || '', // Cellular Phone 1
+        cell_phone: cellPhone, // Cellular Phone 1
         email: document.getElementById('acctEmail2')?.value?.trim() || '', // Accounts Email
         status: 'active',
         type: 'individual',
@@ -486,6 +947,49 @@ class Accounts {
       console.log('✅ Account saved successfully:', saved);
       alert('Account saved successfully!\nData synced to Supabase database.');
 
+      // If this page was opened from Reservation, notify the opener/parent and return
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const from = (params.get('from') || '').toLowerCase();
+        const payload = {
+          action: 'relia:accountSaved',
+          accountId: accountNumber,
+          accountName: this.getCurrentAccountDisplayName?.() || ''
+        };
+
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(payload, '*');
+          if (from === 'reservation') {
+            // Close popup if possible
+            setTimeout(() => {
+              try { window.close(); } catch { /* ignore */ }
+            }, 150);
+          }
+        }
+
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(payload, '*');
+        }
+
+        // Fallback: same-window return
+        if (from === 'reservation' && (!window.opener || window.opener.closed)) {
+          const returnUrl = localStorage.getItem('relia_return_to_reservation_url');
+          if (returnUrl) {
+            try {
+              const u = new URL(returnUrl, window.location.origin);
+              u.searchParams.set('newAccountId', accountNumber);
+              localStorage.removeItem('relia_return_to_reservation_url');
+              window.location.href = u.toString();
+            } catch {
+              // If URL parsing fails, just go back to reservation form
+              window.location.href = 'reservation-form.html';
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to return-to-reservation flow:', e);
+      }
+
       // Show success feedback
       const btn = document.getElementById('saveAccountBtn');
       if (btn) {
@@ -503,7 +1007,6 @@ class Accounts {
       
       // Reload accounts list
       await this.loadAccountsList();
-      });
     } catch (error) {
       console.error('❌ Error saving account:', error);
     }

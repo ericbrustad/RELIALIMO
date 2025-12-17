@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Supabase Integration Test</title>
+  <script src="./env.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -79,7 +80,27 @@
   </style>
 </head>
 <body>
-  <h1>🐂 RELIA LIMO - Supabase Integration Test</h1>
+  <h1>RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" style="width: 28px; height: 28px; vertical-align: middle; margin: 0 6px;">LIMO - Supabase Integration Test</h1>
+
+  <div class="test-section">
+    <h2>0. Auth <span id="status0" class="status pending">Pending</span></h2>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <div style="flex: 1; min-width: 240px;">
+        <label style="display:block; font-size:12px; color:#666; margin-bottom:6px;">Email</label>
+        <input id="authEmail" type="email" placeholder="you@example.com" style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd;" autocomplete="username" />
+      </div>
+      <div style="flex: 1; min-width: 240px;">
+        <label style="display:block; font-size:12px; color:#666; margin-bottom:6px;">Password</label>
+        <input id="authPassword" type="password" placeholder="••••••••" style="width:100%; padding:10px; border-radius:4px; border:1px solid #ddd;" autocomplete="current-password" />
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button onclick="signIn()">Sign In</button>
+        <button class="error" onclick="signOut()">Sign Out</button>
+        <button onclick="checkAuth()">Check Current User</button>
+      </div>
+    </div>
+    <div id="result0" class="result"></div>
+  </div>
   
   <div class="test-section">
     <h2>1. Connection Test <span id="status1" class="status pending">Pending</span></h2>
@@ -125,9 +146,23 @@
   </div>
 
   <script type="module">
-    import { setupAPI, saveAccountToSupabase, fetchAccounts, savePassengerToSupabase, saveBookingAgentToSupabase, fetchDrivers } from './api-service.js';
+    import { setupAPI, saveAccountToSupabase, fetchAccounts, savePassengerToSupabase, saveBookingAgentToSupabase, fetchDrivers, getLastApiError } from './api-service.js';
     
     let apiReady = false;
+
+    function setStatus(el, kind, text) {
+      el.className = `status ${kind}`;
+      el.textContent = text;
+    }
+
+    async function getClient() {
+      await setupAPI();
+      // setupAPI initializes the module-level client; we can re-use it through setupAPI()'s internal singleton.
+      // api-service.js exposes getSupabaseClient(), but we keep this file minimal and rely on setupAPI + window.supabase.
+      // However, the REST client is default export from supabase-client.js via initSupabase().
+      // setupAPI() returns the client instance, so we just call it again when needed.
+      return await setupAPI();
+    }
     
     // Initialize API
     window.initializeAPI = async function() {
@@ -135,11 +170,103 @@
         await setupAPI();
         apiReady = true;
         console.log('✅ API initialized');
+
+        // Update auth status immediately
+        try {
+          const client = await getClient();
+          const { data: { user } } = await client.auth.getUser();
+          const result0 = document.getElementById('result0');
+          const status0 = document.getElementById('status0');
+          if (user) {
+            result0.textContent = `✅ Signed in as: ${user.email || user.id}`;
+            setStatus(status0, 'success', 'Signed In');
+          } else {
+            result0.textContent = '⚠️ Not signed in. Sign in above to run create/fetch tests.';
+            setStatus(status0, 'pending', 'Not Signed In');
+          }
+        } catch (e) {
+          console.warn('Auth check failed:', e);
+        }
         return true;
       } catch (error) {
         console.error('❌ API initialization failed:', error);
         return false;
       }
+    };
+
+    window.checkAuth = async function() {
+      const result = document.getElementById('result0');
+      const status = document.getElementById('status0');
+
+      try {
+        const ok = await window.initializeAPI();
+        if (!ok) throw new Error('API not initialized');
+
+        const client = await getClient();
+        const { data: { user }, error } = await client.auth.getUser();
+        if (error) throw error;
+
+        if (user) {
+          result.textContent = `✅ Signed in as: ${user.email || user.id}\n\n${JSON.stringify(user, null, 2)}`;
+          setStatus(status, 'success', 'Signed In');
+        } else {
+          result.textContent = '⚠️ Not signed in. Use Sign In above.';
+          setStatus(status, 'pending', 'Not Signed In');
+        }
+      } catch (e) {
+        result.textContent = `❌ FAILED\n\nError: ${e.message || e}`;
+        setStatus(status, 'failed', 'Failed');
+      }
+
+      updateSummary();
+    };
+
+    window.signIn = async function() {
+      const result = document.getElementById('result0');
+      const status = document.getElementById('status0');
+      const email = document.getElementById('authEmail')?.value?.trim() || '';
+      const password = document.getElementById('authPassword')?.value || '';
+
+      result.textContent = 'Signing in...';
+      setStatus(status, 'pending', 'Signing In');
+
+      try {
+        const ok = await window.initializeAPI();
+        if (!ok) throw new Error('API not initialized');
+
+        const client = await getClient();
+        const { data, error } = await client.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+
+        result.textContent = `✅ Signed in as: ${data?.user?.email || data?.user?.id || email}`;
+        setStatus(status, 'success', 'Signed In');
+      } catch (e) {
+        result.textContent = `❌ FAILED\n\nError: ${e.message || e}\n\nTip: You must use a real Supabase Auth user for your project (or sign in via auth.html first).`;
+        setStatus(status, 'failed', 'Failed');
+      }
+
+      updateSummary();
+    };
+
+    window.signOut = async function() {
+      const result = document.getElementById('result0');
+      const status = document.getElementById('status0');
+
+      result.textContent = 'Signing out...';
+      setStatus(status, 'pending', 'Signing Out');
+
+      try {
+        const client = await getClient();
+        const { error } = await client.auth.signOut();
+        if (error) throw error;
+        result.textContent = '✅ Signed out';
+        setStatus(status, 'pending', 'Not Signed In');
+      } catch (e) {
+        result.textContent = `❌ FAILED\n\nError: ${e.message || e}`;
+        setStatus(status, 'failed', 'Failed');
+      }
+
+      updateSummary();
     };
     
     // Test 1: Connection
@@ -198,7 +325,9 @@
           status.className = 'status success';
           status.textContent = 'Success';
         } else {
-          throw new Error('saveAccountToSupabase returned null');
+          const last = getLastApiError?.();
+          const msg = last?.message || last?.error?.message || last?.error_description || (typeof last === 'string' ? last : null);
+          throw new Error(msg ? `saveAccountToSupabase returned null: ${msg}` : 'saveAccountToSupabase returned null');
         }
       } catch (error) {
         result.textContent = `❌ FAILED\n\nError: ${error.message}\n\nPossible causes:\n- Schema not deployed to Supabase\n- RLS policies blocking insert\n- No organization membership\n- Missing required fields`;
@@ -233,7 +362,9 @@
           status.className = 'status success';
           status.textContent = 'Success';
         } else {
-          throw new Error('fetchAccounts returned null');
+          const last = getLastApiError?.();
+          const msg = last?.message || last?.error?.message || last?.error_description || (typeof last === 'string' ? last : null);
+          throw new Error(msg ? `fetchAccounts returned null: ${msg}` : 'fetchAccounts returned null');
         }
       } catch (error) {
         result.textContent = `❌ FAILED\n\nError: ${error.message}`;
@@ -273,7 +404,9 @@
           status.className = 'status success';
           status.textContent = 'Success';
         } else {
-          throw new Error('savePassengerToSupabase returned null');
+          const last = getLastApiError?.();
+          const msg = last?.message || last?.error?.message || last?.error_description || (typeof last === 'string' ? last : null);
+          throw new Error(msg ? `savePassengerToSupabase returned null: ${msg}` : 'savePassengerToSupabase returned null');
         }
       } catch (error) {
         result.textContent = `❌ FAILED\n\nError: ${error.message}`;
@@ -311,7 +444,9 @@
           status.className = 'status success';
           status.textContent = 'Success';
         } else {
-          throw new Error('saveBookingAgentToSupabase returned null');
+          const last = getLastApiError?.();
+          const msg = last?.message || last?.error?.message || last?.error_description || (typeof last === 'string' ? last : null);
+          throw new Error(msg ? `saveBookingAgentToSupabase returned null: ${msg}` : 'saveBookingAgentToSupabase returned null');
         }
       } catch (error) {
         result.textContent = `❌ FAILED\n\nError: ${error.message}`;
@@ -346,7 +481,9 @@
           status.className = 'status success';
           status.textContent = 'Success';
         } else {
-          throw new Error('fetchDrivers returned null');
+          const last = getLastApiError?.();
+          const msg = last?.message || last?.error?.message || last?.error_description || (typeof last === 'string' ? last : null);
+          throw new Error(msg ? `fetchDrivers returned null: ${msg}` : 'fetchDrivers returned null');
         }
       } catch (error) {
         result.textContent = `❌ FAILED\n\nError: ${error.message}`;

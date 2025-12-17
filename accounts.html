@@ -20,6 +20,21 @@
   </head>
   <body>
     <div id="app">
+      <!-- Navigation Header -->
+      <header class="header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div class="header-content" style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="header-left">
+            <h1 class="logo" style="margin: 0; color: white; font-size: 24px; display: flex; align-items: center; gap: 5px;">
+              RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" style="width: 30px; height: 30px;">LIMO™
+            </h1>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
+            <button onclick="window.location.href='reservation-form.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">➕ New Reservation</button>
+          </div>
+        </div>
+      </header>
+
       <!-- Accounts Tabs -->
       <div class="window-tabs-bar">
         <div class="window-tabs">
@@ -255,15 +270,15 @@
                       <h4 class="form-section-header">Account Type</h4>
                       <div class="checkbox-row">
                         <label class="checkbox-label">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="acctTypeBilling" />
                           <span>Billing Client</span>
                         </label>
                         <label class="checkbox-label">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="acctTypePassenger" />
                           <span>Passngr</span>
                         </label>
                         <label class="checkbox-label">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="acctTypeBooking" />
                           <span>Booking Contact</span>
                         </label>
                       </div>
@@ -374,7 +389,7 @@
                           <option>?</option>
                           <option>📱</option>
                         </select>
-                        <input type="text" class="form-control" placeholder="Enter number" />
+                        <input type="text" id="acctCellularPhone1" class="form-control" placeholder="Enter number" />
                         <label class="ext-label">Ext</label>
                         <input type="text" class="ext-input" />
                       </div>
@@ -481,11 +496,33 @@
                       <h4 class="form-section-header" style="margin-bottom: 10px;">DRES4 / Passenger App Email Login</h4>
                       <div class="form-row">
                         <label>Email:</label>
-                        <input type="text" class="form-control" />
+                        <input
+                          type="email"
+                          id="dres4LoginEmail"
+                          name="dres4_login_email"
+                          class="form-control"
+                          autocomplete="off"
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-form-type="other"
+                          autocapitalize="none"
+                          spellcheck="false"
+                        />
                       </div>
                       <div class="form-row">
                         <label>Password:</label>
-                        <input type="password" class="form-control" />
+                        <input
+                          type="password"
+                          id="dres4LoginPassword"
+                          name="dres4_login_password"
+                          class="form-control"
+                          autocomplete="new-password"
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-form-type="other"
+                          autocapitalize="none"
+                          spellcheck="false"
+                        />
                       </div>
                     </div>
 

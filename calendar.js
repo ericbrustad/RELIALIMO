@@ -1,3 +1,5 @@
+import { wireMainNav } from './navigation.js';
+
 class Calendar {
   constructor() {
     this.currentView = 'day';
@@ -18,12 +20,7 @@ class Calendar {
 
   setupEventListeners() {
     // Main navigation buttons
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const section = e.target.dataset.section;
-        this.navigateToSection(section);
-      });
-    });
+    wireMainNav();
 
     // View type buttons
     document.querySelectorAll('.view-type-btn').forEach(btn => {

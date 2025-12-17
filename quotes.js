@@ -1,3 +1,5 @@
+import { wireMainNav } from './navigation.js';
+
 class Quotes {
   constructor() {
     this.currentTab = 'manage-quotes';
@@ -21,12 +23,7 @@ class Quotes {
 
   setupEventListeners() {
     // Main navigation buttons
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const section = e.target.dataset.section;
-        this.navigateToSection(section);
-      });
-    });
+    wireMainNav();
 
     // Window tabs (Manage Quotes, Response Templates, Initial Response)
     document.querySelectorAll('.window-tab').forEach(tab => {
@@ -190,9 +187,6 @@ class Quotes {
       window.location.href = 'reservations-list.html';
     } else if (section === 'quotes') {
       window.location.href = 'quotes.html';
-    } else {
-      // Placeholder for other sections
-      alert(`${section} section coming soon`);
     }
   }
 

@@ -2,6 +2,28 @@
 import { supabaseConfig, initSupabase } from './config.js';
 
 let supabaseClient = null;
+let lastApiError = null;
+
+export function getLastApiError() {
+  return lastApiError;
+}
+
+async function getOrgContextOrThrow(client) {
+  const { data: { user }, error: userError } = await client.auth.getUser();
+  if (userError) throw userError;
+  if (!user) throw new Error('User not authenticated');
+
+  const { data: membership, error: membershipError } = await client
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .single();
+
+  if (membershipError) throw membershipError;
+  if (!membership?.organization_id) throw new Error('User not in any organization');
+
+  return { user, organizationId: membership.organization_id };
+}
 
 /**
  * Initialize the Supabase client
@@ -35,14 +57,19 @@ export async function fetchDrivers() {
   if (!client) return null;
   
   try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+
     const { data, error } = await client
       .from('drivers')
-      .select('*');
+      .select('*')
+      .eq('organization_id', organizationId);
     
     if (error) throw error;
     return data;
   } catch (error) {
     console.error('Error fetching drivers:', error);
+    lastApiError = error;
     return null;
   }
 }
@@ -397,22 +424,12 @@ export async function saveAccountToSupabase(accountData) {
   }
   
   try {
-    // Get current user's organization
-    const { data: { user } } = await client.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    
-    // Get user's organization
-    const { data: membership } = await client
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
-    
-    if (!membership) throw new Error('User not in any organization');
+    lastApiError = null;
+    const { user, organizationId } = await getOrgContextOrThrow(client);
     
     // Prepare account data for Supabase
     const supabaseAccount = {
-      organization_id: membership.organization_id,
+      organization_id: organizationId,
       account_number: accountData.account_number || accountData.id,
       first_name: accountData.first_name,
       last_name: accountData.last_name,
@@ -441,12 +458,14 @@ export async function saveAccountToSupabase(accountData) {
     };
     
     // Check if account exists by account_number
-    const { data: existing } = await client
+    const { data: existingRows, error: existingError } = await client
       .from('accounts')
       .select('id')
       .eq('account_number', supabaseAccount.account_number)
-      .eq('organization_id', membership.organization_id)
-      .single();
+      .eq('organization_id', organizationId);
+
+    if (existingError) throw existingError;
+    const existing = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
     
     if (existing) {
       // Update existing account
@@ -472,6 +491,7 @@ export async function saveAccountToSupabase(accountData) {
     }
   } catch (error) {
     console.error('❌ Error saving account to Supabase:', error);
+    lastApiError = error;
     return null;
   }
 }
@@ -484,9 +504,13 @@ export async function fetchAccounts() {
   if (!client) return null;
   
   try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+
     const { data, error } = await client
       .from('accounts')
       .select('*')
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
@@ -494,6 +518,7 @@ export async function fetchAccounts() {
     return data;
   } catch (error) {
     console.error('❌ Error fetching accounts:', error);
+    lastApiError = error;
     return null;
   }
 }
@@ -506,19 +531,11 @@ export async function savePassengerToSupabase(passengerData) {
   if (!client) return null;
   
   try {
-    const { data: { user } } = await client.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    
-    const { data: membership } = await client
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
-    
-    if (!membership) throw new Error('User not in any organization');
+    lastApiError = null;
+    const { user, organizationId } = await getOrgContextOrThrow(client);
     
     const supabasePassenger = {
-      organization_id: membership.organization_id,
+      organization_id: organizationId,
       first_name: passengerData.firstName || passengerData.first_name,
       last_name: passengerData.lastName || passengerData.last_name,
       phone: passengerData.phone,
@@ -531,14 +548,16 @@ export async function savePassengerToSupabase(passengerData) {
     };
     
     // Check for duplicate
-    const { data: existing } = await client
+    const { data: existingRows, error: existingError } = await client
       .from('passengers')
       .select('id')
       .eq('first_name', supabasePassenger.first_name)
       .eq('last_name', supabasePassenger.last_name)
       .eq('email', supabasePassenger.email)
-      .eq('organization_id', membership.organization_id)
-      .single();
+      .eq('organization_id', organizationId);
+
+    if (existingError) throw existingError;
+    const existing = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
     
     if (existing) {
       const { data, error } = await client
@@ -560,6 +579,7 @@ export async function savePassengerToSupabase(passengerData) {
     }
   } catch (error) {
     console.error('❌ Error saving passenger to Supabase:', error);
+    lastApiError = error;
     return null;
   }
 }
@@ -572,19 +592,11 @@ export async function saveBookingAgentToSupabase(agentData) {
   if (!client) return null;
   
   try {
-    const { data: { user } } = await client.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    
-    const { data: membership } = await client
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
-    
-    if (!membership) throw new Error('User not in any organization');
+    lastApiError = null;
+    const { user, organizationId } = await getOrgContextOrThrow(client);
     
     const supabaseAgent = {
-      organization_id: membership.organization_id,
+      organization_id: organizationId,
       first_name: agentData.firstName || agentData.first_name,
       last_name: agentData.lastName || agentData.last_name,
       phone: agentData.phone,
@@ -595,14 +607,16 @@ export async function saveBookingAgentToSupabase(agentData) {
     };
     
     // Check for duplicate
-    const { data: existing } = await client
+    const { data: existingRows, error: existingError } = await client
       .from('booking_agents')
       .select('id')
       .eq('first_name', supabaseAgent.first_name)
       .eq('last_name', supabaseAgent.last_name)
       .eq('email', supabaseAgent.email)
-      .eq('organization_id', membership.organization_id)
-      .single();
+      .eq('organization_id', organizationId);
+
+    if (existingError) throw existingError;
+    const existing = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
     
     if (existing) {
       const { data, error } = await client
@@ -624,6 +638,7 @@ export async function saveBookingAgentToSupabase(agentData) {
     }
   } catch (error) {
     console.error('❌ Error saving booking agent to Supabase:', error);
+    lastApiError = error;
     return null;
   }
 }

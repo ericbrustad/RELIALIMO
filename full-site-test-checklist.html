@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RELIALIMO — Full Site Test Checklist</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    /* Minimal, layout-only styling; uses existing fonts/colors from style.css */
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .page-header h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .page-header .links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn-link {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.15);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .checklist {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .checklist h1, .checklist h2, .checklist h3 {
+      margin: 18px 0 10px;
+    }
+
+    .checklist h1 { font-size: 22px; }
+    .checklist h2 { font-size: 18px; }
+    .checklist h3 { font-size: 16px; }
+
+    .checklist ul {
+      margin: 8px 0 10px;
+      padding-left: 20px;
+    }
+
+    .task {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .task input[type="checkbox"] {
+      margin-top: 2px;
+      width: 16px;
+      height: 16px;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.95em;
+    }
+
+    .muted {
+      opacity: 0.85;
+    }
+
+    .error {
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 80, 80, 0.5);
+      background: rgba(255, 80, 80, 0.1);
+      margin-top: 12px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <h1>Full Site Test Checklist</h1>
+      <div class="links">
+        <a class="btn-link" href="./index.html">Home</a>
+        <a class="btn-link" href="./FULL_SITE_TEST_CHECKLIST.md" target="_blank" rel="noopener">Open Markdown</a>
+      </div>
+    </div>
+
+    <div class="checklist">
+      <div class="muted">Loading checklist from <span class="mono">FULL_SITE_TEST_CHECKLIST.md</span>…</div>
+      <div id="checklistRoot"></div>
+      <div id="checklistError" class="error" style="display:none"></div>
+    </div>
+  </div>
+
+  <script src="./full-site-test-checklist.js"></script>
+</body>
+</html>

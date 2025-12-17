@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™</h1>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>New Reservation - RELIARELIA bullLIMO™</title>
+    <title>New Reservation - RELIA🐂LIMO™</title>
     <link rel="icon" href="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" />
     <link rel="stylesheet" href="reservation-form.css" />
     <script>
@@ -21,6 +20,21 @@
   </head>
   <body>
     <div id="app">
+      <!-- Navigation Header -->
+      <header class="header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div class="header-content" style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="header-left">
+            <h1 class="logo" style="margin: 0; color: white; font-size: 24px; display: flex; align-items: center; gap: 5px;">
+              RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" style="width: 30px; height: 30px;">LIMO™
+            </h1>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
+            <button onclick="window.location.href='accounts.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
+          </div>
+        </div>
+      </header>
+
       <!-- Attention Warning -->
       <div class="attention-warning">
         <strong>ATTENTION:</strong> This reservation was created but has not been saved. Be sure to save it before leaving this screen.
@@ -67,6 +81,10 @@
                   <div class="form-group" style="position: relative; flex: 1; margin-bottom: 0;">
                     <label>Account</label>
                     <input type="text" id="billingAccountSearch" class="form-control" placeholder="Search or enter account" autocomplete="off" />
+                    <div style="margin-top: 6px; font-size: 12px; color: #666;">
+                      Account #:
+                      <span id="billingAccountNumberDisplay" style="font-weight: 600; color: #333;"></span>
+                    </div>
                     <div id="accountSuggestions" class="suggestions-dropdown"></div>
                   </div>
                   <button type="button" id="addAccountBtn" class="btn-icon" title="Add New Account" style="padding: 8px 10px; font-size: 16px; margin-top: 24px;">+</button>
@@ -241,9 +259,10 @@
               
               <div class="form-section">
                 <div class="form-row-2">
-                  <div class="form-group">
+                  <div class="form-group" style="position: relative;">
                     <label>First Name</label>
                     <input type="text" id="passengerFirstName" class="form-control" />
+                    <div id="passengerSuggestions" class="suggestions-dropdown"></div>
                   </div>
 
                   <div class="form-group">
@@ -284,9 +303,10 @@
               
               <div class="form-section">
                 <div class="form-row-2">
-                  <div class="form-group">
+                  <div class="form-group" style="position: relative;">
                     <label>First Name</label>
                     <input type="text" id="bookedByFirstName" class="form-control" />
+                    <div id="bookingAgentSuggestions" class="suggestions-dropdown"></div>
                   </div>
 
                   <div class="form-group">
@@ -578,7 +598,7 @@
                     </label>
                   </div>
 
-                  <button id="createStopBtn" class="btn btn-create" onclick="handleCreateStop()">CREATE</button>
+                  <button id="createStopBtn" type="button" class="btn btn-create">CREATE</button>
                 </div>
 
                 <!-- Stored Routing Information -->
@@ -1873,6 +1893,27 @@
         const row = document.createElement('tr');
         row.id = stopId;
         row.dataset.stopId = stopId;
+        // Store full stop data for reliable save/load
+        row.dataset.stopType = stopData.stopType || '';
+        row.dataset.locationName = stopData.locationName || '';
+        row.dataset.address1 = stopData.address1 || '';
+        row.dataset.address2 = stopData.address2 || '';
+        row.dataset.city = stopData.city || '';
+        row.dataset.state = stopData.state || '';
+        row.dataset.zipCode = stopData.zipCode || '';
+        row.dataset.country = stopData.country || '';
+        row.dataset.phone = stopData.phone || '';
+        row.dataset.notes = stopData.notes || '';
+        row.dataset.timeIn = stopData.timeIn || '';
+        row.dataset.fullAddress = stopData.fullAddress || '';
+        row.dataset.airportCode = stopData.airportCode || '';
+        row.dataset.airline = stopData.airline || '';
+        row.dataset.flightNumber = stopData.flightNumber || '';
+        row.dataset.terminalGate = stopData.terminalGate || '';
+        row.dataset.flightStatus = stopData.flightStatus || '';
+        row.dataset.fboId = stopData.fboId || '';
+        row.dataset.fboName = stopData.fboName || '';
+        row.dataset.fboEmail = stopData.fboEmail || '';
         const badgeColor = 
           stopType === 'pickup' ? '#28a745' :
           stopType === 'dropoff' ? '#dc3545' :

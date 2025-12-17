@@ -1,5 +1,6 @@
 // Import API service
 import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver } from './api-service.js';
+import { wireMainNav } from './navigation.js';
 
 class MyOffice {
   constructor() {
@@ -159,18 +160,7 @@ class MyOffice {
     });
 
     // Main navigation
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const section = e.target.dataset.section;
-        if (section === 'reservations') {
-          window.location.href = 'reservations-list.html';
-        } else if (section === 'office') {
-          // Already on office page
-        } else {
-          alert(`${section} section coming soon!`);
-        }
-      });
-    });
+        wireMainNav();
 
     // Company Preferences sub-navigation
     document.querySelectorAll('.prefs-subnav-btn').forEach(btn => {

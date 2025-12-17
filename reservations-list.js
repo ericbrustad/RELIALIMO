@@ -1,10 +1,12 @@
+import { wireMainNav } from './navigation.js';
+
 class ReservationsList {
   constructor() {
     this.init();
   }
 
   async init() {
-    this.loadDbModule();
+    await this.loadDbModule();
     this.setupEventListeners();
     this.setupTabSwitching();
     await this.loadReservations();
@@ -33,6 +35,7 @@ class ReservationsList {
       if (reservations && reservations.length > 0) {
         this.displayReservations(reservations);
       } else {
+        this.displayReservations([]);
         console.log('📭 No reservations found');
       }
     } catch (error) {
@@ -48,30 +51,24 @@ class ReservationsList {
       return;
     }
     
-    // Clear existing rows (except header)
-    const existingRows = tableBody.querySelectorAll('tr');
-    existingRows.forEach(row => {
-      // Only remove data rows, not template rows
-      if (!row.classList.contains('template')) {
-        row.remove();
-      }
-    });
+    // Clear existing rows
+    tableBody.innerHTML = '';
     
     // Add new rows for each reservation
     reservations.forEach(res => {
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td><input type="checkbox" class="row-checkbox" /></td>
         <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
         <td>${this.formatDate(res.pickup_at)}</td>
         <td>${this.formatTime(res.pickup_at)}</td>
         <td>${res.passenger_name || ''}</td>
         <td>${res.company_name || ''}</td>
-        <td>${res.service_type || ''}</td>
         <td>${res.vehicle_type || ''}</td>
-        <td>${res.status || 'confirmed'}</td>
         <td>$${(res.grand_total || 0).toFixed(2)}</td>
-        <td><a href="#" class="select-link">Select</a></td>
+        <td>${res.payment_type || ''}</td>
+        <td>${res.status || 'confirmed'}</td>
+        <td>${res.group_name || ''}</td>
+        <td><a href="#" class="select-link">Select >></a></td>
       `;
       tableBody.appendChild(row);
     });
@@ -154,20 +151,7 @@ class ReservationsList {
 
   setupEventListeners() {
     // Main navigation buttons
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const button = e.target.closest('.nav-btn');
-        const section = button.dataset.section;
-        
-        if (section === 'office') {
-          window.location.href = 'my-office.html';
-        } else if (section === 'reservations') {
-          // Already on reservations page
-        } else {
-          alert(`${section} section coming soon!`);
-        }
-      });
-    });
+    wireMainNav();
 
     // View buttons (window-actions)
     document.querySelectorAll('.view-btn').forEach(btn => {

@@ -153,12 +153,142 @@ export const supabase = {
       };
     }
   },
-  from: (table) => ({
-    select: () => ({ data: null, error: 'Use api-service.js' }),
-    insert: () => ({ data: null, error: 'Use api-service.js' }),
-    update: () => ({ data: null, error: 'Use api-service.js' })
-  })
+  from: (table) => new PostgrestQuery(table)
 };
+
+class PostgrestQuery {
+  constructor(table) {
+    this.table = table;
+    this.method = 'GET';
+    this.filters = [];
+    this.orderBy = null;
+    this.selectColumns = null;
+    this.body = undefined;
+    this.returnRepresentation = false;
+    this.expectSingle = false;
+  }
+
+  select(columns = '*') {
+    this.selectColumns = columns;
+    if (this.method === 'POST' || this.method === 'PATCH' || this.method === 'DELETE') {
+      this.returnRepresentation = true;
+    } else {
+      this.method = 'GET';
+    }
+    return this;
+  }
+
+  insert(rows) {
+    this.method = 'POST';
+    this.body = rows;
+    return this;
+  }
+
+  update(values) {
+    this.method = 'PATCH';
+    this.body = values;
+    return this;
+  }
+
+  delete() {
+    this.method = 'DELETE';
+    return this;
+  }
+
+  eq(column, value) {
+    this.filters.push({ op: 'eq', column, value });
+    return this;
+  }
+
+  order(column, options = {}) {
+    const dir = options.ascending === false ? 'desc' : 'asc';
+    this.orderBy = { column, dir };
+    return this;
+  }
+
+  single() {
+    this.expectSingle = true;
+    return this;
+  }
+
+  async execute() {
+    const token = localStorage.getItem('supabase_access_token') || supabaseAnonKey;
+
+    const url = new URL(`${supabaseUrl}/rest/v1/${this.table}`);
+
+    if (this.selectColumns) {
+      url.searchParams.set('select', this.selectColumns);
+    }
+
+    if (this.orderBy?.column) {
+      url.searchParams.set('order', `${this.orderBy.column}.${this.orderBy.dir}`);
+    }
+
+    this.filters.forEach(f => {
+      url.searchParams.append(f.column, `${f.op}.${f.value}`);
+    });
+
+    const headers = {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`
+    };
+
+    if (this.expectSingle) {
+      headers.Accept = 'application/vnd.pgrst.object+json';
+    }
+
+    if (this.returnRepresentation) {
+      headers.Prefer = 'return=representation';
+    }
+
+    const hasBody = this.method === 'POST' || this.method === 'PATCH';
+    if (hasBody) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await fetch(url.toString(), {
+      method: this.method,
+      headers,
+      body: hasBody ? JSON.stringify(this.body ?? {}) : undefined
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json') || contentType.includes('+json');
+
+    const payload = response.status === 204
+      ? null
+      : (isJson ? await response.json().catch(() => null) : await response.text().catch(() => null));
+
+    if (!response.ok) {
+      const message = (payload && typeof payload === 'object' && (payload.message || payload.error_description || payload.error))
+        ? (payload.message || payload.error_description || payload.error)
+        : `Supabase request failed (${response.status})`;
+
+      return {
+        data: null,
+        error: {
+          status: response.status,
+          message,
+          details: payload
+        }
+      };
+    }
+
+    return { data: payload, error: null };
+  }
+
+  then(onFulfilled, onRejected) {
+    return this.execute().then(onFulfilled, onRejected);
+  }
+
+  catch(onRejected) {
+    return this.execute().catch(onRejected);
+  }
+
+  finally(onFinally) {
+    return this.execute().finally(onFinally);
+  }
+}
 
 // Test connection via simple REST request
 export async function testSupabaseConnection() {
