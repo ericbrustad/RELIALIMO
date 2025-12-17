@@ -662,6 +662,8 @@ class MyOffice {
       'limoanywhere-pay': null,
       'digital-marketing': null,
       'appearance': 'appearance.html',
+      'test-checklist': 'full-site-test-checklist.html',
+      'supabase-integration-test': 'test-supabase-integration.html',
     };
 
     const subnav = document.getElementById('systemSettingsSubnav');

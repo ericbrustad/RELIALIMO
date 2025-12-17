@@ -481,6 +481,14 @@ class ReservationForm {
       });
     }
 
+    // Clear Billing Account button
+    const clearBillingAccountBtn = document.getElementById('clearBillingAccountBtn');
+    if (clearBillingAccountBtn) {
+      clearBillingAccountBtn.addEventListener('click', () => {
+        this.clearBillingAccount();
+      });
+    }
+
     // Create Account button
     const createAccountBtn = document.getElementById('createAccountBtn');
     console.log('🔍 Looking for createAccountBtn:', createAccountBtn);
@@ -501,6 +509,22 @@ class ReservationForm {
         if (copyPassengerCheckbox.checked) {
           this.copyPassengerToBilling();
         }
+      });
+    }
+
+    // Clear Passenger button
+    const clearPassengerBtn = document.getElementById('clearPassengerBtn');
+    if (clearPassengerBtn) {
+      clearPassengerBtn.addEventListener('click', () => {
+        this.clearPassenger();
+      });
+    }
+
+    // Clear Booking Agent button
+    const clearBookingAgentBtn = document.getElementById('clearBookingAgentBtn');
+    if (clearBookingAgentBtn) {
+      clearBookingAgentBtn.addEventListener('click', () => {
+        this.clearBookingAgent();
       });
     }
     
@@ -1283,6 +1307,55 @@ class ReservationForm {
 
   closeModal() {
     document.getElementById('accountModal').classList.remove('active');
+  }
+
+  clearBillingAccount() {
+    const billingAccountSearch = document.getElementById('billingAccountSearch');
+    if (billingAccountSearch) {
+      billingAccountSearch.value = '';
+      billingAccountSearch.removeAttribute('readonly');
+      billingAccountSearch.style.backgroundColor = '';
+      billingAccountSearch.style.cursor = '';
+    }
+
+    ['billingCompany', 'billingFirstName', 'billingLastName', 'billingPhone', 'billingEmail'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    this.setBillingAccountNumberDisplay('');
+
+    const suggestions = document.getElementById('accountSuggestions');
+    if (suggestions) {
+      suggestions.classList.remove('active');
+      suggestions.innerHTML = '';
+    }
+  }
+
+  clearPassenger() {
+    ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail', 'altContactName', 'altContactPhone'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    const suggestions = document.getElementById('passengerSuggestions');
+    if (suggestions) {
+      suggestions.classList.remove('active');
+      suggestions.innerHTML = '';
+    }
+  }
+
+  clearBookingAgent() {
+    ['bookedByFirstName', 'bookedByLastName', 'bookedByPhone', 'bookedByEmail'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    const suggestions = document.getElementById('bookingAgentSuggestions');
+    if (suggestions) {
+      suggestions.classList.remove('active');
+      suggestions.innerHTML = '';
+    }
   }
 
   // Add Contact Modal Methods

@@ -488,6 +488,16 @@ class Accounts {
       console.log('✅ Search listeners attached');
     }
 
+    // Clear search
+    const clearSearchBtn = document.getElementById('clearAccountsSearchBtn');
+    if (clearSearchBtn) {
+      clearSearchBtn.addEventListener('click', () => {
+        const input = document.querySelector('.sidebar-input');
+        if (input) input.value = '';
+        this.searchAccounts('');
+      });
+    }
+
     // Companies list selection
     const companiesList = document.getElementById('companiesList');
     if (companiesList) {
