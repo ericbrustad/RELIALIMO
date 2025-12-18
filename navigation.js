@@ -21,18 +21,21 @@ export function getRouteForSection(section) {
   return SECTION_ROUTES[section] || null;
 }
 
-export function navigateToSection(section) {
+export function navigateToSection(section, options = {}) {
   const route = getRouteForSection(section);
   if (!route) {
     alert(`${section} section not available`);
     return false;
   }
 
+  const urlOverride = typeof options?.url === 'string' ? options.url : null;
+  const targetUrl = urlOverride || route;
+
   // Index-only entrypoint:
   // - If inside an iframe, ask the parent shell to switch sections.
   // - If standalone, route back to index.html and load this page inside the correct iframe.
   if (window.self !== window.top) {
-    window.parent.postMessage({ action: 'switchSection', section }, '*');
+    window.parent.postMessage({ action: 'switchSection', section, url: urlOverride || undefined }, '*');
     return true;
   }
 
@@ -40,6 +43,10 @@ export function navigateToSection(section) {
   if (currentFile === 'index.html' || currentFile === '') {
     // If index.html defines switchMainSection, use it. Otherwise fall back to query routing.
     if (typeof window.switchMainSection === 'function') {
+      if (urlOverride) {
+        const frame = document.querySelector(`#${CSS.escape(section)}Section iframe`);
+        if (frame) frame.src = urlOverride;
+      }
       window.switchMainSection(section);
       return true;
     }
@@ -47,8 +54,21 @@ export function navigateToSection(section) {
     return true;
   }
 
-  const url = `${route}${window.location.search || ''}${window.location.hash || ''}`;
-  window.location.href = `index.html?section=${encodeURIComponent(section)}&url=${encodeURIComponent(url)}`;
+  // Avoid exposing a free-form target URL in the address bar.
+  // If a specific iframe URL is needed, hand it off via sessionStorage and let index.html validate it.
+  if (urlOverride) {
+    try {
+      sessionStorage.setItem('relia_nav_override', JSON.stringify({
+        section,
+        url: urlOverride,
+        ts: Date.now()
+      }));
+    } catch {
+      // ignore
+    }
+  }
+
+  window.location.href = `index.html?section=${encodeURIComponent(section)}`;
   return true;
 }
 

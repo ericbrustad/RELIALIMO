@@ -139,6 +139,100 @@
     </div>
 
     <script>
+      // Cross-tab shell coordination so standalone pages don't remain open "behind" index.
+      // Standalone pages can ask an existing shell tab to switch sections, then navigate away.
+      (function setupShellCoordination() {
+        const SECTION_ROUTES = {
+          dashboard: 'index-reservations.html',
+          office: 'my-office.html',
+          accounts: 'accounts.html',
+          quotes: 'quotes.html',
+          calendar: 'calendar.html',
+          'new-reservation': 'reservation-form.html',
+          reservations: 'reservations-list.html',
+          dispatch: 'dispatch-grid.html',
+          network: 'network.html',
+          settle: 'settle.html',
+          receivables: 'receivables.html',
+          payables: 'payables.html',
+          memos: 'memos.html',
+          files: 'files.html',
+          tools: 'tools.html',
+          reports: 'reports.html'
+        };
+
+        const isSafeRelativeUrl = (url) => {
+          if (typeof url !== 'string') return false;
+          const s = url.trim();
+          if (!s) return false;
+          if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return false;
+          if (s.startsWith('//')) return false;
+          if (s.includes('\\')) return false;
+          if (s.includes('..')) return false;
+          return true;
+        };
+
+        const isAllowedSectionUrl = (section, url) => {
+          const base = SECTION_ROUTES[section];
+          if (!base) return false;
+          if (!isSafeRelativeUrl(url)) return false;
+          const pathOnly = url.split('?')[0].split('#')[0];
+          return pathOnly === base;
+        };
+
+        const applySectionSwitch = (section, url) => {
+          try {
+            if (section && typeof url === 'string' && url.length > 0 && isAllowedSectionUrl(section, url)) {
+              const frame = document.querySelector(`#${CSS.escape(section)}Section iframe`);
+              if (frame) frame.src = url;
+            }
+          } catch {
+            // ignore
+          }
+
+          try {
+            if (section) switchMainSection(section);
+          } catch {
+            // ignore
+          }
+        };
+
+        // Heartbeat for other tabs to detect an existing shell.
+        const beat = () => {
+          try { localStorage.setItem('relia_shell_heartbeat', String(Date.now())); } catch { /* ignore */ }
+        };
+        beat();
+        setInterval(beat, 1500);
+
+        // BroadcastChannel (preferred)
+        try {
+          const bc = new BroadcastChannel('relia_shell');
+          bc.addEventListener('message', (event) => {
+            const data = event?.data || {};
+            if (data.type === 'relia:shellPing' && data.id) {
+              bc.postMessage({ type: 'relia:shellPong', id: data.id });
+              return;
+            }
+            if (data.type === 'relia:openSection' && data.section) {
+              applySectionSwitch(data.section, data.url || '');
+            }
+          });
+        } catch {
+          // ignore
+        }
+
+        // localStorage event fallback
+        window.addEventListener('storage', (e) => {
+          if (e.key !== 'relia_shell_switch' || !e.newValue) return;
+          try {
+            const msg = JSON.parse(e.newValue);
+            if (msg && msg.section) applySectionSwitch(msg.section, msg.url || '');
+          } catch {
+            // ignore
+          }
+        });
+      })();
+
       // Wire all navigation buttons with event delegation
       document.addEventListener('DOMContentLoaded', () => {
         const mainNav = document.querySelector('.main-nav');
@@ -151,17 +245,72 @@
           });
         }
 
-        // Support deep-links and standalone redirects: index.html?section=...&url=...
+        const SECTION_ROUTES = {
+          dashboard: 'index-reservations.html',
+          office: 'my-office.html',
+          accounts: 'accounts.html',
+          quotes: 'quotes.html',
+          calendar: 'calendar.html',
+          'new-reservation': 'reservation-form.html',
+          reservations: 'reservations-list.html',
+          dispatch: 'dispatch-grid.html',
+          network: 'network.html',
+          settle: 'settle.html',
+          receivables: 'receivables.html',
+          payables: 'payables.html',
+          memos: 'memos.html',
+          files: 'files.html',
+          tools: 'tools.html',
+          reports: 'reports.html'
+        };
+
+        const isSafeRelativeUrl = (url) => {
+          if (typeof url !== 'string') return false;
+          const s = url.trim();
+          if (!s) return false;
+          // Disallow absolute/protocol URLs and path traversal
+          if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return false;
+          if (s.startsWith('//')) return false;
+          if (s.includes('\\')) return false;
+          if (s.includes('..')) return false;
+          return true;
+        };
+
+        const isAllowedSectionUrl = (section, url) => {
+          const base = SECTION_ROUTES[section];
+          if (!base) return false;
+          if (!isSafeRelativeUrl(url)) return false;
+          const pathOnly = url.split('?')[0].split('#')[0];
+          return pathOnly === base;
+        };
+
+        // Support deep-links and standalone redirects: index.html?section=...
         try {
           const params = new URLSearchParams(window.location.search);
           const section = params.get('section');
-          const url = params.get('url');
           if (section) {
-            if (url) {
-              const decoded = decodeURIComponent(url);
-              const frame = document.querySelector(`#${CSS.escape(section)}Section iframe`);
-              if (frame && decoded) frame.src = decoded;
+            // If someone provided an old-style &url=..., strip it and ignore.
+            if (params.has('url')) {
+              params.delete('url');
+              const next = `${window.location.pathname}?${params.toString()}${window.location.hash || ''}`;
+              try { history.replaceState({}, '', next); } catch { /* ignore */ }
             }
+
+            // One-time internal override (not user-controllable via URL)
+            try {
+              const raw = sessionStorage.getItem('relia_nav_override');
+              if (raw) {
+                const ov = JSON.parse(raw);
+                if (ov && ov.section === section && typeof ov.url === 'string' && isAllowedSectionUrl(section, ov.url)) {
+                  const frame = document.querySelector(`#${CSS.escape(section)}Section iframe`);
+                  if (frame) frame.src = ov.url;
+                }
+                sessionStorage.removeItem('relia_nav_override');
+              }
+            } catch {
+              // ignore
+            }
+
             switchMainSection(section);
           }
         } catch {
@@ -200,7 +349,85 @@
 
       // Listen for messages from iframes
       window.addEventListener('message', function(event) {
+        if (event.data.action === 'relia:accountSaved') {
+          // Forward to the reservation iframe so it can populate Billing with the saved account.
+          try {
+            const reservationIframe = document.querySelector('#new-reservationSection iframe');
+            if (reservationIframe && reservationIframe.contentWindow) {
+              reservationIframe.contentWindow.postMessage(event.data, '*');
+            }
+          } catch {
+            // ignore
+          }
+
+          // If this save originated from the reservation flow, return user to New Reservation.
+          try {
+            const from = (event?.data?.from || '').toString().toLowerCase();
+            if (from === 'reservation') {
+              switchMainSection('new-reservation');
+            }
+          } catch {
+            // ignore
+          }
+          return;
+        }
+
         if (event.data.action === 'switchSection') {
+          try {
+            const section = event.data.section;
+            const url = event.data.url;
+            if (section && typeof url === 'string' && url.length > 0) {
+              // Only allow the default route for that section (plus query/hash).
+              const allowed = (function() {
+                try {
+                  const SECTION_ROUTES = {
+                    dashboard: 'index-reservations.html',
+                    office: 'my-office.html',
+                    accounts: 'accounts.html',
+                    quotes: 'quotes.html',
+                    calendar: 'calendar.html',
+                    'new-reservation': 'reservation-form.html',
+                    reservations: 'reservations-list.html',
+                    dispatch: 'dispatch-grid.html',
+                    network: 'network.html',
+                    settle: 'settle.html',
+                    receivables: 'receivables.html',
+                    payables: 'payables.html',
+                    memos: 'memos.html',
+                    files: 'files.html',
+                    tools: 'tools.html',
+                    reports: 'reports.html'
+                  };
+
+                  const isSafeRelativeUrl = (u) => {
+                    if (typeof u !== 'string') return false;
+                    const s = u.trim();
+                    if (!s) return false;
+                    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return false;
+                    if (s.startsWith('//')) return false;
+                    if (s.includes('\\')) return false;
+                    if (s.includes('..')) return false;
+                    return true;
+                  };
+
+                  const base = SECTION_ROUTES[section];
+                  if (!base) return false;
+                  if (!isSafeRelativeUrl(url)) return false;
+                  const pathOnly = url.split('?')[0].split('#')[0];
+                  return pathOnly === base;
+                } catch {
+                  return false;
+                }
+              })();
+
+              if (allowed) {
+                const frame = document.querySelector(`#${CSS.escape(section)}Section iframe`);
+                if (frame) frame.src = url;
+              }
+            }
+          } catch {
+            // ignore
+          }
           switchMainSection(event.data.section);
         } else if (event.data.action === 'navigate') {
           // Navigate to a specific URL

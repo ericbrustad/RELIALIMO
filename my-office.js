@@ -1,6 +1,14 @@
 // Import API service
 import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver } from './api-service.js';
-import { wireMainNav } from './navigation.js';
+import { wireMainNav, navigateToSection } from './navigation.js';
+import {
+  syncPaymentMethodsFromOfficeTable,
+  getPaymentMethods,
+  setPaymentMethods,
+  syncPaymentGatewaysFromOfficeSection,
+  getPaymentGateways,
+  seedPaymentGateways
+} from './payment-data.js';
 
 class MyOffice {
   constructor() {
@@ -54,6 +62,61 @@ class MyOffice {
     this.checkURLParameters();
     // Initialize API
     this.initializeAPI();
+
+    // Ensure payment lists are available for Reservations/Accounts
+    this.setupPaymentLists();
+  }
+
+  setupPaymentLists() {
+    // Payment Methods: source of truth is List Management table
+    try {
+      // Seed from the current DOM (and persist)
+      syncPaymentMethodsFromOfficeTable(document);
+
+      // Keep localStorage in sync when user flips Active/Inactive
+      const tbody = document.getElementById('paymentMethodsTbody');
+      if (tbody) {
+        tbody.addEventListener('change', (e) => {
+          const select = e.target?.closest('select');
+          if (!select) return;
+          const row = select.closest('tr');
+          if (!row) return;
+
+          const cells = row.querySelectorAll('td');
+          const code = (cells[1]?.textContent || '').trim().toUpperCase().replace(/\s+/g, '_');
+          if (!code) return;
+
+          const methods = getPaymentMethods({ includeInactive: true });
+          const next = methods.map(m => {
+            if (m.code !== code) return m;
+            return { ...m, active: select.value === 'active' };
+          });
+          setPaymentMethods(next);
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to initialize payment methods list:', e);
+    }
+
+    // Payment Gateways: source of truth is Company Settings → Payment Gateway section
+    try {
+      seedPaymentGateways();
+      syncPaymentGatewaysFromOfficeSection(document);
+
+      // If the gateway table changes later (future enhancements), we at least re-sync on Update click.
+      const updateBtn = document.querySelector('#payment-section .payment-form-actions .btn.btn-primary');
+      if (updateBtn) {
+        updateBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          syncPaymentGatewaysFromOfficeSection(document);
+          const gateways = getPaymentGateways({ includeInactive: true });
+          console.log('✅ Payment gateways saved:', gateways);
+          alert('Payment gateway settings saved locally.');
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to initialize payment gateways list:', e);
+    }
   }
 
   async initializeAPI() {
@@ -91,7 +154,7 @@ class MyOffice {
     const newResBtn = document.querySelector('.btn-new-reservation');
     if (newResBtn) {
       newResBtn.addEventListener('click', () => {
-        window.location.href = 'reservation-form.html';
+        navigateToSection('new-reservation');
       });
     }
 
@@ -123,11 +186,11 @@ class MyOffice {
         } else if (action === 'driver-view') {
           window.location.href = 'index.html?view=driver';
         } else if (action === 'reservations') {
-          window.location.href = 'reservations-list.html';
+          navigateToSection('reservations');
         } else if (action === 'farm-out') {
           window.location.href = 'index.html?view=reservations';
         } else if (action === 'new-reservation') {
-          window.location.href = 'reservation-form.html';
+          navigateToSection('new-reservation');
         }
       });
     });

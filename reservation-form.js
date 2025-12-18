@@ -4,7 +4,7 @@ import { MapboxService } from './MapboxService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
 import { db } from './assets/db.js';
-import { wireMainNav } from './navigation.js';
+import { wireMainNav, navigateToSection } from './navigation.js';
 
 const RESERVATION_DRAFT_KEY = 'relia_reservation_draft';
 
@@ -19,6 +19,8 @@ class ReservationForm {
     this.selectedAirline = null;
     this.selectedFlight = null;
     this.selectedAffiliate = null;
+
+    this._creatingAccountFromBilling = false;
 
     this.isEditMode = false;
     this.editConfNumber = null;
@@ -73,29 +75,39 @@ class ReservationForm {
       }
 
       // Listen for Account saves (popup or iframe) so we can return and fill Billing Account#
-      window.addEventListener('message', (event) => {
-        if (event?.data?.action !== 'relia:accountSaved') return;
-        const accountId = (event.data.accountId || '').toString().trim();
-        if (!accountId) return;
+      if (!window.__reliaAccountSavedListenerAdded) {
+        window.__reliaAccountSavedListenerAdded = true;
+        window.addEventListener('message', (event) => {
+          if (event?.data?.action !== 'relia:accountSaved') return;
+          const accountId = (event.data.accountId || '').toString().trim();
+          if (!accountId) return;
 
-        const billingAccountSearch = document.getElementById('billingAccountSearch');
-        if (billingAccountSearch) {
-          billingAccountSearch.value = accountId;
-        }
+          // Prefer loading the saved account and applying it, so Billing is fully populated.
+          try {
+            const account = db.getAccountById?.(accountId) || db.getAllAccounts?.()?.find(a => {
+              const id = (a?.id ?? '').toString();
+              const acct = (a?.account_number ?? a?.id ?? '').toString();
+              return id === accountId || acct === accountId;
+            });
 
-        // Also update the displayed account number if the account exists
-        try {
-          const account = db.getAllAccounts()?.find(a => (a?.account_number ?? a?.id)?.toString() === accountId || (a?.id ?? '').toString() === accountId);
-          if (account) this.updateBillingAccountNumberDisplay(account);
-          else this.setBillingAccountNumberDisplay(accountId);
-        } catch {
-          this.setBillingAccountNumberDisplay(accountId);
-        }
+            if (account) {
+              this.useExistingAccount(account);
+            } else {
+              const billingAccountSearch = document.getElementById('billingAccountSearch');
+              if (billingAccountSearch) billingAccountSearch.value = accountId;
+              this.setBillingAccountNumberDisplay(accountId);
+            }
+          } catch {
+            const billingAccountSearch = document.getElementById('billingAccountSearch');
+            if (billingAccountSearch) billingAccountSearch.value = accountId;
+            this.setBillingAccountNumberDisplay(accountId);
+          }
 
-        // If we returned via same-window redirect, also clear the return URL
-        try { localStorage.removeItem('relia_return_to_reservation_url'); } catch { /* ignore */ }
-        try { window.focus(); } catch { /* ignore */ }
-      });
+          // If we returned via same-window redirect, also clear the return URL
+          try { localStorage.removeItem('relia_return_to_reservation_url'); } catch { /* ignore */ }
+          try { window.focus(); } catch { /* ignore */ }
+        });
+      }
 
       // Restore existing reservation or apply a draft copy
       if (this.isEditMode && this.editConfNumber) {
@@ -493,11 +505,14 @@ class ReservationForm {
     const createAccountBtn = document.getElementById('createAccountBtn');
     console.log('🔍 Looking for createAccountBtn:', createAccountBtn);
     if (createAccountBtn) {
-      createAccountBtn.addEventListener('click', () => {
-        console.log('✅ Create Account button clicked!');
-        this.createAccountFromBilling();
-      });
-      console.log('✅ Create Account button listener attached');
+      if (createAccountBtn.dataset.wired !== '1') {
+        createAccountBtn.dataset.wired = '1';
+        createAccountBtn.addEventListener('click', () => {
+          console.log('✅ Create Account button clicked!');
+          this.createAccountFromBilling();
+        });
+        console.log('✅ Create Account button listener attached');
+      }
     } else {
       console.error('❌ createAccountBtn not found in DOM!');
     }
@@ -1300,9 +1315,9 @@ class ReservationForm {
 
     // Store account ID for accounts page to load
     localStorage.setItem('currentAccountId', nextAccountNumber.toString());
-    
-    // Navigate directly to accounts page with all data
-    window.location.href = 'accounts.html';
+
+    // Single source of truth: show the Accounts section in the parent shell
+    navigateToSection('accounts', { url: 'accounts.html?from=reservation' });
   }
 
   closeModal() {
@@ -1559,6 +1574,9 @@ class ReservationForm {
 
   async createAccountFromBilling() {
     console.log('🚀 createAccountFromBilling() called');
+
+    if (this._creatingAccountFromBilling) return;
+    this._creatingAccountFromBilling = true;
     
     try {
       // Collect billing section fields
@@ -1659,17 +1677,14 @@ class ReservationForm {
         // ignore
       }
 
-      // Open Accounts in a popup (preferred). Fallback to same window.
-      const url = 'accounts.html?mode=new&from=reservation';
-      const popup = window.open(url, 'ReliaAccounts', 'width=1200,height=900,resizable=yes,scrollbars=yes');
-      if (popup) {
-        try { popup.focus(); } catch { /* ignore */ }
-      } else {
-        window.location.href = url;
-      }
+      // Single source of truth: show the Accounts section in the parent shell.
+      // This prevents accounts.html from being opened multiple times (popup + hidden iframe + iframe navigation).
+      navigateToSection('accounts', { url: 'accounts.html?mode=new&from=reservation' });
     } catch (error) {
       console.error('❌ Error in createAccountFromBilling:', error);
       alert('Error creating account: ' + error.message);
+    } finally {
+      this._creatingAccountFromBilling = false;
     }
   }
 
@@ -1737,7 +1752,7 @@ class ReservationForm {
         // Open Accounts page after brief delay
         setTimeout(() => {
           console.log('🌐 Navigating to accounts.html');
-          window.location.href = 'accounts.html?mode=new';
+          navigateToSection('accounts', { url: 'accounts.html?mode=new&from=reservation' });
         }, 800);
       }
     } catch (error) {
@@ -3121,7 +3136,7 @@ window.copyPassengerToBillingAndOpenAccounts = function() {
     
     setTimeout(() => {
       console.log('🌐 Navigating to accounts.html');
-      window.location.href = 'accounts.html?mode=new';
+      navigateToSection('accounts', { url: 'accounts.html?mode=new&from=reservation' });
     }, 800);
   }
 };

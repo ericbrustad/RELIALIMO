@@ -1,3 +1,5 @@
+import { navigateToSection } from './navigation.js';
+
 class DispatchGrid {
   constructor() {
     this.map = null;
@@ -179,7 +181,7 @@ class DispatchGrid {
 
   openReservation(confNum) {
     console.log('Opening reservation:', confNum);
-    window.location.href = `reservation-form.html?conf=${confNum}`;
+    navigateToSection('new-reservation', { url: `reservation-form.html?conf=${encodeURIComponent(confNum)}` });
   }
 
   switchView(view) {

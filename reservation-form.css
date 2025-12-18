@@ -989,6 +989,108 @@ textarea.form-control {
   border-top: 1px solid #ccc;
 }
 
+/* Payments Modal */
+.payments-modal-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 14px;
+}
+
+.payments-section {
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.payments-section-title {
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 1px solid #ccc;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.payments-table-container {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.payments-table thead {
+  background: #f8f9fa;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.payments-table th,
+.payments-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e0e0e0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.payments-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.payments-muted {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #666;
+}
+
+.payments-totals {
+  margin-top: 12px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.payments-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 12px;
+}
+
+.payments-total-row:last-child {
+  border-bottom: none;
+}
+
+.payments-total-row-strong {
+  font-weight: 700;
+  background: #f8f9fa;
+}
+
+.payments-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.payments-btn-row .btn {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .payments-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Affiliate List Modal */
 .affiliate-search-bar {
   margin-bottom: 15px;

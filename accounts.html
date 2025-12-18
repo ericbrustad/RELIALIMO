@@ -11,10 +11,8 @@
       // Hide main navigation if in iframe
       if (window.self !== window.top) {
         document.addEventListener('DOMContentLoaded', function() {
-          const headerContent = document.querySelector('.header-content');
-          if (headerContent) {
-            headerContent.style.display = 'none';
-          }
+          const header = document.querySelector('header.header');
+          if (header) header.style.display = 'none';
         });
       }
     </script>
@@ -634,6 +632,21 @@
                   
                   <div class="form-section">
                     <h4 class="form-section-header">Payment Information</h4>
+
+                    <div class="form-row-2">
+                      <div class="form-group">
+                        <label>Default Payment Method</label>
+                        <select id="accountPaymentMethod" class="form-control">
+                          <option value="">-- NOT SELECTED --</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Default Payment Gateway</label>
+                        <select id="accountPaymentGateway" class="form-control">
+                          <option value="">-- NOT SELECTED --</option>
+                        </select>
+                      </div>
+                    </div>
                     
                     <div class="form-row-2">
                       <div class="form-group">

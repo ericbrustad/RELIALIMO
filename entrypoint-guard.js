@@ -39,6 +39,73 @@ function getCurrentFileName() {
   if (!section) return;
 
   const relativeUrl = file + (window.location.search || '') + (window.location.hash || '');
-  const target = `index.html?section=${encodeURIComponent(section)}&url=${encodeURIComponent(relativeUrl)}`;
+
+  // If this page was opened as a popup/tab from the main shell, don't stay open behind it.
+  // Ask the opener to switch sections and then close this window.
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ action: 'switchSection', section, url: relativeUrl }, '*');
+      try { window.opener.focus(); } catch { /* ignore */ }
+      // Browsers only allow closing windows opened by script. If close is blocked,
+      // at least navigate away so Accounts isn't running behind the shell.
+      setTimeout(() => {
+        try { window.close(); } catch { /* ignore */ }
+        try { window.location.replace('about:blank'); } catch { /* ignore */ }
+      }, 25);
+      return;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Cross-tab case: if the shell is already open in another tab (no opener),
+  // tell it to switch sections and then navigate this standalone tab away.
+  try {
+    const beatRaw = localStorage.getItem('relia_shell_heartbeat');
+    const beatTs = beatRaw ? Number(beatRaw) : 0;
+    const shellLikelyOpen = Number.isFinite(beatTs) && (Date.now() - beatTs) < 4500;
+
+    if (shellLikelyOpen) {
+      try {
+        const bc = new BroadcastChannel('relia_shell');
+        bc.postMessage({ type: 'relia:openSection', section, url: relativeUrl, ts: Date.now() });
+        try { bc.close(); } catch { /* ignore */ }
+      } catch {
+        // ignore
+      }
+
+      // Fallback via localStorage event
+      try {
+        localStorage.setItem('relia_shell_switch', JSON.stringify({
+          section,
+          url: relativeUrl,
+          ts: Date.now(),
+          nonce: Math.random().toString(36).slice(2)
+        }));
+      } catch {
+        // ignore
+      }
+
+      // Don't keep this standalone tab running behind the shell.
+      setTimeout(() => {
+        try { window.location.replace('about:blank'); } catch { /* ignore */ }
+      }, 50);
+      return;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    sessionStorage.setItem('relia_nav_override', JSON.stringify({
+      section,
+      url: relativeUrl,
+      ts: Date.now()
+    }));
+  } catch {
+    // ignore
+  }
+
+  const target = `index.html?section=${encodeURIComponent(section)}`;
   window.location.replace(target);
 })();

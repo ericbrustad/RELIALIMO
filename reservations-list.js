@@ -1,8 +1,15 @@
-import { wireMainNav } from './navigation.js';
+import { wireMainNav, navigateToSection } from './navigation.js';
 
 class ReservationsList {
   constructor() {
     this.init();
+  }
+
+  openReservation(confNumber) {
+    const url = confNumber
+      ? `reservation-form.html?conf=${encodeURIComponent(confNumber)}`
+      : 'reservation-form.html';
+    navigateToSection('new-reservation', { url });
   }
 
   async init() {
@@ -127,7 +134,7 @@ class ReservationsList {
       }
 
       // Fallback if the row isn't rendered
-      window.location.href = `reservation-form.html?conf=${encodeURIComponent(openConf)}`;
+      this.openReservation(openConf);
     } catch (e) {
       console.warn('⚠️ Failed to open reservation from calendar:', e);
     }
@@ -139,7 +146,7 @@ class ReservationsList {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const confNumber = e.target.dataset.conf;
-        window.location.href = `reservation-form.html?conf=${confNumber}`;
+        this.openReservation(confNumber);
       });
     });
 
@@ -223,7 +230,7 @@ class ReservationsList {
         } else if (action === 'farm-out') {
           window.location.href = 'index.html?view=reservations';
         } else if (action === 'new-reservation') {
-          window.location.href = 'reservation-form.html';
+          this.openReservation(null);
         }
       });
     });
@@ -242,7 +249,7 @@ class ReservationsList {
         e.preventDefault();
         // Navigate to reservation form with this reservation ID
         const confNumber = e.target.textContent;
-        window.location.href = `reservation-form.html?conf=${confNumber}`;
+        this.openReservation(confNumber);
       });
     });
 
@@ -272,7 +279,7 @@ class ReservationsList {
   selectReservation(confNumber) {
     console.log('Selected reservation:', confNumber);
     // Navigate to the reservation details
-    window.location.href = `reservation-form.html?conf=${confNumber}`;
+    this.openReservation(confNumber);
   }
 }
 

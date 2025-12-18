@@ -1,3 +1,4 @@
+import { getPaymentMethods, getPaymentGateways, getDefaultPaymentGatewayId, getCardLast4 } from './payment-data.js';
 import { wireMainNav, navigateToSection } from './navigation.js';
 
 class Accounts {
@@ -262,16 +263,86 @@ class Accounts {
       const cellValue = account.cell_phone || '';
       if (cellPhone1El) cellPhone1El.value = cellValue;
       if (cellularPhone1El) cellularPhone1El.value = cellValue;
-      if (emailEl) emailEl.value = account.email || ''; // Accounts Email
+        if (emailEl) emailEl.value = account.email || ''; // Accounts Email
+
+        // Financial + Payment Profile (shared with Reservation payment tab/modal)
+        this.applyFinancialData(account);
 
       // Ensure DRES4 fields never prefill from account data
       this.clearDres4LoginFields();
       
       // Switch to accounts tab
       this.switchAccountTab('info');
-      
     } catch (error) {
       console.error('❌ Error loading account:', error);
+    }
+  }
+
+  applyFinancialData(account) {
+    const financial = account?.financial_settings || {};
+    const profile = account?.payment_profile || {};
+
+    const postMethodEl = document.getElementById('postMethod');
+    const postTermsEl = document.getElementById('postTerms');
+    if (postMethodEl) postMethodEl.value = financial.post_method || postMethodEl.value;
+    if (postTermsEl) postTermsEl.value = financial.post_terms || postTermsEl.value;
+
+    // Populate selects (methods/gateways) then set values
+    this.populatePaymentSelects();
+
+    const methodEl = document.getElementById('accountPaymentMethod');
+    const gatewayEl = document.getElementById('accountPaymentGateway');
+    if (methodEl && profile.method_code) methodEl.value = profile.method_code;
+    if (gatewayEl && profile.gateway_id) gatewayEl.value = profile.gateway_id;
+
+    const ccNumberEl = document.getElementById('creditCardNumber');
+    const expMonthEl = document.getElementById('expMonth');
+    const expYearEl = document.getElementById('expYear');
+    const nameOnCardEl = document.getElementById('nameOnCard');
+    const billingAddressEl = document.getElementById('billingAddressCC');
+    const billingCityEl = document.getElementById('billingCityCC');
+    const billingStateEl = document.getElementById('billingStateCC');
+    const billingZipEl = document.getElementById('billingZipCC');
+    const billingLine2El = document.getElementById('billingAddressLine2CC');
+    const billingCountryEl = document.getElementById('billingCountryCC');
+    const ccTypeEl = document.getElementById('ccType');
+    const notesEl = document.getElementById('creditCardNotes');
+
+    if (ccNumberEl) ccNumberEl.value = profile.card_number || '';
+    if (expMonthEl) expMonthEl.value = profile.exp_month || '';
+    if (expYearEl) expYearEl.value = profile.exp_year || '';
+    if (nameOnCardEl) nameOnCardEl.value = profile.name_on_card || '';
+    if (billingAddressEl) billingAddressEl.value = profile.billing_address1 || '';
+    if (billingLine2El) billingLine2El.value = profile.billing_address2 || '';
+    if (billingCityEl) billingCityEl.value = profile.billing_city || '';
+    if (billingStateEl && profile.billing_state) billingStateEl.value = profile.billing_state;
+    if (billingZipEl) billingZipEl.value = profile.billing_zip || '';
+    if (billingCountryEl && profile.billing_country) billingCountryEl.value = profile.billing_country;
+    if (ccTypeEl && profile.cc_type) ccTypeEl.value = profile.cc_type;
+    if (notesEl) notesEl.value = profile.notes || '';
+
+    // Never persist CVV; always clear when loading
+    const cvvEl = document.getElementById('cvv');
+    if (cvvEl) cvvEl.value = '';
+  }
+
+  populatePaymentSelects() {
+    const methodEl = document.getElementById('accountPaymentMethod');
+    if (methodEl && methodEl.dataset.optionsLoaded !== '1') {
+      const methods = getPaymentMethods();
+      methodEl.innerHTML = '<option value="">-- NOT SELECTED --</option>' +
+        methods.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
+      methodEl.dataset.optionsLoaded = '1';
+    }
+
+    const gatewayEl = document.getElementById('accountPaymentGateway');
+    if (gatewayEl && gatewayEl.dataset.optionsLoaded !== '1') {
+      const gateways = getPaymentGateways();
+      const defaultId = getDefaultPaymentGatewayId();
+      gatewayEl.innerHTML = '<option value="">-- NOT SELECTED --</option>' +
+        gateways.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      if (!gatewayEl.value && defaultId) gatewayEl.value = defaultId;
+      gatewayEl.dataset.optionsLoaded = '1';
     }
   }
 
@@ -367,6 +438,53 @@ class Accounts {
         }
       }
 
+      // Prefill Financial Data payment profile if present
+      const payment = draft.payment_profile || {};
+      if (payment && typeof payment === 'object') {
+        // Ensure selects are populated from Office lists
+        this.populatePaymentSelects();
+
+        const methodEl = document.getElementById('accountPaymentMethod');
+        const gatewayEl = document.getElementById('accountPaymentGateway');
+        if (methodEl && (methodEl.value ?? '').toString().trim() === '') {
+          methodEl.value = payment.method_code || methodEl.value;
+        }
+        if (gatewayEl && (gatewayEl.value ?? '').toString().trim() === '') {
+          gatewayEl.value = payment.gateway_id || gatewayEl.value;
+        }
+
+        setIfEmpty(document.getElementById('creditCardNumber'), payment.card_number);
+        setIfEmpty(document.getElementById('expMonth'), payment.exp_month);
+        setIfEmpty(document.getElementById('expYear'), payment.exp_year);
+        setIfEmpty(document.getElementById('nameOnCard'), payment.name_on_card);
+        setIfEmpty(document.getElementById('billingAddressCC'), payment.billing_address1);
+        setIfEmpty(document.getElementById('billingAddressLine2CC'), payment.billing_address2);
+        setIfEmpty(document.getElementById('billingCityCC'), payment.billing_city);
+
+        const billingStateEl = document.getElementById('billingStateCC');
+        if (billingStateEl && (billingStateEl.value ?? '').toString().trim() === '') {
+          billingStateEl.value = payment.billing_state || billingStateEl.value;
+        }
+
+        setIfEmpty(document.getElementById('billingZipCC'), payment.billing_zip);
+
+        const billingCountryEl = document.getElementById('billingCountryCC');
+        if (billingCountryEl && (billingCountryEl.value ?? '').toString().trim() === '') {
+          billingCountryEl.value = payment.billing_country || billingCountryEl.value;
+        }
+
+        const ccTypeEl = document.getElementById('ccType');
+        if (ccTypeEl && (ccTypeEl.value ?? '').toString().trim() === '') {
+          ccTypeEl.value = payment.cc_type || ccTypeEl.value;
+        }
+
+        setIfEmpty(document.getElementById('creditCardNotes'), payment.notes);
+
+        // Never prefill CVV
+        const cvvEl = document.getElementById('cvv');
+        if (cvvEl) cvvEl.value = '';
+      }
+
       // Clear the draft so it doesn't keep refilling
       localStorage.removeItem('relia_account_draft');
       console.log('✅ Draft applied and cleared');
@@ -436,11 +554,12 @@ class Accounts {
         } else if (action === 'driver-view') {
           window.location.href = 'index.html?view=driver';
         } else if (action === 'reservations') {
-          window.location.href = 'reservations-list.html';
+          navigateToSection('reservations');
         } else if (action === 'farm-out') {
-          window.location.href = 'reservations-list.html?filter=farm-out';
+          navigateToSection('reservations', { url: 'reservations-list.html?filter=farm-out' });
         } else if (action === 'new-reservation') {
-          window.location.href = 'reservation-form.html';
+          // Route through the index shell so it doesn't open inside this iframe
+          navigateToSection('new-reservation');
         }
       });
     });
@@ -599,6 +718,9 @@ class Accounts {
         el.classList.add('active');
         el.style.display = '';
       }
+
+      // Ensure dropdowns are filled from Office lists
+      this.populatePaymentSelects();
     } else if (tabName === 'addresses') {
       const el = document.getElementById('addressesTab');
       if (el) {
@@ -923,6 +1045,9 @@ class Accounts {
           miscAccountNumberEl.value = accountNumber;
         }
       }
+
+      // Preserve existing nested data when updating an account
+      const existingAccount = this.db.getAccountById?.(accountNumber) || {};
       
       // Collect form data with proper field mappings
       const accountData = {
@@ -936,7 +1061,35 @@ class Accounts {
         email: document.getElementById('acctEmail2')?.value?.trim() || '', // Accounts Email
         status: 'active',
         type: 'individual',
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+
+        // Financial settings + shared payment profile
+        financial_settings: {
+          ...(existingAccount.financial_settings || {}),
+          post_method: document.getElementById('postMethod')?.value || '',
+          post_terms: document.getElementById('postTerms')?.value?.trim() || ''
+        },
+        payment_profile: {
+          ...(existingAccount.payment_profile || {}),
+          method_code: document.getElementById('accountPaymentMethod')?.value || '',
+          gateway_id: document.getElementById('accountPaymentGateway')?.value || '',
+
+          // Card details (stored with account per your workflow)
+          // NOTE: CVV is intentionally NOT stored.
+          card_number: document.getElementById('creditCardNumber')?.value?.trim() || '',
+          card_last4: getCardLast4(document.getElementById('creditCardNumber')?.value),
+          exp_month: document.getElementById('expMonth')?.value?.trim() || '',
+          exp_year: document.getElementById('expYear')?.value?.trim() || '',
+          name_on_card: document.getElementById('nameOnCard')?.value?.trim() || '',
+          billing_address1: document.getElementById('billingAddressCC')?.value?.trim() || '',
+          billing_address2: document.getElementById('billingAddressLine2CC')?.value?.trim() || '',
+          billing_city: document.getElementById('billingCityCC')?.value?.trim() || '',
+          billing_state: document.getElementById('billingStateCC')?.value || '',
+          billing_zip: document.getElementById('billingZipCC')?.value?.trim() || '',
+          billing_country: document.getElementById('billingCountryCC')?.value || '',
+          cc_type: document.getElementById('ccType')?.value || '',
+          notes: document.getElementById('creditCardNotes')?.value?.trim() || ''
+        }
       };
 
       console.log('📝 Account data to save:', accountData);
@@ -973,6 +1126,7 @@ class Accounts {
         const from = (params.get('from') || '').toLowerCase();
         const payload = {
           action: 'relia:accountSaved',
+          from,
           accountId: accountNumber,
           accountName: this.getCurrentAccountDisplayName?.() || ''
         };
@@ -991,8 +1145,8 @@ class Accounts {
           window.parent.postMessage(payload, '*');
         }
 
-        // Fallback: same-window return
-        if (from === 'reservation' && (!window.opener || window.opener.closed)) {
+        // Fallback: same-window return (only when running top-level)
+        if (window.self === window.top && from === 'reservation' && (!window.opener || window.opener.closed)) {
           const returnUrl = localStorage.getItem('relia_return_to_reservation_url');
           if (returnUrl) {
             try {
@@ -1002,7 +1156,16 @@ class Accounts {
               window.location.href = u.toString();
             } catch {
               // If URL parsing fails, just go back to reservation form
-              window.location.href = 'reservation-form.html';
+              try {
+                sessionStorage.setItem('relia_nav_override', JSON.stringify({
+                  section: 'new-reservation',
+                  url: 'reservation-form.html',
+                  ts: Date.now()
+                }));
+              } catch {
+                // ignore
+              }
+              window.location.href = `index.html?section=${encodeURIComponent('new-reservation')}`;
             }
           }
         }
