@@ -17,6 +17,22 @@ const FILE_TO_SECTION = {
   'reservation-form.html': 'new-reservation'
 };
 
+// Global shared styles (e.g., compact line-height)
+(function ensureGlobalCss() {
+  try {
+    if (!document || !document.head) return;
+    if (document.querySelector('link[data-relia-global-css]')) return;
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'global.css';
+    link.setAttribute('data-relia-global-css', '1');
+    document.head.appendChild(link);
+  } catch {
+    // ignore
+  }
+})();
+
 function getCurrentFileName() {
   const p = String(window.location.pathname || '');
   const parts = p.split('/').filter(Boolean);

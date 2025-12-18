@@ -1,0 +1,6 @@
+/* Global style overrides shared by all pages */
+
+html,
+body {
+  line-height: 1.2;
+}
