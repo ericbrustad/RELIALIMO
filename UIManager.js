@@ -11,9 +11,11 @@ export class UIManager {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const time = now.toTimeString().slice(0, 5);
-    
-    document.getElementById('pickupDate').value = today;
-    document.getElementById('pickupTime').value = time;
+
+    const pickupDate = document.getElementById('pickupDate');
+    if (pickupDate) pickupDate.value = today;
+    const pickupTime = document.getElementById('pickupTime');
+    if (pickupTime) pickupTime.value = time;
   }
 
   switchView(viewId) {

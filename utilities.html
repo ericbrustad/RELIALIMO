@@ -1,0 +1,156 @@
+<script type="module">
+import { getSupabaseClient, setupAPI } from './api-service.js';
+async function fetchUserPermissions() {
+  await setupAPI();
+  const client = getSupabaseClient();
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await client
+    .from('system_users')
+    .select('role, allowed_sections')
+    .eq('email', user.email)
+    .single();
+  if (error) return null;
+  return data;
+}
+async function enforceSectionAccess() {
+  const perms = await fetchUserPermissions();
+  if (!perms) return;
+  // Hide master delete buttons if not admin
+  if (perms.role !== 'admin') {
+    document.querySelectorAll('.btn-danger').forEach(btn => btn.style.display = 'none');
+  }
+}
+enforceSectionAccess();
+</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Utilities</title>
+  <script src="env.js"></script>
+  <link rel="stylesheet" href="appearance.css">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    h2 { margin-bottom: 24px; }
+    ul { list-style: none; padding: 0; }
+    li { margin-bottom: 18px; }
+    a.btn {
+      display: inline-block;
+      padding: 12px 28px;
+      background: #1976d2;
+      color: #fff;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    a.btn:hover { background: #125ea2; }
+  </style>
+</head>
+<body>
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h2>Utilities</h2>
+    <div id="profileBox" style="min-width:180px; text-align:right;"></div>
+  </div>
+  <div id="authWarning" style="display:none; color:#b71c1c; background:#ffebee; border:1px solid #d32f2f; padding:16px; margin-bottom:24px; border-radius:4px; font-weight:600;">
+    <span>⚠️ You are not authenticated. Please log in through the main app to use admin utilities.</span>
+  </div>
+  <ul>
+    <li><a class="btn" href="appearance.html">Appearance</a></li>
+    <li><a class="btn" href="full-site-test-checklist.html">Test Checklist</a></li>
+    <li><a class="btn" href="test-supabase-integration.html">Supabase Integration Test</a></li>
+    <li><button id="deleteAllReservationsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Reservations (Supabase)</button></li>
+    <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Accounts (Supabase)</button></li>
+    <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Drivers (Supabase)</button></li>
+    <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Rate Data (Supabase)</button></li>
+  </ul>
+<script type="module">
+
+
+import { deleteAllReservationsSupabase, deleteAllAccountsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase, setupAPI, getSupabaseClient } from './api-service.js';
+// Show login/profile info in top right
+async function showProfileBox() {
+  await setupAPI();
+  const client = getSupabaseClient();
+  const box = document.getElementById('profileBox');
+  if (!client) {
+    box.innerHTML = '<button id="loginBtn" class="btn" style="background:#1976d2;">Login</button>';
+    return;
+  }
+  const { data: { user } } = await client.auth.getUser();
+  if (user && user.email) {
+    box.innerHTML = `<span style='font-size:15px; color:#1976d2; font-weight:600;'>${user.email}</span> <button id="logoutBtn" class="btn" style="background:#d32f2f; margin-left:8px;">Logout</button>`;
+    document.getElementById('logoutBtn').onclick = async () => {
+      await client.auth.signOut();
+      location.reload();
+    };
+  } else {
+    box.innerHTML = '<button id="loginBtn" class="btn" style="background:#1976d2;">Login</button>';
+    document.getElementById('loginBtn').onclick = async () => {
+      // Simple email/password prompt (for demo)
+      const email = prompt('Email:');
+      const password = prompt('Password:');
+      if (email && password) {
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        if (error) alert('Login failed: ' + error.message);
+        else location.reload();
+      }
+    };
+  }
+}
+
+showProfileBox();
+
+
+// Ensure Supabase is initialized and user is authenticated
+async function ensureSupabaseReady() {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase client not available');
+    // Check for user session
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+    document.getElementById('authWarning').style.display = 'none';
+    document.querySelectorAll('button.btn').forEach(btn => btn.disabled = false);
+    return true;
+  } catch (e) {
+    document.getElementById('authWarning').style.display = 'block';
+    document.querySelectorAll('button.btn').forEach(btn => btn.disabled = true);
+    return false;
+  }
+}
+
+ensureSupabaseReady();
+
+
+function setupDeleteButton(btnId, fn, label) {
+  const btn = document.getElementById(btnId);
+  if (btn) {
+    btn.onclick = async function() {
+      await ensureSupabaseReady();
+      if (confirm(`Are you sure you want to permanently delete ALL ${label} from Supabase? This cannot be undone.`)) {
+        btn.disabled = true;
+        btn.textContent = 'Deleting...';
+        const result = await fn();
+        if (result) {
+          alert(`All ${label} deleted from Supabase.`);
+        } else {
+          alert(`Failed to delete ${label}. Check console for details.`);
+        }
+        btn.disabled = false;
+        btn.textContent = `Delete ALL ${label} (Supabase)`;
+      }
+    };
+  }
+}
+
+setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
+setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
+setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
+setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+</script>
+</body>
+</html>

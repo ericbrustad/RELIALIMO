@@ -1,0 +1,66 @@
+<!-- System Settings Tab: Utilities Page -->
+<head>
+  <meta charset="UTF-8">
+  <title>System Settings</title>
+  <script src="env.js"></script>
+</head>
+<div id="systemSettingsTab" class="tab-section">
+  <h2>System Settings</h2>
+  <button id="utilitiesBtn" class="btn">Utilities</button>
+  <div id="utilitiesPanel" style="display:none; margin-top:20px;">
+    <h3>Utilities</h3>
+    <ul>
+      <li><button id="appearanceUtilBtn" class="btn">Appearance</button></li>
+      <li><button id="testChecklistUtilBtn" class="btn">Test Checklist</button></li>
+      <li><button id="supabaseTestUtilBtn" class="btn">Supabase Integration Test</button></li>
+      <li><button id="deleteAllReservationsSupabaseBtn" class="btn btn-danger">Delete ALL Reservations (Supabase)</button></li>
+      <li><button id="deleteAllAccountsSupabaseBtn" class="btn btn-danger">Delete ALL Accounts (Supabase)</button></li>
+      <li><button id="deleteAllDriversSupabaseBtn" class="btn btn-danger">Delete ALL Drivers (Supabase)</button></li>
+      <li><button id="deleteAllRatesSupabaseBtn" class="btn btn-danger">Delete ALL Rate Data (Supabase)</button></li>
+    </ul>
+  </div>
+</div>
+<script>
+  document.getElementById('utilitiesBtn').onclick = function() {
+    const panel = document.getElementById('utilitiesPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  };
+  document.getElementById('appearanceUtilBtn').onclick = function() {
+    window.location.href = 'appearance.html';
+  };
+  document.getElementById('testChecklistUtilBtn').onclick = function() {
+    window.location.href = 'full-site-test-checklist.html';
+  };
+  document.getElementById('supabaseTestUtilBtn').onclick = function() {
+    window.location.href = 'test-supabase-integration.html';
+  };
+</script>
+<script type="module">
+import { deleteAllReservationsSupabase, deleteAllAccountsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase } from './api-service.js';
+
+function setupDeleteButton(btnId, fn, label) {
+  const btn = document.getElementById(btnId);
+  if (btn) {
+    btn.onclick = async function() {
+      if (confirm(`Are you sure you want to permanently delete ALL ${label} from Supabase? This cannot be undone.`)) {
+        btn.disabled = true;
+        btn.textContent = 'Deleting...';
+        const result = await fn();
+        if (result) {
+          alert(`All ${label} deleted from Supabase.`);
+        } else {
+          alert(`Failed to delete ${label}. Check console for details.`);
+        }
+        btn.disabled = false;
+        btn.textContent = `Delete ALL ${label} (Supabase)`;
+      }
+    };
+  }
+}
+
+setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
+setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
+setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
+setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+</script>
+</script>

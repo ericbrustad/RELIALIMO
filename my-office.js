@@ -49,6 +49,12 @@ class MyOffice {
     ];
     this.selectedUserId = this.users[0]?.id || null;
     this.userInputs = {};
+    try {
+      const preview = (document?.body?.innerText || '').slice(0, 200);
+      console.log('[MyOffice init] body text preview:', preview);
+    } catch (err) {
+      console.warn('[MyOffice init] Unable to read body text:', err);
+    }
     this.init();
   }
 

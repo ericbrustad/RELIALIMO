@@ -5,11 +5,26 @@ class ReservationsList {
     this.init();
   }
 
-  openReservation(confNumber) {
-    const url = confNumber
-      ? `reservation-form.html?conf=${encodeURIComponent(confNumber)}`
-      : 'reservation-form.html';
-    navigateToSection('new-reservation', { url });
+  async openReservation(confNumber) {
+    let url;
+    if (confNumber) {
+      url = `reservation-form.html?conf=${encodeURIComponent(confNumber)}`;
+    } else {
+      // Prefill with next confirmation number for new reservation
+      try {
+        const dbModule = await import('./assets/db.js');
+        const nextConf = dbModule.db.getNextConfirmationNumber();
+        url = `reservation-form.html?conf=${encodeURIComponent(nextConf)}`;
+      } catch {
+        url = 'reservation-form.html';
+      }
+    }
+    if (window.history && window.history.pushState) {
+      window.history.pushState({}, '', url);
+      window.location.href = url;
+    } else {
+      navigateToSection('new-reservation', { url });
+    }
   }
 
   async init() {

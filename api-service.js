@@ -1,3 +1,87 @@
+/**
+ * Bulk delete all rate data in Supabase (admin only)
+ */
+export async function deleteAllRatesSupabase() {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+    const { error } = await client
+      .from('rates')
+      .delete()
+      .eq('organization_id', organizationId);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting all rate data:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+/**
+ * Bulk delete all drivers in Supabase (admin only)
+ */
+export async function deleteAllDriversSupabase() {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+    const { error } = await client
+      .from('drivers')
+      .delete()
+      .eq('organization_id', organizationId);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting all drivers:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+/**
+ * Bulk delete all accounts in Supabase (admin only)
+ */
+export async function deleteAllAccountsSupabase() {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+    const { error } = await client
+      .from('accounts')
+      .delete()
+      .eq('organization_id', organizationId);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting all accounts:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+/**
+ * Bulk delete all reservations in Supabase (admin only)
+ */
+export async function deleteAllReservationsSupabase() {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+    const { error } = await client
+      .from('reservations')
+      .delete()
+      .eq('organization_id', organizationId);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting all reservations:', error);
+    lastApiError = error;
+    return false;
+  }
+}
 // API Service for RELIA🐂LIMO™
 import { supabaseConfig, initSupabase } from './config.js';
 

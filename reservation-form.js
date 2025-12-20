@@ -2672,14 +2672,14 @@ class ReservationForm {
       if (isNewReservation) {
         db.setNextConfirmationNumber(parseInt(currentConfNumber) + 1);
       }
-      
+
       // Get account_id from billing account search (if an account number is entered)
       const accountSearchValue = reservationData.billingAccount.account?.trim();
       let accountId = null;
       if (accountSearchValue) {
         // Try to find account by account number
-        const account = db.getAllAccounts().find(a => 
-          a.account_number === accountSearchValue || 
+        const account = db.getAllAccounts().find(a =>
+          a.account_number === accountSearchValue ||
           a.id === accountSearchValue ||
           `${a.account_number} - ${a.first_name} ${a.last_name}`.includes(accountSearchValue)
         );
@@ -2688,13 +2688,13 @@ class ReservationForm {
           console.log('✅ Found account for reservation:', account.account_number);
         }
       }
-      
+
       const formSnapshot = this.collectReservationSnapshot();
 
       // Save to LocalStorage via db module
       const saved = db.saveReservation({
         id: currentConfNumber,
-        status: "confirmed",
+        status: "active", // Set status to active on save
         account_id: accountId, // Link reservation to account
         passenger_name: `${reservationData.passenger.firstName} ${reservationData.passenger.lastName}`,
         company_name: reservationData.billingAccount.company,
@@ -2719,7 +2719,7 @@ class ReservationForm {
       });
 
       console.log('💾 Reservation saved to db:', saved);
-      
+
       // Save passenger to passengers database (with Supabase sync)
       if (reservationData.passenger.firstName || reservationData.passenger.lastName) {
         const passengerSaved = await db.savePassenger({
@@ -2733,7 +2733,7 @@ class ReservationForm {
         });
         console.log('👤 Passenger saved to db and Supabase:', passengerSaved);
       }
-      
+
       // Save booking agent to booking agents database (with Supabase sync)
       if (reservationData.bookedBy.firstName || reservationData.bookedBy.lastName) {
         const bookingAgentSaved = await db.saveBookingAgent({
@@ -2745,7 +2745,7 @@ class ReservationForm {
         });
         console.log('📞 Booking agent saved to db and Supabase:', bookingAgentSaved);
       }
-      
+
       // If passenger/booking agent matches billing, also update the account
       if (this.passengerMatchesBilling || this.bookingMatchesBilling) {
         const accountNumber = reservationData.billingAccount.account;
@@ -2771,16 +2771,16 @@ class ReservationForm {
           db.saveRouteStops(saved.id, reservationData.routing.stops);
           console.log('✅ Route stops saved to db');
         }
-        
+
         // Save addresses to account if account number exists
         const accountNumber = reservationData.billingAccount.account;
         if (accountNumber && accountNumber.trim()) {
           // Find account by number
           const account = db.getAllAccounts().find(a => a.id === accountNumber || a.account_number === accountNumber);
-          
+
           if (account) {
             console.log('📍 Saving addresses to account:', account.id);
-            
+
             // Save each stop address to the account
             reservationData.routing.stops.forEach(stop => {
               if (stop.address1 && stop.city) {
@@ -2794,11 +2794,10 @@ class ReservationForm {
                   zip_code: stop.zipCode || '',
                   country: 'United States'
                 };
-                
                 db.saveAccountAddress(account.id, addressData);
               }
             });
-            
+
             console.log('✅ Addresses saved to account');
           }
         }
@@ -2813,7 +2812,7 @@ class ReservationForm {
       } catch (apiError) {
         console.warn('⚠️ API sync failed, but local save succeeded:', apiError);
       }
-      
+
       if (saved) {
         console.log('✅ Reservation saved successfully:', saved);
         saveButtons.forEach(btn => {
@@ -2821,22 +2820,19 @@ class ReservationForm {
           btn.style.background = '#28a745';
           btn.style.color = 'white';
         });
-        
-        // Wait and redirect to reservations list
+
+        // Remove highlight from new reservation tab if present
+        const newTab = document.querySelector('.window-tab[data-tab="new-reservations"]');
+        if (newTab) newTab.classList.remove('active');
+
+        // After save, reload form in edit mode for this reservation
         setTimeout(() => {
+          // If user wants to view the list, go there
           if (confirm('Reservation saved! View reservations list?')) {
             window.location.href = 'reservations-list.html';
           } else {
-            // Reset button and initialize new confirmation number for next reservation
-            if (!this.isEditMode) {
-              this.initializeConfirmationNumber();
-            }
-            originalButtonState.forEach(s => {
-              s.btn.disabled = s.disabled;
-              s.btn.textContent = s.text;
-              s.btn.style.background = s.background;
-              s.btn.style.color = s.color;
-            });
+            // Reload this form in edit mode (with conf param)
+            window.location.href = `reservation-form.html?conf=${encodeURIComponent(currentConfNumber)}`;
           }
         }, 1500);
       } else {
@@ -2849,7 +2845,6 @@ class ReservationForm {
         console.error('Stack:', error.stack);
       }
       alert(`Error saving reservation: ${message}`);
-      
       // Reset buttons
       originalButtonState.forEach(s => {
         s.btn.disabled = s.disabled;

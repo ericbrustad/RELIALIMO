@@ -1,3 +1,76 @@
+    <script type="module">
+    import { getSupabaseClient, setupAPI } from './api-service.js';
+    async function fetchUserPermissions() {
+      await setupAPI();
+      const client = getSupabaseClient();
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return null;
+      const fallbackAdmin = {
+        role: 'admin',
+        allowed_sections: [
+          'Reservations',
+          'Accounts',
+          'Office',
+          'Dashboard',
+          'Calendar',
+          'Quotes',
+          'Dispatch',
+          'Network',
+          'Settle',
+          'Receivables',
+          'Payables',
+          'Memos',
+          'Files',
+          'Tools',
+          'Reports',
+          'New Reservation'
+        ]
+      };
+      const { data, error } = await client
+        .from('system_users')
+        .select('role, allowed_sections')
+        .eq('email', user.email)
+        .single();
+      if (error || !data) {
+        if ((user.email || '').toLowerCase() === 'ericbrustad@gmail.com') {
+          return fallbackAdmin;
+        }
+        return null;
+      }
+      if ((user.email || '').toLowerCase() === 'ericbrustad@gmail.com') {
+        return {
+          role: 'admin',
+          allowed_sections: data.allowed_sections && data.allowed_sections.length ? data.allowed_sections : fallbackAdmin.allowed_sections
+        };
+      }
+      return data;
+    }
+    async function enforceSectionAccess() {
+      const perms = await fetchUserPermissions();
+      if (!perms) return;
+      const allowed = perms.allowed_sections || [];
+      // Hide Reservations tab if not allowed
+      if (!allowed.includes('Reservations')) {
+        const btn = document.querySelector('[data-section="reservations"]');
+        if (btn) btn.style.display = 'none';
+      }
+      // Hide Accounts tab if not allowed
+      if (!allowed.includes('Accounts')) {
+        const btn = document.querySelector('[data-section="accounts"]');
+        if (btn) btn.style.display = 'none';
+      }
+      // Hide Office tab if not allowed
+      if (!allowed.includes('Office')) {
+        const btn = document.querySelector('[data-section="office"]');
+        if (btn) btn.style.display = 'none';
+      }
+      // Hide master delete buttons if not admin (global)
+      if (perms.role !== 'admin') {
+        document.querySelectorAll('.btn-danger').forEach(btn => btn.style.display = 'none');
+      }
+    }
+    enforceSectionAccess();
+    </script>
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -5,8 +78,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RELIA LIMO™</title>
     <link rel="icon" href="favicon.png" />
-    <!-- Load environment variables first -->
     <script src="env.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="global.css" />
     <link rel="stylesheet" href="my-office.css" />
     <link rel="stylesheet" href="accounts.css" />
@@ -53,6 +127,7 @@
       .app-main-section {
         height: calc(100vh - 60px);
         overflow: hidden;
+         background: #f4f7fb; /* Added visible background to active sections */
       }
 
       /* Wide sections: use full browser width (no centered max-width header) */
@@ -76,30 +151,78 @@
     </style>
   </head>
   <body>
+    <noscript>
+      <div style="background:#fff3cd;color:#856404;padding:16px;text-align:center;font-size:18px;border-bottom:1px solid #ffeeba;">
+        JavaScript is required for RELIA LIMO. Please enable JavaScript in your browser settings.
+      </div>
+    </noscript>
     <div id="app">
       <!-- UNIFIED HEADER -->
       <header class="header">
-        <div class="header-content">
-          <div class="header-left">
-            <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™</h1>
+        <div class="header-content" style="display:flex;align-items:center;justify-content:flex-start;width:100%;position:relative;">
+          <div style="display:flex;align-items:center;gap:32px;">
+            <div class="header-left">
+              <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™</h1>
+            </div>
+            <div class="main-nav">
+              <button class="nav-btn" data-section="new-reservation"><span>New Reservation</span><span style="font-size: 24px;">➕</span></button>
+              <button class="nav-btn" data-section="dashboard"><span>Farmout Dashboard</span><span style="font-size: 24px;">🏠</span></button>
+              <button class="nav-btn active" data-section="office"><span>Office</span><span style="font-size: 24px;">🏢</span></button>
+              <button class="nav-btn" data-section="accounts"><span>Accounts</span><span style="font-size: 24px;">👤</span></button>
+              <button class="nav-btn" data-section="calendar"><span>Calendar</span><span style="font-size: 24px;">📅</span></button>
+              <button class="nav-btn" data-section="quotes"><span>Quotes</span><span style="font-size: 24px;">📋</span></button>
+              <button class="nav-btn" data-section="reservations"><span>Reservations</span><span style="font-size: 24px;">🚗</span></button>
+              <button class="nav-btn" data-section="dispatch"><span>Dispatch</span><span style="font-size: 24px;">🚙</span></button>
+              <button class="nav-btn" data-section="network"><span>Network</span><span style="font-size: 24px;">🌐</span></button>
+              <button class="nav-btn" data-section="settle"><span>Settle</span><span style="font-size: 24px;">💰</span></button>
+              <button class="nav-btn" data-section="receivables"><span>Receivables</span><span style="font-size: 24px;">📊</span></button>
+              <button class="nav-btn" data-section="payables"><span>Payables</span><span style="font-size: 24px;">💳</span></button>
+              <button class="nav-btn" data-section="memos"><span>Memos</span><span style="font-size: 24px;">📝</span></button>
+              <button class="nav-btn" data-section="files"><span>Files</span><span style="font-size: 24px;">📁</span></button>
+              <button class="nav-btn" data-section="tools"><span>Tools</span><span style="font-size: 24px;">🔧</span></button>
+              <button class="nav-btn" data-section="reports"><span>Reports</span><span style="font-size: 24px;">📈</span></button>
+            </div>
           </div>
-          <div class="main-nav">
-            <button class="nav-btn" data-section="new-reservation"><span>New Reservation</span><span style="font-size: 24px;">➕</span></button>
-            <button class="nav-btn" data-section="dashboard"><span>Farmout Dashboard</span><span style="font-size: 24px;">🏠</span></button>
-            <button class="nav-btn active" data-section="office"><span>Office</span><span style="font-size: 24px;">🏢</span></button>
-            <button class="nav-btn" data-section="accounts"><span>Accounts</span><span style="font-size: 24px;">👤</span></button>
-            <button class="nav-btn" data-section="calendar"><span>Calendar</span><span style="font-size: 24px;">📅</span></button>
-            <button class="nav-btn" data-section="quotes"><span>Quotes</span><span style="font-size: 24px;">📋</span></button>
-            <button class="nav-btn" data-section="reservations"><span>Reservations</span><span style="font-size: 24px;">🚗</span></button>
-            <button class="nav-btn" data-section="dispatch"><span>Dispatch</span><span style="font-size: 24px;">🚙</span></button>
-            <button class="nav-btn" data-section="network"><span>Network</span><span style="font-size: 24px;">🌐</span></button>
-            <button class="nav-btn" data-section="settle"><span>Settle</span><span style="font-size: 24px;">💰</span></button>
-            <button class="nav-btn" data-section="receivables"><span>Receivables</span><span style="font-size: 24px;">📊</span></button>
-            <button class="nav-btn" data-section="payables"><span>Payables</span><span style="font-size: 24px;">💳</span></button>
-            <button class="nav-btn" data-section="memos"><span>Memos</span><span style="font-size: 24px;">📝</span></button>
-            <button class="nav-btn" data-section="files"><span>Files</span><span style="font-size: 24px;">📁</span></button>
-            <button class="nav-btn" data-section="tools"><span>Tools</span><span style="font-size: 24px;">🔧</span></button>
-            <button class="nav-btn" data-section="reports"><span>Reports</span><span style="font-size: 24px;">📈</span></button>
+          <div id="profileBox" style="position:absolute;top:0;right:0;min-width:180px;text-align:right;padding:18px 32px 0 0;z-index:20;pointer-events:auto;"></div>
+          <style>
+            #profileBox { background: transparent; pointer-events: auto; }
+            .header-content { position: relative; }
+            .main-nav { z-index: 10; position: relative; }
+            /* Only the profileBox area is clickable for login/profile, rest is nav */
+            #profileBox:empty { pointer-events: none; }
+          </style>
+                <script type="module">
+                import { setupAPI, getSupabaseClient } from './api-service.js';
+                async function showProfileBox() {
+                  await setupAPI();
+                  const client = getSupabaseClient();
+                  const box = document.getElementById('profileBox');
+                  if (!client) {
+                    box.innerHTML = '<button id="loginBtn" class="btn" style="background:#1976d2;">Login</button>';
+                    return;
+                  }
+                  const { data: { user } } = await client.auth.getUser();
+                  if (user && user.email) {
+                    box.innerHTML = `<span style='font-size:15px; color:#1976d2; font-weight:600;'>${user.email}</span> <button id="logoutBtn" class="btn" style="background:#d32f2f; margin-left:8px;">Logout</button>`;
+                    document.getElementById('logoutBtn').onclick = async () => {
+                      await client.auth.signOut();
+                      location.reload();
+                    };
+                  } else {
+                    box.innerHTML = '<button id="loginBtn" class="btn" style="background:#1976d2;">Login</button>';
+                    document.getElementById('loginBtn').onclick = async () => {
+                      const email = prompt('Email:');
+                      const password = prompt('Password:');
+                      if (email && password) {
+                        const { error } = await client.auth.signInWithPassword({ email, password });
+                        if (error) alert('Login failed: ' + error.message);
+                        else location.reload();
+                      }
+                    };
+                  }
+                }
+                showProfileBox();
+                </script>
           </div>
         </div>
       </header>
@@ -282,6 +405,15 @@
 
       // Wire all navigation buttons with event delegation
       document.addEventListener('DOMContentLoaded', () => {
+        try {
+          document.querySelectorAll('.app-main-section').forEach(sec => {
+            const rect = sec.getBoundingClientRect();
+            console.log('[Section metrics]', sec.id, 'display=', getComputedStyle(sec).display, 'size=', rect.width + 'x' + rect.height, 'active=', sec.classList.contains('active'));
+          });
+        } catch (err) {
+          console.warn('Section metrics debug failed:', err);
+        }
+
         const mainNav = document.querySelector('.main-nav');
         if (mainNav) {
           mainNav.addEventListener('click', (e) => {
@@ -291,6 +423,28 @@
             }
           });
         }
+
+        document.querySelectorAll('.app-main-section iframe').forEach((frame) => {
+          const logPreview = () => {
+            try {
+              const doc = frame?.contentDocument;
+              if (!doc) {
+                console.warn('[Iframe inspect] Missing document for', frame.src);
+                return;
+              }
+              const textPreview = doc.body?.innerText?.slice(0, 120) || '[empty body]';
+              console.log('[Iframe inspect]', frame.src, 'preview:', textPreview);
+            } catch (err) {
+              console.warn('[Iframe inspect] Unable to read contents for', frame.src, err);
+            }
+          };
+
+          frame.addEventListener('load', logPreview);
+
+          if (frame.contentDocument?.readyState === 'complete') {
+            logPreview();
+          }
+        });
 
         const SECTION_ROUTES = {
           dashboard: 'index-reservations.html',
@@ -407,6 +561,15 @@
         const sectionElement = document.getElementById(section + 'Section');
         if (sectionElement) {
           sectionElement.classList.add('active');
+          try {
+            const frame = sectionElement.querySelector('iframe');
+            if (frame?.contentDocument) {
+              const preview = frame.contentDocument.body?.innerText?.slice(0, 120) || '[empty body]';
+              console.log('[Section preview]', section, preview);
+            }
+          } catch (err) {
+            console.warn('Unable to inspect iframe for section', section, err);
+          }
           console.log('✓ Activated section:', section);
         } else {
           console.error('Section not found:', section + 'Section');
@@ -535,4 +698,24 @@
     <script type="module" src="auth-guard.js"></script>
     <script type="module" src="user-menu.js"></script>
   </body>
+</body>
+<script type="module">
+  // Admin utility: Add a button to clear all local data
+  document.addEventListener('DOMContentLoaded', function() {
+    if (!window.location.search.includes('admin-clear')) return;
+    import('./assets/db.js').then(({ db }) => {
+      const btn = document.createElement('button');
+      btn.textContent = '⚠️ Clear ALL Local Data';
+      btn.style = 'position:fixed;top:10px;right:10px;z-index:9999;background:#c00;color:#fff;padding:10px 20px;border:none;border-radius:4px;font-size:16px;cursor:pointer;';
+      btn.onclick = () => {
+        if (confirm('Are you sure you want to delete ALL local account and reservation data? This cannot be undone.')) {
+          db.clearAllData();
+          alert('All local data cleared. Reloading...');
+          window.location.reload();
+        }
+      };
+      document.body.appendChild(btn);
+    });
+  });
+</script>
 </html>
