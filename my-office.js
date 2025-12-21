@@ -989,6 +989,7 @@ class MyOffice {
       'limoanywhere-pay': null,
       'digital-marketing': null,
       'appearance': 'appearance.html',
+      'utilities': 'utilities.html',
       'test-checklist': 'full-site-test-checklist.html',
       'supabase-integration-test': 'test-supabase-integration.html',
     };
@@ -2006,7 +2007,45 @@ class MyOffice {
     // Load drivers list
     this.loadDriversList();
 
-    // Driver list selection
+    // Show All checkbox - reload list when toggled
+    const showAllCheckbox = document.getElementById('showAllDriversCheckbox');
+    if (showAllCheckbox) {
+      showAllCheckbox.addEventListener('change', () => this.loadDriversList());
+    }
+
+    // Delete Driver button
+    const deleteDriverBtn = document.getElementById('deleteDriverBtn');
+    if (deleteDriverBtn) {
+      deleteDriverBtn.addEventListener('click', () => this.deleteDriver());
+    }
+
+    // Add New Driver button
+    const addNewDriverBtn = document.getElementById('addNewDriverBtn');
+    if (addNewDriverBtn) {
+      addNewDriverBtn.addEventListener('click', () => {
+        this.currentDriver = null;
+        const formTitle = document.getElementById('driverFormTitle');
+        if (formTitle) formTitle.textContent = 'Add New Driver';
+        
+        // Clear all form inputs
+        const form = document.querySelector('.drivers-form-panel');
+        if (form) {
+          form.querySelectorAll('input[type="text"], textarea').forEach(input => input.value = '');
+          form.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+          form.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
+        
+        // Deselect all in list
+        const driversListContainer = document.getElementById('driversListContainer');
+        if (driversListContainer) {
+          driversListContainer.querySelectorAll('.driver-list-item').forEach(i => {
+            i.style.background = '#fff';
+          });
+        }
+      });
+    }
+
+    // Driver list selection (old select dropdown - backward compatibility)
     const driversList = document.querySelector('.drivers-list-select');
     if (driversList) {
       driversList.addEventListener('change', (e) => {
@@ -2037,23 +2076,78 @@ class MyOffice {
 
   async loadDriversList() {
     try {
+      const showAll = document.getElementById('showAllDriversCheckbox')?.checked || false;
       const data = await fetchDrivers();
+      
       if (data) {
-        this.drivers = data;
+        // Filter by active status unless "Show All" is checked
+        this.drivers = showAll ? data : data.filter(d => d.is_active !== false);
+        
+        // Render to the new container layout (clickable list items)
+        const driversListContainer = document.getElementById('driversListContainer');
+        if (driversListContainer) {
+          if (this.drivers.length === 0) {
+            driversListContainer.innerHTML = '<div style="padding: 10px; color: #666; font-size: 11px;">No drivers found</div>';
+          } else {
+            driversListContainer.innerHTML = this.drivers.map((driver, index) => {
+              const isActive = driver.is_active !== false;
+              const statusClass = isActive ? 'driver-active' : 'driver-inactive';
+              const statusIcon = isActive ? '🟢' : '🔴';
+              return `
+                <div class="driver-list-item ${statusClass}" 
+                     data-driver-id="${driver.id}" 
+                     data-index="${index}"
+                     style="padding: 8px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 6px; background: ${index === 0 ? '#e3f2fd' : '#fff'}; border: 1px solid #ddd;">
+                  <span>${statusIcon}</span>
+                  <span>${driver.last_name}, ${driver.first_name}</span>
+                </div>
+              `;
+            }).join('');
+            
+            // Add click handlers
+            driversListContainer.querySelectorAll('.driver-list-item').forEach(item => {
+              item.addEventListener('click', () => {
+                // Remove selection from all
+                driversListContainer.querySelectorAll('.driver-list-item').forEach(i => {
+                  i.style.background = '#fff';
+                });
+                // Highlight selected
+                item.style.background = '#e3f2fd';
+                
+                const index = parseInt(item.dataset.index);
+                if (this.drivers[index]) {
+                  this.loadDriverForm(this.drivers[index]);
+                }
+              });
+            });
+            
+            // Auto-select first driver
+            if (this.drivers.length > 0) {
+              this.loadDriverForm(this.drivers[0]);
+            }
+          }
+        }
+        
+        // Also update the old select dropdown if it exists (for backward compatibility)
         const driversList = document.querySelector('.drivers-list-select');
         if (driversList) {
           driversList.innerHTML = '';
-          data.forEach((driver) => {
+          this.drivers.forEach((driver) => {
             const option = document.createElement('option');
             option.value = driver.id;
             option.textContent = `${driver.last_name}, ${driver.first_name}`;
             driversList.appendChild(option);
           });
         }
-        console.log('✅ Drivers loaded:', data.length);
+        
+        console.log(`✅ Drivers loaded: ${this.drivers.length} (showAll: ${showAll})`);
       }
     } catch (error) {
       console.error('❌ Error loading drivers:', error);
+      const driversListContainer = document.getElementById('driversListContainer');
+      if (driversListContainer) {
+        driversListContainer.innerHTML = '<div style="padding: 10px; color: #c00; font-size: 11px;">Error loading drivers</div>';
+      }
     }
   }
 
@@ -2061,6 +2155,12 @@ class MyOffice {
     this.currentDriver = driver;
     const form = document.querySelector('.drivers-form-panel');
     if (!form) return;
+
+    // Update form title
+    const formTitle = document.getElementById('driverFormTitle');
+    if (formTitle) {
+      formTitle.textContent = `Edit Driver: ${driver.first_name} ${driver.last_name}`;
+    }
 
     // Populate form fields with driver data
     const inputs = form.querySelectorAll('input[type="text"], select, textarea');

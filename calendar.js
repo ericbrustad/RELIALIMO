@@ -8,6 +8,8 @@ class Calendar {
     this.tooltipEl = null;
     this.modalEl = null;
     this.settingsStorageKey = 'relia_calendar_settings_anon';
+    this.currentUser = null;
+    this.availabilityStorageKey = 'relia_calendar_availability_events';
     this.selectedFilters = {
       drivers: [],
       cars: [],
@@ -34,6 +36,13 @@ class Calendar {
       if (!supabase?.auth?.getUser) return;
       const { data } = await supabase.auth.getUser();
       const user = data?.user;
+      if (user) {
+        this.currentUser = {
+          id: user.id || null,
+          email: user.email || null,
+          role: user.role || user.user_metadata?.role || user.app_metadata?.role || null
+        };
+      }
       const raw = user?.id || user?.email;
       if (raw) {
         const safe = String(raw).replace(/[^a-zA-Z0-9_.@-]/g, '_');
@@ -300,8 +309,21 @@ class Calendar {
       content.className = 'cell-content';
       cell.appendChild(content);
 
+      // Allow adding availability on double-click of empty space
+      // (Only useful when "Only Reservations" is OFF, since availability is hidden otherwise.)
+      const dateKey = this.dateKey(cellDate);
+      cell.dataset.dateKey = dateKey;
+      content.dataset.dateKey = dateKey;
+      const onEmptyDblClick = (e) => {
+        if (e.target?.closest?.('.event-item')) return;
+        if (cell.classList.contains('other-month')) return;
+        this.promptCreateAvailability(dateKey);
+      };
+      // Bind on the whole cell so empty-space double-click works
+      cell.addEventListener('dblclick', onEmptyDblClick);
+
       if (cellDate.getMonth() === monthIndex) {
-        dayCellMap.set(this.dateKey(cellDate), content);
+        dayCellMap.set(dateKey, content);
       }
 
       fragment.appendChild(cell);
@@ -311,21 +333,33 @@ class Calendar {
     calendarBody.innerHTML = '';
     calendarBody.appendChild(fragment);
 
-    // Add holidays / observances
-    const showFederal = document.getElementById('showFederalHolidays')?.checked ?? true;
-    const showMajor = document.getElementById('showMajorObservances')?.checked ?? false;
-    const holidayEvents = [
-      ...(showFederal ? this.getUSHolidays(year) : []),
-      ...(showMajor ? this.getMajorObservances(year) : [])
-    ].filter(h => h?.date?.getMonth?.() === monthIndex);
+    // Add holidays / observances (hidden when "Only Reservations" is ON)
+    const onlyReservations = document.getElementById('onlyReservations')?.checked ?? true;
+    if (!onlyReservations) {
+      const showFederal = document.getElementById('showFederalHolidays')?.checked ?? true;
+      const showMajor = document.getElementById('showMajorObservances')?.checked ?? false;
+      const holidayEvents = [
+        ...(showFederal ? this.getUSHolidays(year) : []),
+        ...(showMajor ? this.getMajorObservances(year) : [])
+      ].filter(h => h?.date?.getMonth?.() === monthIndex);
 
-    for (const h of holidayEvents) {
-      const key = this.dateKey(h.date);
-      const container = dayCellMap.get(key);
-      if (!container) continue;
+      for (const h of holidayEvents) {
+        const key = this.dateKey(h.date);
+        const container = dayCellMap.get(key);
+        if (!container) continue;
 
-      const el = this.createHolidayEventEl(h);
-      container.appendChild(el);
+        const el = this.createHolidayEventEl(h);
+        container.appendChild(el);
+      }
+
+      // Add availability events (drivers / booked-by)
+      const availability = this.getAvailabilityForMonth(year, monthIndex);
+      for (const ev of availability) {
+        const el = this.createAvailabilityEventEl(ev);
+        const container = dayCellMap.get(el.dataset.dateKey);
+        if (!container) continue;
+        container.appendChild(el);
+      }
     }
 
     // Add reservations
@@ -338,6 +372,313 @@ class Calendar {
     }
 
     this.updateHolidayTicker();
+  }
+
+  getAvailabilityForMonth(year, monthIndex) {
+    const onlyMyEvents = document.getElementById('onlyMyEvents')?.checked ?? false;
+    const userId = this.currentUser?.id;
+    const userEmail = (this.currentUser?.email || '').toLowerCase();
+
+    const all = this.loadAvailabilityEvents();
+    return all
+      .filter(e => e && e.start_at)
+      .map(e => ({ raw: e, startDate: this.parseLocalDateTime(e.start_at) }))
+      .filter(x => x.startDate && x.startDate.getFullYear() === year && x.startDate.getMonth() === monthIndex)
+      .filter(x => {
+        if (!onlyMyEvents) return true;
+        if (!userId && !userEmail) return false;
+        const createdById = x.raw.created_by_id ? String(x.raw.created_by_id) : '';
+        const createdByEmail = (x.raw.created_by_email || '').toLowerCase();
+        if (userId && createdById && createdById === String(userId)) return true;
+        if (userEmail && createdByEmail && createdByEmail === userEmail) return true;
+        return false;
+      })
+      .sort((a, b) => a.startDate - b.startDate)
+      .map(x => x.raw);
+  }
+
+  loadAvailabilityEvents() {
+    try {
+      const raw = localStorage.getItem(this.availabilityStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.warn('⚠️ Failed to load availability events:', e);
+      return [];
+    }
+  }
+
+  saveAvailabilityEvents(events) {
+    try {
+      localStorage.setItem(this.availabilityStorageKey, JSON.stringify(events));
+    } catch (e) {
+      console.warn('⚠️ Failed to save availability events:', e);
+    }
+  }
+
+  promptCreateAvailability(dateKey) {
+    const onlyReservationsEl = document.getElementById('onlyReservations');
+    const onlyReservations = onlyReservationsEl?.checked ?? true;
+    // If user is creating availability, make it visible automatically.
+    if (onlyReservationsEl && onlyReservations) {
+      onlyReservationsEl.checked = false;
+      try { this.filterByReservations(false); } catch { /* ignore */ }
+      try { this.saveSettingsFromUi(); } catch { /* ignore */ }
+      try { this.applyTickerVisibilityFromUi?.(); } catch { /* ignore */ }
+    }
+
+    if (!this.currentUser?.id && !this.currentUser?.email) {
+      alert('Sign in required to create availability.');
+      return;
+    }
+
+    const startTime = (prompt('Time START (HH:MM)', '09:00') || '').trim();
+    if (!startTime) return;
+    const timeIn = (prompt('Time IN (HH:MM, optional)', '') || '').trim();
+    const timeStop = (prompt('Time STOP (HH:MM, optional)', '') || '').trim();
+    const timeOut = (prompt('Time OUT (HH:MM)', '17:00') || '').trim();
+    if (!timeOut) return;
+    const note = prompt('Note (optional)', '') ?? '';
+
+    if (!this.isValidHHMM(startTime) || !this.isValidHHMM(timeOut)) {
+      alert('Invalid time format. Use HH:MM (e.g. 09:30).');
+      return;
+    }
+    if (timeIn && !this.isValidHHMM(timeIn)) {
+      alert('Invalid IN time. Use HH:MM (e.g. 10:15).');
+      return;
+    }
+    if (timeStop && !this.isValidHHMM(timeStop)) {
+      alert('Invalid STOP time. Use HH:MM (e.g. 12:00).');
+      return;
+    }
+
+    const startAt = `${dateKey}T${startTime}`;
+    const endAt = `${dateKey}T${timeOut}`;
+    const startDate = this.parseLocalDateTime(startAt);
+    const endDate = this.parseLocalDateTime(endAt);
+    if (!startDate || !endDate) {
+      alert('Invalid date/time.');
+      return;
+    }
+    if (endDate <= startDate) {
+      alert('OUT time must be after START time.');
+      return;
+    }
+
+    const role = (this.currentUser?.role || '').toLowerCase();
+    const ownerType = role === 'driver' ? 'driver' : 'booked-by';
+
+    const newEvent = {
+      id: `avail-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      type: 'availability',
+      owner_type: ownerType,
+      created_by_id: this.currentUser?.id || null,
+      created_by_email: this.currentUser?.email || null,
+      start_time: startTime,
+      in_time: timeIn || null,
+      stop_time: timeStop || null,
+      out_time: timeOut,
+      start_at: startAt,
+      end_at: endAt,
+      note,
+      created_at: new Date().toISOString()
+    };
+
+    const all = this.loadAvailabilityEvents();
+    all.push(newEvent);
+    this.saveAvailabilityEvents(all);
+    this.render();
+  }
+
+  isAvailabilityOwner(ev) {
+    const userId = this.currentUser?.id ? String(this.currentUser.id) : '';
+    const userEmail = (this.currentUser?.email || '').toLowerCase();
+    const createdById = ev?.created_by_id ? String(ev.created_by_id) : '';
+    const createdByEmail = (ev?.created_by_email || '').toLowerCase();
+    if (userId && createdById && userId === createdById) return true;
+    if (userEmail && createdByEmail && userEmail === createdByEmail) return true;
+    return false;
+  }
+
+  promptEditAvailability(eventId) {
+    const all = this.loadAvailabilityEvents();
+    const idx = all.findIndex(e => e && e.id === eventId);
+    if (idx < 0) return;
+    const ev = all[idx];
+
+    if (!this.isAvailabilityOwner(ev)) {
+      alert('Only the creator can edit this availability.');
+      return;
+    }
+
+    const startDate = this.parseLocalDateTime(ev.start_at);
+    const endDate = this.parseLocalDateTime(ev.end_at);
+    const dateKey = startDate ? this.dateKey(startDate) : null;
+    if (!startDate || !endDate || !dateKey) {
+      alert('This availability event has invalid dates.');
+      return;
+    }
+
+    const fmt24 = (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const currentStart = (ev.start_time || fmt24(startDate)).toString();
+    const currentIn = (ev.in_time || '').toString();
+    const currentStop = (ev.stop_time || '').toString();
+    const currentOut = (ev.out_time || fmt24(endDate)).toString();
+
+    const startTime = (prompt('Edit Time START (HH:MM)', currentStart) || '').trim();
+    if (!startTime) return;
+    const timeIn = (prompt('Edit Time IN (HH:MM, optional)', currentIn) || '').trim();
+    const timeStop = (prompt('Edit Time STOP (HH:MM, optional)', currentStop) || '').trim();
+    const timeOut = (prompt('Edit Time OUT (HH:MM)', currentOut) || '').trim();
+    if (!timeOut) return;
+    const note = prompt('Edit Note (optional)', (ev.note || '').toString()) ?? '';
+
+    if (!this.isValidHHMM(startTime) || !this.isValidHHMM(timeOut)) {
+      alert('Invalid time format. Use HH:MM (e.g. 09:30).');
+      return;
+    }
+    if (timeIn && !this.isValidHHMM(timeIn)) {
+      alert('Invalid IN time. Use HH:MM (e.g. 10:15).');
+      return;
+    }
+    if (timeStop && !this.isValidHHMM(timeStop)) {
+      alert('Invalid STOP time. Use HH:MM (e.g. 12:00).');
+      return;
+    }
+
+    const nextStartAt = `${dateKey}T${startTime}`;
+    const nextEndAt = `${dateKey}T${timeOut}`;
+    const nextStart = this.parseLocalDateTime(nextStartAt);
+    const nextEnd = this.parseLocalDateTime(nextEndAt);
+    if (!nextStart || !nextEnd) {
+      alert('Invalid date/time.');
+      return;
+    }
+    if (nextEnd <= nextStart) {
+      alert('OUT time must be after START time.');
+      return;
+    }
+
+    all[idx] = {
+      ...ev,
+      start_time: startTime,
+      in_time: timeIn || null,
+      stop_time: timeStop || null,
+      out_time: timeOut,
+      start_at: nextStartAt,
+      end_at: nextEndAt,
+      note,
+      updated_at: new Date().toISOString()
+    };
+
+    this.saveAvailabilityEvents(all);
+    this.render();
+  }
+
+  createAvailabilityEventEl(ev) {
+    const startDate = this.parseLocalDateTime(ev.start_at);
+    const endDate = this.parseLocalDateTime(ev.end_at);
+    const dateKey = startDate ? this.dateKey(startDate) : '';
+
+    const fmtShort = (d) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const startLabel = (ev.start_time || (startDate ? fmtShort(startDate) : '')).toString();
+    const outLabel = (ev.out_time || (endDate ? fmtShort(endDate) : '')).toString();
+    const timeLabel = (startLabel && outLabel) ? `${startLabel}-${outLabel}` : (startLabel || outLabel || '');
+
+    const who = (ev.created_by_email || ev.created_by_id || '').toString();
+    const note = (ev.note || '').toString();
+
+    const el = document.createElement('div');
+    el.className = 'event-item event-orange';
+    el.dataset.type = 'availability';
+    el.dataset.id = ev.id || '';
+    el.dataset.dateKey = dateKey;
+    el.dataset.time = timeLabel;
+    el.dataset.who = who;
+    el.dataset.note = note;
+
+    el.innerHTML = `
+      <div class="event-time">Availability</div>
+      <div class="event-vehicle">${this.escapeHtml(timeLabel)}${who ? `, ${this.escapeHtml(who)}` : ''}</div>
+    `;
+
+    el.addEventListener('mouseenter', (e) => {
+      const lines = ['Availability'];
+      if (startLabel) lines.push(`START: ${startLabel}`);
+      if (ev.in_time) lines.push(`IN: ${ev.in_time}`);
+      if (ev.stop_time) lines.push(`STOP: ${ev.stop_time}`);
+      if (outLabel) lines.push(`OUT: ${outLabel}`);
+      if (who) lines.push(`By: ${who}`);
+      if (note) lines.push(note);
+      this.openTooltip(lines.join('\n'));
+      this.positionTooltip(e);
+    });
+    el.addEventListener('mousemove', (e) => this.positionTooltip(e));
+    el.addEventListener('mouseleave', () => this.closeTooltip());
+
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const lines = [
+        { label: 'Type', value: 'Availability' },
+        { label: 'START', value: startLabel },
+        { label: 'IN', value: (ev.in_time || '') },
+        { label: 'STOP', value: (ev.stop_time || '') },
+        { label: 'OUT', value: outLabel },
+        { label: 'By', value: who },
+        { label: 'Note', value: note }
+      ].filter(x => x.value);
+
+      // Reuse the calendar modal
+      this.closeModal();
+      const modal = document.createElement('div');
+      modal.className = 'calendar-modal';
+      modal.innerHTML = `
+        <div class="calendar-modal-overlay"></div>
+        <div class="calendar-modal-content" role="dialog" aria-modal="true">
+          <div class="calendar-modal-header">
+            <div class="calendar-modal-title">Availability</div>
+            <button class="calendar-modal-close" type="button" aria-label="Close">×</button>
+          </div>
+          <div class="calendar-modal-body">
+            ${lines.map(l => `
+              <div class="calendar-modal-row">
+                <div class="calendar-modal-label">${this.escapeHtml(l.label)}:</div>
+                <div class="calendar-modal-value">${this.escapeHtml(l.value)}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      const close = () => this.closeModal();
+      modal.querySelector('.calendar-modal-overlay')?.addEventListener('click', close);
+      modal.querySelector('.calendar-modal-close')?.addEventListener('click', close);
+
+      document.addEventListener('keydown', this._onModalKeydown = (ev2) => {
+        if (ev2.key === 'Escape') close();
+      }, { once: true });
+
+      document.body.appendChild(modal);
+      this.modalEl = modal;
+    });
+
+    // Double-click to edit (owner only)
+    el.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = el.dataset.id;
+      if (!id) return;
+      this.promptEditAvailability(id);
+    });
+
+    return el;
+  }
+
+  isValidHHMM(value) {
+    const s = String(value || '').trim();
+    const m = s.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+    return !!m;
   }
 
   loadSettingsIntoUi() {
@@ -479,14 +820,26 @@ class Calendar {
       return [];
     }
 
-    const onlyReservations = document.getElementById('onlyReservations')?.checked ?? true;
-    if (!onlyReservations) {
-      // Still show reservations even when unchecked (it likely means “include other events”).
-      // There are no other event sources yet.
-    }
+    // "Only Reservations" affects whether we show holidays; reservations always show.
+
+    const onlyMyEvents = document.getElementById('onlyMyEvents')?.checked ?? false;
 
     const filtered = all
       .filter(r => r && r.pickup_at)
+      .filter(r => {
+        if (!onlyMyEvents) return true;
+        const userId = this.currentUser?.id;
+        const userEmail = (this.currentUser?.email || '').toLowerCase();
+        if (!userId && !userEmail) return false;
+
+        const driverId = this.getReservationDriverId(r);
+        if (userId && driverId && String(driverId) === String(userId)) return true;
+
+        const bookedByEmail = this.getReservationBookedByEmail(r);
+        if (userEmail && bookedByEmail && bookedByEmail.toLowerCase() === userEmail) return true;
+
+        return false;
+      })
       .map(r => ({
         raw: r,
         pickupDate: this.parseLocalDateTime(r.pickup_at)
@@ -495,6 +848,20 @@ class Calendar {
       .sort((a, b) => a.pickupDate - b.pickupDate);
 
     return filtered.map(x => x.raw);
+  }
+
+  getReservationDriverId(res) {
+    // Prefer explicit fields if present; fallback to form snapshot
+    const direct = res?.driver_id || res?.driverId || res?.driver;
+    if (direct) return direct;
+    return res?.form_snapshot?.details?.driver || null;
+  }
+
+  getReservationBookedByEmail(res) {
+    const direct = res?.booked_by_email || res?.bookedByEmail;
+    if (direct) return String(direct);
+    const snap = res?.form_snapshot?.bookedBy?.email;
+    return snap ? String(snap) : null;
   }
 
   createReservationEventEl(res) {
@@ -544,15 +911,16 @@ class Calendar {
     el.dataset.type = 'holiday';
     el.dataset.dateKey = this.dateKey(holiday.date);
     el.dataset.name = holiday.name;
+    el.dataset.kind = holiday.kind || 'Holiday';
 
     el.innerHTML = `
-      <div class="event-time">Holiday</div>
+      <div class="event-time">${this.escapeHtml(el.dataset.kind)}</div>
       <div class="event-vehicle">${this.escapeHtml(holiday.name)}</div>
     `;
 
     // Tooltip on hover (no modal/nav required)
     el.addEventListener('mouseenter', (e) => {
-      this.openTooltip(`Holiday: ${holiday.name}`);
+      this.openTooltip(`${el.dataset.kind}: ${holiday.name}`);
       this.positionTooltip(e);
     });
     el.addEventListener('mousemove', (e) => this.positionTooltip(e));
@@ -737,7 +1105,8 @@ class Calendar {
   getUSHolidays(year) {
     const fixed = (monthIndex, day, name) => ({
       name,
-      date: new Date(year, monthIndex, day)
+      date: new Date(year, monthIndex, day),
+      kind: 'Federal Holiday'
     });
 
     const nthWeekday = (monthIndex, weekday, n, name) => {
@@ -745,14 +1114,14 @@ class Calendar {
       const first = new Date(year, monthIndex, 1);
       const offset = (weekday - first.getDay() + 7) % 7;
       const day = 1 + offset + (n - 1) * 7;
-      return { name, date: new Date(year, monthIndex, day) };
+      return { name, date: new Date(year, monthIndex, day), kind: 'Federal Holiday' };
     };
 
     const lastWeekday = (monthIndex, weekday, name) => {
       const last = new Date(year, monthIndex + 1, 0);
       const offset = (last.getDay() - weekday + 7) % 7;
       last.setDate(last.getDate() - offset);
-      return { name, date: last };
+      return { name, date: last, kind: 'Federal Holiday' };
     };
 
     return [
@@ -772,12 +1141,12 @@ class Calendar {
 
   // Major observances (non-federal) used for ticker + optional awareness
   getMajorObservances(year) {
-    const fixed = (monthIndex, day, name) => ({ name, date: new Date(year, monthIndex, day) });
+    const fixed = (monthIndex, day, name) => ({ name, date: new Date(year, monthIndex, day), kind: 'Major Observance' });
     const nthWeekday = (monthIndex, weekday, n, name) => {
       const first = new Date(year, monthIndex, 1);
       const offset = (weekday - first.getDay() + 7) % 7;
       const day = 1 + offset + (n - 1) * 7;
-      return { name, date: new Date(year, monthIndex, day) };
+      return { name, date: new Date(year, monthIndex, day), kind: 'Major Observance' };
     };
 
     return [
@@ -797,6 +1166,35 @@ class Calendar {
     // Anonymous Gregorian algorithm
     const a = year % 19;
     const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31); // 3=March, 4=April
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return { name: 'Easter Sunday', date: new Date(year, month - 1, day), kind: 'Major Observance' };
+  }
+
+  getElectionDay(year) {
+    // First Tuesday after the first Monday in November
+    const nov1 = new Date(year, 10, 1);
+    const firstMondayOffset = (1 - nov1.getDay() + 7) % 7;
+    const firstMonday = new Date(year, 10, 1 + firstMondayOffset);
+    const firstTuesdayAfter = new Date(firstMonday);
+    firstTuesdayAfter.setDate(firstMonday.getDate() + 1);
+    return { name: 'Election Day (US)', date: firstTuesdayAfter, kind: 'Major Observance' };
+  }
+}
+
+// Initialize the calendar
+const calendar = new Calendar();
+loor(year / 100);
     const c = year % 100;
     const d = Math.floor(b / 4);
     const e = b % 4;

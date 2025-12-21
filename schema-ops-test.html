@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schema Ops Test</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      color: #00d9ff;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle {
+      color: #888;
+      margin-bottom: 30px;
+    }
+    
+    .card {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border: 1px solid #0f3460;
+    }
+    
+    .card h2 {
+      margin-top: 0;
+      color: #00d9ff;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .card h2 .step {
+      background: #0f3460;
+      color: #00d9ff;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #aaa;
+      font-size: 14px;
+    }
+    
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      background: #1a1a2e;
+      color: #eee;
+      font-size: 14px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      margin-bottom: 16px;
+    }
+    
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #00d9ff;
+    }
+    
+    textarea {
+      min-height: 200px;
+      resize: vertical;
+    }
+    
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-primary {
+      background: #00d9ff;
+      color: #1a1a2e;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      background: #00b8d9;
+    }
+    
+    .btn-success {
+      background: #00c853;
+      color: #fff;
+    }
+    
+    .btn-success:hover:not(:disabled) {
+      background: #00a844;
+    }
+    
+    .btn-warning {
+      background: #ff9100;
+      color: #fff;
+    }
+    
+    .btn-warning:hover:not(:disabled) {
+      background: #e68200;
+    }
+    
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    
+    .status-bar.info {
+      background: rgba(0, 217, 255, 0.1);
+      border: 1px solid rgba(0, 217, 255, 0.3);
+      color: #00d9ff;
+    }
+    
+    .status-bar.success {
+      background: rgba(0, 200, 83, 0.1);
+      border: 1px solid rgba(0, 200, 83, 0.3);
+      color: #00c853;
+    }
+    
+    .status-bar.error {
+      background: rgba(255, 82, 82, 0.1);
+      border: 1px solid rgba(255, 82, 82, 0.3);
+      color: #ff5252;
+    }
+    
+    .status-bar.warning {
+      background: rgba(255, 145, 0, 0.1);
+      border: 1px solid rgba(255, 145, 0, 0.3);
+      color: #ff9100;
+    }
+    
+    .log-container {
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    
+    .log-entry {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #21262d;
+    }
+    
+    .log-entry:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    
+    .log-time {
+      color: #666;
+      margin-right: 10px;
+    }
+    
+    .log-info { color: #58a6ff; }
+    .log-success { color: #3fb950; }
+    .log-error { color: #f85149; }
+    .log-warning { color: #d29922; }
+    
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    
+    @media (max-width: 600px) {
+      .row {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .auth-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .auth-status .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    
+    .auth-status .dot.connected {
+      background: #00c853;
+    }
+    
+    .auth-status .dot.disconnected {
+      background: #ff5252;
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    pre {
+      background: #0d1117;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Schema Ops Test</h1>
+    <p class="subtitle">Test Supabase schema change requests workflow</p>
+
+    <!-- Configuration -->
+    <div class="card">
+      <h2><span class="step">1</span> Configuration</h2>
+      <div class="row">
+        <div>
+          <label for="supabaseUrl">Supabase URL</label>
+          <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co">
+        </div>
+        <div>
+          <label for="supabaseAnonKey">Supabase Anon Key</label>
+          <input type="password" id="supabaseAnonKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+        </div>
+      </div>
+      <button class="btn-primary" onclick="initSupabase()">Initialize Supabase</button>
+      <div id="initStatus" class="status-bar info hidden"></div>
+    </div>
+
+    <!-- Authentication -->
+    <div class="card">
+      <h2><span class="step">2</span> Authentication</h2>
+      <div id="authStatus" class="status-bar warning">
+        <span class="dot disconnected"></span>
+        Not authenticated
+      </div>
+      <div class="row">
+        <div>
+          <label for="email">Email</label>
+          <input type="text" id="email" placeholder="admin@example.com">
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Your password">
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn-primary" onclick="signIn()">Sign In</button>
+        <button class="btn-warning" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- Organization -->
+    <div class="card">
+      <h2><span class="step">3</span> Organization</h2>
+      <label for="orgId">Organization ID (UUID)</label>
+      <input type="text" id="orgId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+      <div class="btn-group">
+        <button class="btn-primary" onclick="fetchOrganizations()">Fetch My Organizations</button>
+        <button class="btn-success" onclick="createTestOrg()">Create Test Org</button>
+      </div>
+      <div id="orgStatus" class="status-bar info hidden"></div>
+    </div>
+
+    <!-- Schema Spec -->
+    <div class="card">
+      <h2><span class="step">4</span> Schema Change Spec</h2>
+      <label for="specJson">Spec JSON</label>
+      <textarea id="specJson">{
+  "action": "create_table",
+  "schema": "public",
+  "table": "test_notes",
+  "columns": [
+    { "name": "id", "type": "uuid", "nullable": false, "default": "extensions.uuid_generate_v4()" },
+    { "name": "note", "type": "text", "nullable": false },
+    { "name": "created_at", "type": "timestamptz", "nullable": false, "default": "now()" }
+  ],
+  "enable_rls": true
+}</textarea>
+      <button class="btn-primary" onclick="validateSpec()">Validate JSON</button>
+    </div>
+
+    <!-- Execute -->
+    <div class="card">
+      <h2><span class="step">5</span> Execute Schema Change</h2>
+      <div class="btn-group">
+        <button class="btn-primary" id="btnCreate" onclick="createRequest()">Create Request</button>
+        <button class="btn-success" id="btnApprove" onclick="approveRequest()" disabled>Approve</button>
+        <button class="btn-warning" id="btnApply" onclick="applyRequest()" disabled>Apply</button>
+      </div>
+      <div style="margin-top: 16px;">
+        <button class="btn-primary" onclick="executeAll()">🚀 Execute All Steps</button>
+      </div>
+      <div id="requestId" class="status-bar info hidden" style="margin-top: 16px;"></div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <h2>📋 Activity Log</h2>
+      <div class="log-container" id="logContainer">
+        <div class="log-entry">
+          <span class="log-time">[Ready]</span>
+          <span class="log-info">Schema Ops Test initialized. Configure Supabase to begin.</span>
+        </div>
+      </div>
+      <button class="btn-warning" onclick="clearLog()" style="margin-top: 16px;">Clear Log</button>
+    </div>
+  </div>
+
+  <!-- Supabase JS CDN -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="env.js"></script>
+  
+  <script>
+    let supabaseClient = null;
+    let currentSession = null;
+    let currentRequestId = null;
+
+    // Check if Supabase loaded and auto-fill env values
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof window.supabase === 'undefined') {
+        log('ERROR: Supabase library failed to load. Check internet connection.', 'error');
+      } else {
+        log('Supabase library loaded successfully', 'success');
+      }
+      
+      // Load from ENV if available, otherwise from localStorage
+      if (window.ENV) {
+        document.getElementById('supabaseUrl').value = window.ENV.SUPABASE_URL || '';
+        document.getElementById('supabaseAnonKey').value = window.ENV.SUPABASE_ANON_KEY || '';
+        document.getElementById('email').value = window.ENV.SUPABASE_EMAIL || '';
+        document.getElementById('password').value = window.ENV.SUPABASE_PASSWORD || '';
+        log('Loaded credentials from env.js', 'success');
+      } else {
+        // Fallback to localStorage
+        const savedUrl = localStorage.getItem('schemaops_url');
+        const savedKey = localStorage.getItem('schemaops_key');
+        if (savedUrl) document.getElementById('supabaseUrl').value = savedUrl;
+        if (savedKey) document.getElementById('supabaseAnonKey').value = savedKey;
+      }
+    });
+
+    // Logging
+    function log(message, type = 'info') {
+      const container = document.getElementById('logContainer');
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-time">[${time}]</span><span class="log-${type}">${escapeHtml(message)}</span>`;
+      container.appendChild(entry);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function clearLog() {
+      document.getElementById('logContainer').innerHTML = '';
+      log('Log cleared', 'info');
+    }
+
+    function showStatus(elementId, message, type = 'info') {
+      const el = document.getElementById(elementId);
+      el.className = `status-bar ${type}`;
+      el.textContent = message;
+      el.classList.remove('hidden');
+    }
+
+    // Initialize Supabase
+    function initSupabase() {
+      const url = document.getElementById('supabaseUrl').value.trim();
+      const key = document.getElementById('supabaseAnonKey').value.trim();
+
+      if (!url || !key) {
+        showStatus('initStatus', '❌ Please provide both URL and Anon Key', 'error');
+        log('Initialization failed: Missing URL or Key', 'error');
+        return;
+      }
+
+      try {
+        if (typeof window.supabase === 'undefined') {
+          throw new Error('Supabase library not loaded');
+        }
+        supabaseClient = window.supabase.createClient(url, key);
+        showStatus('initStatus', '✅ Supabase initialized successfully', 'success');
+        log(`Supabase client initialized: ${url}`, 'success');
+        
+        // Save to localStorage
+        localStorage.setItem('schemaops_url', url);
+        localStorage.setItem('schemaops_key', key);
+        
+        // Check for existing session
+        checkSession();
+      } catch (error) {
+        showStatus('initStatus', `❌ Error: ${error.message}`, 'error');
+        log(`Initialization error: ${error.message}`, 'error');
+      }
+    }
+
+    // Check existing session
+    async function checkSession() {
+      if (!supabaseClient) return;
+
+      try {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        if (session) {
+          currentSession = session;
+          updateAuthStatus(true, session.user.email);
+          log(`Existing session found: ${session.user.email}`, 'success');
+        }
+      } catch (error) {
+        log(`Session check error: ${error.message}`, 'warning');
+      }
+    }
+
+    // Update auth status display
+    function updateAuthStatus(authenticated, email = '') {
+      const statusEl = document.getElementById('authStatus');
+      if (authenticated) {
+        statusEl.className = 'status-bar success';
+        statusEl.innerHTML = `<span class="dot connected"></span> Authenticated as: ${escapeHtml(email)}`;
+      } else {
+        statusEl.className = 'status-bar warning';
+        statusEl.innerHTML = `<span class="dot disconnected"></span> Not authenticated`;
+      }
+    }
+
+    // Sign In
+    async function signIn() {
+      if (!supabaseClient) {
+        log('Please initialize Supabase first', 'error');
+        return;
+      }
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        log('Please provide email and password', 'error');
+        return;
+      }
+
+      log(`Signing in as ${email}...`, 'info');
+
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (error) throw error;
+
+        currentSession = data.session;
+        updateAuthStatus(true, data.user.email);
+        log(`Signed in successfully: ${data.user.email}`, 'success');
+        log(`User ID: ${data.user.id}`, 'info');
+      } catch (error) {
+        log(`Sign in failed: ${error.message}`, 'error');
+        updateAuthStatus(false);
+      }
+    }
+
+    // Sign Out
+    async function signOut() {
+      if (!supabaseClient) return;
+
+      try {
+        await supabaseClient.auth.signOut();
+        currentSession = null;
+        updateAuthStatus(false);
+        log('Signed out successfully', 'success');
+      } catch (error) {
+        log(`Sign out error: ${error.message}`, 'error');
+      }
+    }
+
+    // Fetch Organizations
+    async function fetchOrganizations() {
+      if (!supabase || !currentSession) {
+        log('Please sign in first', 'error');
+        return;
+      }
+
+      log('Fetching organizations...', 'info');
+
+      try {
+        const { data, error } = await supabase
+          .from('organization_members')
+          .select('organization_id, role, organizations(id, name)')
+          .eq('user_id', currentSession.user.id);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          log(`Found ${data.length} organization(s):`, 'success');
+          data.forEach(m => {
+            const orgName = m.organizations?.name || 'Unknown';
+            log(`  - ${orgName} (${m.organization_id}) [${m.role}]`, 'info');
+            if (m.role === 'admin') {
+              document.getElementById('orgId').value = m.organization_id;
+              showStatus('orgStatus', `✅ Selected: ${orgName} (admin)`, 'success');
+            }
+          });
+        } else {
+          log('No organizations found. Create one first.', 'warning');
+          showStatus('orgStatus', '⚠️ No organizations found', 'warning');
+        }
+      } catch (error) {
+        log(`Fetch error: ${error.message}`, 'error');
+        showStatus('orgStatus', `❌ ${error.message}`, 'error');
+      }
+    }
+
+    // Create Test Organization
+    async function createTestOrg() {
+      if (!supabase || !currentSession) {
+        log('Please sign in first', 'error');
+        return;
+      }
+
+      log('Creating test organization...', 'info');
+
+      try {
+        // Create org
+        const { data: org, error: orgError } = await supabase
+          .from('organizations')
+          .insert({ name: 'Test Org ' + Date.now() })
+          .select('id, name')
+          .single();
+
+        if (orgError) throw orgError;
+
+        log(`Organization created: ${org.name} (${org.id})`, 'success');
+
+        // Add as admin
+        const { error: memberError } = await supabase
+          .from('organization_members')
+          .insert({
+            organization_id: org.id,
+            user_id: currentSession.user.id,
+            role: 'admin'
+          });
+
+        if (memberError) throw memberError;
+
+        document.getElementById('orgId').value = org.id;
+        showStatus('orgStatus', `✅ Created: ${org.name}`, 'success');
+        log(`Added as admin to ${org.name}`, 'success');
+      } catch (error) {
+        log(`Create org error: ${error.message}`, 'error');
+        showStatus('orgStatus', `❌ ${error.message}`, 'error');
+      }
+    }
+
+    // Validate Spec JSON
+    function validateSpec() {
+      const specText = document.getElementById('specJson').value;
+      try {
+        const spec = JSON.parse(specText);
+        log('✅ Spec JSON is valid', 'success');
+        log(`Action: ${spec.action}, Table: ${spec.schema}.${spec.table}`, 'info');
+        return spec;
+      } catch (error) {
+        log(`❌ Invalid JSON: ${error.message}`, 'error');
+        return null;
+      }
+    }
+
+    // Create Request
+    async function createRequest() {
+      if (!supabase || !currentSession) {
+        log('Please sign in first', 'error');
+        return null;
+      }
+
+      const orgId = document.getElementById('orgId').value.trim();
+      if (!orgId) {
+        log('Please provide Organization ID', 'error');
+        return null;
+      }
+
+      const spec = validateSpec();
+      if (!spec) return null;
+
+      log('Creating schema change request...', 'info');
+
+      try {
+        const request = {
+          organization_id: orgId,
+          created_by: currentSession.user.id,
+          action: spec.action || 'create_table',
+          spec: spec
+        };
+
+        const { data, error } = await supabase
+          .from('schema_change_requests')
+          .insert(request)
+          .select('id, status')
+          .single();
+
+        if (error) throw error;
+
+        currentRequestId = data.id;
+        document.getElementById('btnApprove').disabled = false;
+        showStatus('requestId', `Request ID: ${data.id} | Status: ${data.status}`, 'success');
+        log(`✅ Request created: ${data.id}`, 'success');
+        log(`Status: ${data.status}`, 'info');
+        
+        return data;
+      } catch (error) {
+        log(`❌ Create failed: ${error.message}`, 'error');
+        return null;
+      }
+    }
+
+    // Approve Request
+    async function approveRequest() {
+      if (!currentSession || !currentRequestId) {
+        log('No request to approve', 'error');
+        return null;
+      }
+
+      const url = document.getElementById('supabaseUrl').value.trim();
+      log(`Approving request ${currentRequestId}...`, 'info');
+
+      try {
+        const response = await fetch(`${url}/functions/v1/schema-ops/approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentSession.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: currentRequestId })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || `HTTP ${response.status}`);
+        }
+
+        document.getElementById('btnApply').disabled = false;
+        showStatus('requestId', `Request ID: ${currentRequestId} | Status: approved`, 'success');
+        log(`✅ Request approved`, 'success');
+        log(`Response: ${JSON.stringify(result)}`, 'info');
+        
+        return result;
+      } catch (error) {
+        log(`❌ Approve failed: ${error.message}`, 'error');
+        return null;
+      }
+    }
+
+    // Apply Request
+    async function applyRequest() {
+      if (!currentSession || !currentRequestId) {
+        log('No request to apply', 'error');
+        return null;
+      }
+
+      const url = document.getElementById('supabaseUrl').value.trim();
+      log(`Applying request ${currentRequestId}...`, 'info');
+
+      try {
+        const response = await fetch(`${url}/functions/v1/schema-ops/apply`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentSession.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: currentRequestId })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || `HTTP ${response.status}`);
+        }
+
+        showStatus('requestId', `Request ID: ${currentRequestId} | Status: applied ✅`, 'success');
+        log(`✅ Request applied successfully!`, 'success');
+        log(`Result: ${JSON.stringify(result)}`, 'info');
+        
+        return result;
+      } catch (error) {
+        log(`❌ Apply failed: ${error.message}`, 'error');
+        return null;
+      }
+    }
+
+    // Execute All Steps
+    async function executeAll() {
+      log('🚀 Starting full workflow...', 'info');
+      
+      const createResult = await createRequest();
+      if (!createResult) {
+        log('Workflow stopped: Create failed', 'error');
+        return;
+      }
+
+      // Small delay between steps
+      await new Promise(r => setTimeout(r, 500));
+
+      const approveResult = await approveRequest();
+      if (!approveResult) {
+        log('Workflow stopped: Approve failed', 'error');
+        return;
+      }
+
+      await new Promise(r => setTimeout(r, 500));
+
+      const applyResult = await applyRequest();
+      if (!applyResult) {
+        log('Workflow stopped: Apply failed', 'error');
+        return;
+      }
+
+      log('🎉 Full workflow completed successfully!', 'success');
+    }
+  </script>
+</body>
+</html>
