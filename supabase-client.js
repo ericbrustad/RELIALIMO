@@ -19,10 +19,6 @@ const OFFLINE_DEMO_ACCOUNTS = {
   'driver@relialimo.demo': {
     password: 'DemoDriver123!',
     role: 'driver'
-  },
-  'ericbrustad@gmail.com': {
-    password: 'DemoAdmin123!',
-    role: 'admin'
   }
 };
 

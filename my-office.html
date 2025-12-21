@@ -4,9 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Office - RELIA🐂LIMO™</title>
-    <script src="env.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="my-office.css" />
     <link rel="stylesheet" href="tag-selector.css" />
     <script>
@@ -51,7 +48,6 @@
               <button class="sidebar-btn" data-section="payment">Payment Gateway</button>
               <button class="sidebar-btn" data-section="plugins">Third-party Plug-ins</button>
               <button class="sidebar-btn" data-section="system-settings">System Settings</button>
-              <a class="sidebar-btn" href="utilities.html" target="_blank" style="color:#1976d2; font-weight:600;">Utilities</a>
               <div class="sidebar-subgroup" id="systemSettingsSubnav" style="display: none;">
                 <button class="sidebar-subbtn active" data-system-setting="service-types">Service Types</button>
                 <button class="sidebar-subbtn" data-system-setting="partner-settings">Partner Settings</button>
@@ -136,36 +132,83 @@
                 <div class="form-row">
                   <div class="form-group">
                     <label>Company Name</label>
-                    <input type="text" class="form-control" value="Erix Coach and Car" />
+                    <input type="text" id="companyName" class="form-control" value="" />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
                     <label>Street Address</label>
-                    <input type="text" class="form-control" value="10019 Fremont Ave S" />
+                    <input type="text" id="companyStreetAddress" class="form-control" value="" />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
                     <label>Street Address 2</label>
-                    <input type="text" class="form-control" />
+                    <input type="text" id="companyStreetAddress2" class="form-control" />
                   </div>
                 </div>
 
                 <div class="form-row-2">
                   <div class="form-group">
                     <label>City/Town</label>
-                    <input type="text" class="form-control" value="Minneapolis" />
+                    <input type="text" id="companyCity" class="form-control" value="" />
                   </div>
                   <div class="form-group">
                     <label>State/Province/Territory</label>
-                    <select class="form-control">
-                      <option value="MN" selected>MN</option>
+                    <select id="companyState" class="form-control">
+                      <option value="">-- Select --</option>
+                      <option value="AL">AL</option>
+                      <option value="AK">AK</option>
+                      <option value="AZ">AZ</option>
+                      <option value="AR">AR</option>
                       <option value="CA">CA</option>
+                      <option value="CO">CO</option>
+                      <option value="CT">CT</option>
+                      <option value="DE">DE</option>
+                      <option value="FL">FL</option>
+                      <option value="GA">GA</option>
+                      <option value="HI">HI</option>
+                      <option value="ID">ID</option>
+                      <option value="IL">IL</option>
+                      <option value="IN">IN</option>
+                      <option value="IA">IA</option>
+                      <option value="KS">KS</option>
+                      <option value="KY">KY</option>
+                      <option value="LA">LA</option>
+                      <option value="ME">ME</option>
+                      <option value="MD">MD</option>
+                      <option value="MA">MA</option>
+                      <option value="MI">MI</option>
+                      <option value="MN">MN</option>
+                      <option value="MS">MS</option>
+                      <option value="MO">MO</option>
+                      <option value="MT">MT</option>
+                      <option value="NE">NE</option>
+                      <option value="NV">NV</option>
+                      <option value="NH">NH</option>
+                      <option value="NJ">NJ</option>
+                      <option value="NM">NM</option>
                       <option value="NY">NY</option>
+                      <option value="NC">NC</option>
+                      <option value="ND">ND</option>
+                      <option value="OH">OH</option>
+                      <option value="OK">OK</option>
+                      <option value="OR">OR</option>
+                      <option value="PA">PA</option>
+                      <option value="RI">RI</option>
+                      <option value="SC">SC</option>
+                      <option value="SD">SD</option>
+                      <option value="TN">TN</option>
                       <option value="TX">TX</option>
+                      <option value="UT">UT</option>
+                      <option value="VT">VT</option>
+                      <option value="VA">VA</option>
+                      <option value="WA">WA</option>
+                      <option value="WV">WV</option>
+                      <option value="WI">WI</option>
+                      <option value="WY">WY</option>
                     </select>
                   </div>
                 </div>
@@ -173,16 +216,16 @@
                 <div class="form-row-2">
                   <div class="form-group">
                     <label>Zip/Postal Code</label>
-                    <input type="text" id="companyZipCode" class="form-control" value="55431" />
+                    <input type="text" id="companyZipCode" class="form-control" value="" />
                     <small style="display: block; margin-top: 5px; color: #666; font-style: italic;">
                       📍 This zip code determines the default map view location
                     </small>
                   </div>
                   <div class="form-group">
                     <label>EIN/Business Number 🇨🇦</label>
-                    <input type="text" class="form-control" value="83-2374295" />
+                    <input type="text" id="companyEin" class="form-control" value="" />
                     <label style="margin-top: 5px;">
-                      <input type="checkbox" checked /> Show on Trip T/Sh & INV
+                      <input type="checkbox" id="companyShowEinOnDocs" /> Show on Trip T/Sh & INV
                     </label>
                   </div>
                 </div>
@@ -190,8 +233,8 @@
                 <div class="form-row">
                   <div class="form-group">
                     <label>Country</label>
-                    <select class="form-control">
-                      <option value="US" selected>United States of America</option>
+                    <select id="companyCountry" class="form-control">
+                      <option value="US">United States of America</option>
                       <option value="CA">Canada</option>
                       <option value="MX">Mexico</option>
                     </select>
@@ -201,50 +244,50 @@
                 <div class="form-row-3">
                   <div class="form-group">
                     <label>🇺🇸 Primary Phone Number</label>
-                    <input type="tel" class="form-control" value="(763) 482-8238" />
+                    <input type="tel" id="companyPrimaryPhone" class="form-control" value="" />
                   </div>
                   <div class="form-group">
                     <label>🇺🇸 Secondary Phone Number</label>
-                    <input type="tel" class="form-control" value="(952) 288-4920" />
+                    <input type="tel" id="companySecondaryPhone" class="form-control" value="" />
                   </div>
                   <div class="form-group">
                     <label>🇺🇸 Fax Number</label>
-                    <input type="tel" class="form-control" value="(763) 226-2318" />
+                    <input type="tel" id="companyFax" class="form-control" value="" />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
                     <label>General Email Address</label>
-                    <input type="email" class="form-control" value="info@erixmm.com" />
+                    <input type="email" id="companyGeneralEmail" class="form-control" value="" />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
                     <label>Reservation Email Address</label>
-                    <input type="email" class="form-control" value="billing@erixmm.com" />
+                    <input type="email" id="companyReservationEmail" class="form-control" value="" />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
                     <label>Quote Email Address</label>
-                    <input type="email" class="form-control" value="amanda@erixmm.com" />
+                    <input type="email" id="companyQuoteEmail" class="form-control" value="" />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
                     <label>Billing Email Address</label>
-                    <input type="email" class="form-control" value="billing@erixmm.com" />
+                    <input type="email" id="companyBillingEmail" class="form-control" value="" />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
                     <label>Company Website URL</label>
-                    <input type="url" class="form-control" value="http://www.erixmm.com" />
+                    <input type="url" id="companyWebsite" class="form-control" value="" />
                   </div>
                 </div>
 
@@ -253,20 +296,21 @@
                     <label>Company Logo</label>
                     <p class="form-hint">This will be used in outbox web by 1280px logo, or smaller.</p>
                     <p class="form-hint">Supported: .JPG, .PNG</p>
+                    <input type="file" id="logoFileInput" accept="image/jpeg,image/png" style="display: none;" />
                     <div class="file-upload-group">
-                      <button class="btn btn-secondary">Choose File</button>
-                      <span class="file-name">No file chosen</span>
-                      <button class="btn btn-primary">Upload >></button>
+                      <button class="btn btn-secondary" id="logoChooseBtn">Choose File</button>
+                      <span class="file-name" id="logoFileName">No file chosen</span>
+                      <button class="btn btn-primary" id="logoUploadBtn">Upload >></button>
                     </div>
                     <div class="logo-preview">
-                      <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect fill='%23000' width='200' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-family='Arial' font-size='24' font-weight='bold'%3EERIX%3C/text%3E%3C/svg%3E" alt="Company Logo" />
-                      <a href="#" class="logo-link">>> Delete Logo <<</a>
+                      <img id="logoPreviewImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect fill='%23000' width='200' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-family='Arial' font-size='24' font-weight='bold'%3EERIX%3C/text%3E%3C/svg%3E" alt="Company Logo" />
+                      <a href="#" class="logo-link" id="logoDeleteBtn">>> Delete Logo <<</a>
                     </div>
                   </div>
                 </div>
 
                 <div class="form-actions">
-                  <button class="btn btn-primary btn-large">Update My Company Contact Information</button>
+                  <button class="btn btn-primary btn-large" id="saveCompanyInfoBtn">Update My Company Contact Information</button>
                 </div>
               </div>
             </section>
@@ -6730,7 +6774,7 @@ further assistance.</textarea>
                     <th>Is Active</th>
                   </tr>
                 </thead>
-                <tbody id="paymentMethodsTbody">
+                <tbody>
                   <tr>
                     <td>OTHER</td>
                     <td><a href="#" class="table-link">PAYPAL</a></td>
@@ -7612,6 +7656,7 @@ further assistance.</textarea>
     </div>
 
 </script>
+    <script src="env.js"></script>
     <script src="triptag-selector.js"></script>
     <script src="ratetag-selector.js"></script>
     <script src="drag-drop-handler.js"></script>

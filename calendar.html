@@ -4,9 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Calendar - RELIA🐂LIMO™</title>
-    <script src="env.js"></script>
     <link rel="stylesheet" href="calendar.css" />
-    <script type="module" src="entrypoint-guard.js"></script>
     <script>
       // Hide main navigation if in iframe
       if (window.self !== window.top) {
@@ -79,15 +77,12 @@
       <!-- Filter Controls -->
       <div class="filter-controls">
         <div class="filter-checkboxes">
-          <label class="toggle-label" for="onlyReservations">
+          <label class="checkbox-label">
             <input type="checkbox" id="onlyReservations" checked />
-            <span class="toggle-ui" aria-hidden="true"></span>
             Only Reservations
           </label>
-
-          <label class="toggle-label" for="onlyMyEvents">
+          <label class="checkbox-label">
             <input type="checkbox" id="onlyMyEvents" />
-            <span class="toggle-ui" aria-hidden="true"></span>
             Only My Events
           </label>
 
@@ -186,6 +181,7 @@
       </main>
     </div>
 
+    <script src="env.js"></script>
     <script type="module" src="calendar.js"></script>
   </body>
 </html>

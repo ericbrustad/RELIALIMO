@@ -3,6 +3,7 @@ import { MapManager } from './MapManager.js';
 import { UIManager } from './UIManager.js';
 import { MapboxService } from './MapboxService.js';
 import { DriverTracker } from './DriverTracker.js';
+import { db } from './assets/db.js';
 
 class LimoReservationSystem {
   constructor() {
@@ -34,7 +35,7 @@ class LimoReservationSystem {
     this.driverTracker.setBaseLocation(center);
     
     // Load initial data (will use company location)
-    this.loadInitialData();
+    await this.loadInitialData();
     
     // Setup event listeners
     this.setupEventListeners();
@@ -50,6 +51,13 @@ class LimoReservationSystem {
     
     // Handle URL parameters for view switching
     this.handleURLParameters();
+
+    window.addEventListener('storage', (event) => {
+      if (!event) return;
+      if (event.key === 'relia_reservations') {
+        this.updateListViewsFromDb();
+      }
+    });
   }
   
   handleURLParameters() {
@@ -203,7 +211,9 @@ class LimoReservationSystem {
     }
   }
 
-  loadInitialData() {
+  async loadInitialData() {
+    await this.updateListViewsFromDb();
+
     // Use company location for sample data
     const [baseLat, baseLng] = this.companyLocation || [44.8848, -93.2223];
     
@@ -306,7 +316,7 @@ class LimoReservationSystem {
       this.uiManager.switchView('driverView');
     });
 
-    // Reservations button removed from UI
+    // Reservations button - always navigate to reservations list
     const reservationsBtn = document.getElementById('reservationsBtn');
     if (reservationsBtn) {
       reservationsBtn.addEventListener('click', () => {
@@ -314,7 +324,8 @@ class LimoReservationSystem {
         if (window.self !== window.top) {
           window.parent.postMessage({ action: 'switchSection', section: 'reservations' }, '*');
         } else {
-          this.uiManager.switchView('reservationsView');
+          // Navigate directly to reservations list
+          window.location.href = 'reservations-list.html';
         }
       });
     }
@@ -521,6 +532,144 @@ class LimoReservationSystem {
         this.uiManager.updateAllViews();
       }
     }, 30000);
+  }
+
+  async updateListViewsFromDb() {
+    try {
+      if (!db || typeof db.getAllReservations !== 'function') {
+        this.uiManager.renderReservationsFromDb([], []);
+        return;
+      }
+
+      const rawReservations = db.getAllReservations() || [];
+      const mappedReservations = rawReservations
+        .map(reservation => this.mapReservationForDashboard(reservation))
+        .filter(Boolean);
+
+      const farmOutStatusCodes = new Set([
+        'created_farm_out_unassigned',
+        'farm_out_unassigned',
+        'created_farm_out_assigned',
+        'farm_out_assigned',
+        'affiliate_assigned'
+      ]);
+
+      const farmOutReservations = mappedReservations.filter(item => {
+        if (!item) return false;
+        const option = (item.farmOption || '').toLowerCase();
+        const code = (item.statusDetailCode || '').toLowerCase();
+        return option === 'farm-out' && farmOutStatusCodes.has(code);
+      });
+
+      this.uiManager.renderReservationsFromDb(mappedReservations, farmOutReservations);
+    } catch (error) {
+      console.error('Error updating reservation dashboards:', error);
+      this.uiManager.renderReservationsFromDb([], []);
+    }
+  }
+
+  mapReservationForDashboard(reservation) {
+    if (!reservation || typeof reservation !== 'object') {
+      return null;
+    }
+
+    const identifier = reservation.confirmation_number ?? reservation.id;
+    if (identifier === undefined || identifier === null) {
+      return null;
+    }
+
+    const stopsFromRecord = Array.isArray(reservation.stops) ? reservation.stops : [];
+    const snapshotStops = Array.isArray(reservation.form_snapshot?.routing?.stops)
+      ? reservation.form_snapshot.routing.stops
+      : [];
+    const stops = stopsFromRecord.length > 0 ? stopsFromRecord : snapshotStops;
+
+    const normalizeStop = (stop) => {
+      if (!stop || typeof stop !== 'object') return {};
+      return stop;
+    };
+
+    const pickupStop = normalizeStop(
+      stops.find(stop => (stop.stopType || stop.type || '').toLowerCase() === 'pickup')
+    ) || normalizeStop(stops[0]);
+
+    const dropoffStop = normalizeStop(
+      stops.find(stop => (stop.stopType || stop.type || '').toLowerCase() === 'dropoff')
+    ) || normalizeStop(stops[stops.length - 1] || pickupStop);
+
+    const formatStop = (stop) => {
+      if (!stop) return '';
+      return stop.fullAddress || stop.address || stop.address1 || stop.locationName || stop.location || '';
+    };
+
+    const pickupLocation = formatStop(pickupStop) || reservation.pickup_address || 'Unknown Pickup';
+    const dropoffLocation = formatStop(dropoffStop) || reservation.dropoff_address || 'Unknown Dropoff';
+
+    let pickupDate = '';
+    let pickupTime = '';
+    if (reservation.pickup_at) {
+      const pickupDateObj = new Date(reservation.pickup_at);
+      if (!Number.isNaN(pickupDateObj.getTime())) {
+        pickupDate = pickupDateObj.toLocaleDateString('en-US');
+        pickupTime = pickupDateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
+    } else if (reservation.form_snapshot?.details?.puDate) {
+      pickupDate = reservation.form_snapshot.details.puDate;
+    }
+
+    const snapshotPassenger = reservation.form_snapshot?.passenger || {};
+    const computedPassenger = `${snapshotPassenger.firstName || ''} ${snapshotPassenger.lastName || ''}`.trim();
+    const passengerName = reservation.passenger_name || 
+      `${reservation.lead_passenger_first_name || ''} ${reservation.lead_passenger_last_name || ''}`.trim() ||
+      computedPassenger || 'N/A';
+
+    const statusDetailCode = (reservation.status_detail_code || reservation.statusDetailCode || reservation.status_detail || reservation.status || 'pending').toString();
+    const statusLabel = reservation.status_detail_label || reservation.status || '';
+    const statusCategory = this.normalizeStatusCategory(statusDetailCode, statusLabel);
+
+    return {
+      id: String(identifier),
+      confirmationNumber: identifier,
+      passengerName,
+      phone: reservation.passenger_phone || reservation.form_snapshot?.billing?.passenger?.phone || '',
+      email: reservation.passenger_email || reservation.form_snapshot?.billing?.passenger?.email || '',
+      pickupLocation,
+      dropoffLocation,
+      pickupDate,
+      pickupTime,
+      status: statusCategory,
+      statusLabel: statusLabel || statusCategory,
+      statusDetailCode,
+      driverName: reservation.driver_name || reservation.form_snapshot?.driver?.name || '',
+      farmOption: reservation.farm_option || reservation.form_snapshot?.details?.farmOption || 'in-house',
+      efarmStatus: reservation.efarm_status || reservation.form_snapshot?.details?.efarmStatus || '',
+      affiliateName: reservation.affiliate_name || reservation.affiliate_reference || reservation.form_snapshot?.details?.affiliate?.name || '',
+      grandTotal: reservation.grand_total || 0,
+      raw: reservation
+    };
+  }
+
+  normalizeStatusCategory(code, label) {
+    const normalizedCode = (code || '').toLowerCase();
+    const normalizedLabel = (label || '').toLowerCase();
+
+    if (['affiliate_assigned', 'driver_assigned', 'driver_en_route', 'driver_waiting_at_pickup', 'driver_circling'].includes(normalizedCode)) {
+      return 'accepted';
+    }
+
+    if (normalizedLabel.includes('assigned')) {
+      return 'accepted';
+    }
+
+    if (
+      ['completed', 'completing', 'done'].includes(normalizedCode) ||
+      normalizedLabel.includes('completed') ||
+      normalizedLabel.includes('done')
+    ) {
+      return 'completed';
+    }
+
+    return 'pending';
   }
 }
 

@@ -8,9 +8,6 @@ class Calendar {
     this.tooltipEl = null;
     this.modalEl = null;
     this.settingsStorageKey = 'relia_calendar_settings_anon';
-    this.currentUserKey = 'anon';
-    this.eventsStorageKey = 'relia_calendar_events_anon';
-    this.userEvents = [];
     this.selectedFilters = {
       drivers: [],
       cars: [],
@@ -26,8 +23,6 @@ class Calendar {
     this.setupEventListeners();
     this.syncCurrentDateFromSelector();
     this.loadSettingsIntoUi();
-    this.normalizeEventFilters();
-    this.loadUserEventsFromStorage();
     this.render();
   }
 
@@ -43,8 +38,6 @@ class Calendar {
       if (raw) {
         const safe = String(raw).replace(/[^a-zA-Z0-9_.@-]/g, '_');
         this.settingsStorageKey = `relia_calendar_settings_${safe}`;
-        this.currentUserKey = safe;
-        this.eventsStorageKey = `relia_calendar_events_${safe}`;
       }
     } catch {
       // ignore
@@ -114,12 +107,7 @@ class Calendar {
     const onlyReservations = document.getElementById('onlyReservations');
     if (onlyReservations) {
       onlyReservations.addEventListener('change', (e) => {
-        const enabled = !!e.target.checked;
-        if (enabled) {
-          const onlyMy = document.getElementById('onlyMyEvents');
-          if (onlyMy) onlyMy.checked = false;
-        }
-        this.filterByReservations(enabled);
+        this.filterByReservations(e.target.checked);
         this.render();
         this.saveSettingsFromUi();
       });
@@ -128,12 +116,7 @@ class Calendar {
     const onlyMyEvents = document.getElementById('onlyMyEvents');
     if (onlyMyEvents) {
       onlyMyEvents.addEventListener('change', (e) => {
-        const enabled = !!e.target.checked;
-        if (enabled) {
-          const onlyRes = document.getElementById('onlyReservations');
-          if (onlyRes) onlyRes.checked = false;
-        }
-        this.filterByMyEvents(enabled);
+        this.filterByMyEvents(e.target.checked);
         this.render();
         this.saveSettingsFromUi();
       });
@@ -242,58 +225,12 @@ class Calendar {
 
   filterByReservations(enabled) {
     console.log('Only Reservations filter:', enabled);
-    // Implemented in render(): this toggle controls whether My Events are shown.
+    // In a real application, this would filter the calendar to show only reservations
   }
 
   filterByMyEvents(enabled) {
     console.log('Only My Events filter:', enabled);
-    // Implemented in render(): this toggle controls whether reservations are shown.
-  }
-
-  normalizeEventFilters() {
-    const onlyRes = document.getElementById('onlyReservations');
-    const onlyMy = document.getElementById('onlyMyEvents');
-    if (!onlyRes || !onlyMy) return;
-    if (onlyRes.checked && onlyMy.checked) {
-      // Keep defaults sane: prefer reservations when both are on.
-      onlyMy.checked = false;
-    }
-  }
-
-  loadUserEventsFromStorage() {
-    try {
-      const raw = localStorage.getItem(this.eventsStorageKey);
-      if (!raw) {
-        this.userEvents = [];
-        return;
-      }
-      const data = JSON.parse(raw);
-      if (!Array.isArray(data)) {
-        this.userEvents = [];
-        return;
-      }
-      this.userEvents = data
-        .filter(e => e && typeof e === 'object')
-        .map(e => ({
-          id: String(e.id || ''),
-          ownerKey: String(e.ownerKey || 'anon'),
-          dateKey: String(e.dateKey || ''),
-          time: String(e.time || '09:00'),
-          title: String(e.title || ''),
-          notes: String(e.notes || '')
-        }))
-        .filter(e => e.id && /^\d{4}-\d{2}-\d{2}$/.test(e.dateKey));
-    } catch {
-      this.userEvents = [];
-    }
-  }
-
-  saveUserEventsToStorage() {
-    try {
-      localStorage.setItem(this.eventsStorageKey, JSON.stringify(this.userEvents));
-    } catch (e) {
-      console.warn('⚠️ Failed to persist calendar events:', e);
-    }
+    // In a real application, this would filter the calendar to show only user's events
   }
 
   applyFilters() {
@@ -329,8 +266,6 @@ class Calendar {
     this.closeTooltip();
     this.closeModal();
 
-    this.normalizeEventFilters();
-
     const calendarBody = document.getElementById('calendarBody');
     if (!calendarBody) {
       console.warn('⚠️ calendarBody not found');
@@ -343,11 +278,6 @@ class Calendar {
     const start = new Date(year, monthIndex, 1 - firstOfMonth.getDay()); // Sunday start
 
     const dayCellMap = new Map();
-
-    const onlyReservations = document.getElementById('onlyReservations')?.checked ?? true;
-    const onlyMyEvents = document.getElementById('onlyMyEvents')?.checked ?? false;
-    const showReservations = !onlyMyEvents;
-    const showMyEvents = !onlyReservations;
 
     // Build 6-week grid
     const fragment = document.createDocumentFragment();
@@ -371,15 +301,7 @@ class Calendar {
       cell.appendChild(content);
 
       if (cellDate.getMonth() === monthIndex) {
-        const key = this.dateKey(cellDate);
-        cell.dataset.dateKey = key;
-        dayCellMap.set(key, content);
-
-        // Double-click empty day space to create an event
-        cell.addEventListener('dblclick', (e) => {
-          if (e.target && e.target.closest && e.target.closest('.event-item')) return;
-          this.openUserEventEditorModal({ mode: 'create', dateKey: key });
-        });
+        dayCellMap.set(this.dateKey(cellDate), content);
       }
 
       fragment.appendChild(cell);
@@ -407,25 +329,12 @@ class Calendar {
     }
 
     // Add reservations
-    if (showReservations) {
-      const reservations = this.getReservationsForMonth(year, monthIndex);
-      for (const res of reservations) {
-        const el = this.createReservationEventEl(res);
-        const container = dayCellMap.get(el.dataset.dateKey);
-        if (!container) continue;
-        container.appendChild(el);
-      }
-    }
-
-    // Add user-created events
-    if (showMyEvents) {
-      const items = this.getUserEventsForMonth(year, monthIndex, { onlyMine: onlyMyEvents });
-      for (const ev of items) {
-        const el = this.createUserEventEl(ev);
-        const container = dayCellMap.get(ev.dateKey);
-        if (!container) continue;
-        container.appendChild(el);
-      }
+    const reservations = this.getReservationsForMonth(year, monthIndex);
+    for (const res of reservations) {
+      const el = this.createReservationEventEl(res);
+      const container = dayCellMap.get(el.dataset.dateKey);
+      if (!container) continue;
+      container.appendChild(el);
     }
 
     this.updateHolidayTicker();
@@ -586,202 +495,6 @@ class Calendar {
       .sort((a, b) => a.pickupDate - b.pickupDate);
 
     return filtered.map(x => x.raw);
-  }
-
-  getUserEventsForMonth(year, monthIndex, { onlyMine } = { onlyMine: false }) {
-    const events = Array.isArray(this.userEvents) ? this.userEvents : [];
-    return events
-      .filter(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.dateKey))
-      .filter(e => {
-        const d = this.parseDateKey(e.dateKey);
-        return d && d.getFullYear() === year && d.getMonth() === monthIndex;
-      })
-      .filter(e => {
-        if (!onlyMine) return true;
-        return String(e.ownerKey || 'anon') === String(this.currentUserKey || 'anon');
-      })
-      .sort((a, b) => {
-        const da = `${a.dateKey} ${a.time || '00:00'}`;
-        const db = `${b.dateKey} ${b.time || '00:00'}`;
-        return da.localeCompare(db);
-      });
-  }
-
-  createUserEventEl(ev) {
-    const el = document.createElement('div');
-    el.className = 'event-item event-gray';
-    el.dataset.type = 'user-event';
-    el.dataset.eventId = ev.id;
-    el.dataset.dateKey = ev.dateKey;
-    el.dataset.time = ev.time || '';
-    el.dataset.title = ev.title || '';
-    el.dataset.notes = ev.notes || '';
-
-    const timeLabel = String(ev.time || '').trim();
-    const title = String(ev.title || '').trim() || '(untitled)';
-
-    el.innerHTML = `
-      <div class="event-time">${this.escapeHtml(timeLabel || 'Event')}</div>
-      <div class="event-vehicle">${this.escapeHtml(title)}</div>
-    `;
-
-    // Hover tooltip
-    el.addEventListener('mouseenter', (e) => {
-      this.openTooltip(this.buildUserEventTooltipText(el));
-      this.positionTooltip(e);
-    });
-    el.addEventListener('mousemove', (e) => this.positionTooltip(e));
-    el.addEventListener('mouseleave', () => this.closeTooltip());
-
-    // Double click to edit
-    el.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.openUserEventEditorModal({ mode: 'edit', eventId: ev.id });
-    });
-
-    return el;
-  }
-
-  buildUserEventTooltipText(el) {
-    const parts = [];
-    if (el.dataset.time) parts.push(el.dataset.time);
-    if (el.dataset.title) parts.push(el.dataset.title);
-    if (el.dataset.notes) parts.push(el.dataset.notes);
-    return parts.join('\n');
-  }
-
-  parseDateKey(dateKey) {
-    const m = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return null;
-    const y = Number(m[1]);
-    const mo = Number(m[2]) - 1;
-    const d = Number(m[3]);
-    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
-    return new Date(y, mo, d);
-  }
-
-  openUserEventEditorModal({ mode, dateKey, eventId }) {
-    this.closeModal();
-
-    const isEdit = mode === 'edit';
-    const existing = isEdit ? this.userEvents.find(e => e.id === String(eventId)) : null;
-    const initialDateKey = existing?.dateKey || String(dateKey || this.dateKey(new Date()));
-    const initialTime = existing?.time || this.defaultEventTime();
-    const initialTitle = existing?.title || '';
-    const initialNotes = existing?.notes || '';
-
-    const modal = document.createElement('div');
-    modal.className = 'calendar-modal';
-    modal.innerHTML = `
-      <div class="calendar-modal-overlay"></div>
-      <div class="calendar-modal-content" role="dialog" aria-modal="true">
-        <div class="calendar-modal-header">
-          <div class="calendar-modal-title">${isEdit ? 'Edit Event' : 'Create Event'}</div>
-          <button class="calendar-modal-close" type="button" aria-label="Close">✕</button>
-        </div>
-        <div class="calendar-modal-body">
-          <div class="calendar-modal-row">
-            <div class="calendar-modal-label">Date</div>
-            <div class="calendar-modal-value">
-              <input id="evtDate" type="date" value="${this.escapeAttr(initialDateKey)}" style="width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:3px; font-size:12px;" />
-            </div>
-          </div>
-          <div class="calendar-modal-row">
-            <div class="calendar-modal-label">Time</div>
-            <div class="calendar-modal-value">
-              <input id="evtTime" type="time" value="${this.escapeAttr(initialTime)}" style="width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:3px; font-size:12px;" />
-            </div>
-          </div>
-          <div class="calendar-modal-row">
-            <div class="calendar-modal-label">Title</div>
-            <div class="calendar-modal-value">
-              <input id="evtTitle" type="text" value="${this.escapeAttr(initialTitle)}" placeholder="Event title" style="width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:3px; font-size:12px;" />
-            </div>
-          </div>
-          <div class="calendar-modal-row">
-            <div class="calendar-modal-label">Notes</div>
-            <div class="calendar-modal-value">
-              <textarea id="evtNotes" rows="4" placeholder="Notes" style="width:100%; padding:6px 8px; border:1px solid #ccc; border-radius:3px; font-size:12px; resize:vertical;">${this.escapeHtml(initialNotes)}</textarea>
-            </div>
-          </div>
-          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
-            ${isEdit ? '<button class="btn-print" type="button" id="evtDelete">Delete</button>' : ''}
-            <button class="btn-print" type="button" id="evtCancel">Cancel</button>
-            <button class="btn-go" type="button" id="evtSave">Save</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const close = () => this.closeModal();
-    modal.querySelector('.calendar-modal-overlay')?.addEventListener('click', close);
-    modal.querySelector('.calendar-modal-close')?.addEventListener('click', close);
-    modal.querySelector('#evtCancel')?.addEventListener('click', close);
-
-    modal.querySelector('#evtSave')?.addEventListener('click', () => {
-      const d = String(modal.querySelector('#evtDate')?.value || '').trim();
-      const t = String(modal.querySelector('#evtTime')?.value || '').trim();
-      const title = String(modal.querySelector('#evtTitle')?.value || '').trim();
-      const notes = String(modal.querySelector('#evtNotes')?.value || '').trim();
-
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
-      if (t && !/^\d{2}:\d{2}$/.test(t)) return;
-
-      if (isEdit && existing) {
-        existing.dateKey = d;
-        existing.time = t || '09:00';
-        existing.title = title;
-        existing.notes = notes;
-      } else {
-        const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-        this.userEvents.push({
-          id,
-          ownerKey: String(this.currentUserKey || 'anon'),
-          dateKey: d,
-          time: t || '09:00',
-          title,
-          notes
-        });
-      }
-
-      this.saveUserEventsToStorage();
-      this.render();
-      this.saveSettingsFromUi();
-      this.closeModal();
-    });
-
-    if (isEdit) {
-      modal.querySelector('#evtDelete')?.addEventListener('click', () => {
-        if (!existing) return;
-        this.userEvents = this.userEvents.filter(e => e.id !== existing.id);
-        this.saveUserEventsToStorage();
-        this.render();
-        this.saveSettingsFromUi();
-        this.closeModal();
-      });
-    }
-
-    document.body.appendChild(modal);
-    this.modalEl = modal;
-  }
-
-  defaultEventTime() {
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const rounded = minutes < 30 ? 30 : 0;
-    const hours = rounded === 0 ? (now.getHours() + 1) % 24 : now.getHours();
-    const hh = String(hours).padStart(2, '0');
-    const mm = String(rounded).padStart(2, '0');
-    return `${hh}:${mm}`;
-  }
-
-  escapeAttr(v) {
-    return String(v || '')
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
   }
 
   createReservationEventEl(res) {

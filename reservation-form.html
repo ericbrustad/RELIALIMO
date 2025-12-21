@@ -4,18 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>New Reservation - RELIA🐂LIMO™</title>
-    <script src="env.js"></script>
     <link rel="icon" href="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="reservation-form.css" />
-    <script type="module" src="entrypoint-guard.js"></script>
     <script>
       // Hide main navigation if in iframe
       if (window.self !== window.top) {
         document.addEventListener('DOMContentLoaded', function() {
-          const header = document.querySelector('header.header');
-          if (header) header.style.display = 'none';
+          const headerContent = document.querySelector('.header-content');
+          if (headerContent) {
+            headerContent.style.display = 'none';
+          }
         });
       }
     </script>
@@ -31,6 +29,7 @@
             </h1>
           </div>
           <div style="display: flex; gap: 10px;">
+            <button onclick="window.location.href='reservations-list.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
             <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
             <button onclick="window.location.href='accounts.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
           </div>
@@ -128,14 +127,19 @@
                   <div class="payment-form-row-2">
                     <div class="payment-form-group">
                       <label class="payment-label">Payment Method</label>
-                      <select id="reservationPaymentMethod" class="payment-control">
-                        <option value="">---</option>
+                      <select class="payment-control">
+                        <option>---</option>
+                        <option>Cash</option>
+                        <option>Credit Card</option>
+                        <option>Check</option>
+                        <option>Account</option>
+                        <option>Voucher</option>
                       </select>
                     </div>
 
                     <div class="payment-form-group">
                       <label class="payment-label">Payment Status</label>
-                      <select id="reservationPaymentStatus" class="payment-control">
+                      <select class="payment-control">
                         <option selected>UNPAID</option>
                         <option>PAID</option>
                         <option>PARTIALLY PAID</option>
@@ -146,65 +150,68 @@
 
                   <div class="payment-form-group">
                     <label class="payment-label">Payment Terms:</label>
-                    <input type="text" id="reservationPaymentTerms" class="payment-control" placeholder="" />
+                    <input type="text" class="payment-control" placeholder="" />
                   </div>
 
                   <div class="payment-form-group">
                     <label class="payment-label">Payment Gateways:</label>
-                    <select id="reservationPaymentGateway" class="payment-control">
-                      <option value="">-- NOT SELECTED --</option>
+                    <select class="payment-control">
+                      <option selected>Square</option>
+                      <option>Stripe</option>
+                      <option>PayPal</option>
+                      <option>Authorize.net</option>
                     </select>
                   </div>
 
                   <div class="payment-card-options">
                     <label class="payment-radio-option">
-                      <input type="radio" id="reservationCardOptionNew" name="cardOption" value="new" checked />
+                      <input type="radio" name="cardOption" value="new" checked />
                       <span>Pay with new card</span>
                     </label>
                     <label class="payment-radio-option">
-                      <input type="radio" id="reservationCardOptionExisting" name="cardOption" value="existing" />
+                      <input type="radio" name="cardOption" value="existing" />
                       <span>Use existing card</span>
                     </label>
                   </div>
 
                   <div class="payment-card-input-group">
                     <button type="button" class="payment-card-icon-btn">💳</button>
-                    <input type="text" id="reservationCardNumber" class="payment-control-inline" placeholder="Card number" autocomplete="cc-number" />
+                    <input type="text" class="payment-control-inline" placeholder="Card number" />
                   </div>
 
                   <div class="payment-form-row-2">
                     <div class="payment-form-group-inline">
-                      <input type="text" id="reservationCardExp" class="payment-control" placeholder="MM/YY" autocomplete="cc-exp" />
+                      <input type="text" class="payment-control" placeholder="MM/YY" />
                     </div>
 
                     <div class="payment-form-group-inline">
-                      <input type="text" id="reservationCardCvv" class="payment-control" placeholder="CVV" autocomplete="cc-csc" />
+                      <input type="text" class="payment-control" placeholder="CVV" />
                     </div>
                   </div>
 
                   <div class="payment-form-group">
-                    <input type="text" id="reservationCardName" class="payment-control" placeholder="Name on Card" autocomplete="cc-name" />
+                    <input type="text" class="payment-control" placeholder="Name on Card" />
                   </div>
 
                   <div class="payment-section-title">Billing Information (optional)</div>
 
                   <div class="payment-form-row-2">
                     <div class="payment-form-group-inline">
-                      <input type="text" id="reservationCardBillingAddress1" class="payment-control" placeholder="Address Line 1" />
+                      <input type="text" class="payment-control" placeholder="Address Line 1" />
                     </div>
 
                     <div class="payment-form-group-inline">
-                      <input type="text" id="reservationCardBillingAddress2" class="payment-control" placeholder="Address Line 2" />
+                      <input type="text" class="payment-control" placeholder="Address Line 2" />
                     </div>
                   </div>
 
                   <div class="payment-form-group">
-                    <input type="text" id="reservationCardBillingCity" class="payment-control" placeholder="City" />
+                    <input type="text" class="payment-control" placeholder="City" />
                   </div>
 
                   <div class="payment-form-row-2">
                     <div class="payment-form-group-inline">
-                      <select id="reservationCardBillingCountry" class="payment-control">
+                      <select class="payment-control">
                         <option>Select country ▼</option>
                         <option>United States</option>
                         <option>Canada</option>
@@ -213,7 +220,7 @@
                     </div>
 
                     <div class="payment-form-group-inline">
-                      <select id="reservationCardBillingState" class="payment-control">
+                      <select class="payment-control">
                         <option>Select state ▼</option>
                         <option>Alabama</option>
                         <option>Alaska</option>
@@ -228,19 +235,19 @@
 
                   <div class="payment-form-row-2">
                     <div class="payment-form-group-inline">
-                      <input type="email" id="reservationCardholderEmail" class="payment-control" placeholder="Cardholder Email" />
+                      <input type="email" class="payment-control" placeholder="Cardholder Email" />
                     </div>
 
                     <div class="payment-form-group-inline">
-                      <input type="tel" id="reservationCardholderPhone" class="payment-control" placeholder="Cardholder Phone" />
+                      <input type="tel" class="payment-control" placeholder="Cardholder Phone" />
                     </div>
                   </div>
 
-                  <button type="button" id="reservationAddCardBtn" class="payment-btn-add-card">Add Card</button>
+                  <button type="button" class="payment-btn-add-card">Add Card</button>
 
                   <div class="payment-notes-section">
                     <label class="payment-notes-label">Credit Card Notes</label>
-                    <textarea id="reservationCardNotes" class="payment-notes-textarea" rows="3"></textarea>
+                    <textarea class="payment-notes-textarea" rows="3"></textarea>
                   </div>
                 </div>
               </div>
@@ -403,6 +410,10 @@
                     <label>Select Stored Address</label>
                     <select id="storedAddressSelect" class="form-control">
                       <option value="">Choose an address...</option>
+                      <option value="home">Home Office - 123 Main St</option>
+                      <option value="warehouse">Warehouse - 456 Industrial Ave</option>
+                      <option value="hotel1">Beverly Hills Hotel - 9641 Sunset Blvd</option>
+                      <option value="hotel2">The Ritz-Carlton - 900 W Olympic Blvd</option>
                     </select>
                   </div>
                 </div>
@@ -1204,143 +1215,6 @@
       </main>
     </div>
 
-    <!-- Payments / Transactions Modal -->
-    <div id="paymentsModal" class="modal">
-      <div class="modal-content modal-large payments-modal">
-        <div class="modal-header">
-          <h3>Transactions for reservation <span id="paymentsModalConf"></span></h3>
-          <button class="modal-close" id="closePaymentsModal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="payments-modal-grid">
-            <div class="payments-left">
-              <div class="payments-section">
-                <div class="payments-section-title">Posted Transactions</div>
-                <div class="payments-table-container">
-                  <table class="payments-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th style="text-align: right;">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody id="paymentsTransactionsBody">
-                      <!-- Transactions inserted dynamically -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div class="payments-section">
-                <div class="payments-section-title">Pending Payment Request</div>
-                <div class="payments-muted" id="paymentsPendingText">None</div>
-              </div>
-
-              <div class="payments-totals">
-                <div class="payments-total-row">
-                  <span>Total</span>
-                  <span id="paymentsTotal">0.00</span>
-                </div>
-                <div class="payments-total-row">
-                  <span>Paid</span>
-                  <span id="paymentsPaid">0.00</span>
-                </div>
-                <div class="payments-total-row">
-                  <span>Authorized</span>
-                  <span id="paymentsAuthorized">0.00</span>
-                </div>
-                <div class="payments-total-row payments-total-row-strong">
-                  <span>Outstanding</span>
-                  <span id="paymentsOutstanding">0.00</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="payments-right">
-              <div class="payments-section">
-                <div class="payments-section-title">Payment</div>
-
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label>Payment Method</label>
-                    <select id="paymentsMethod" class="form-control">
-                      <option value="credit-card" selected>Credit Card</option>
-                      <option value="cash">Cash</option>
-                      <option value="check">Check</option>
-                      <option value="account">Account</option>
-                      <option value="voucher">Voucher</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Gateway</label>
-                    <select id="paymentsGateway" class="form-control">
-                      <option value="roam" selected>Roam</option>
-                      <option value="nmi">NMI</option>
-                      <option value="authorize">Authorize.Net</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label>Card Number</label>
-                  <input type="text" id="paymentsCardNumber" class="form-control" placeholder="•••• •••• •••• ••••" autocomplete="cc-number" />
-                </div>
-
-                <div class="form-row-3">
-                  <div class="form-group">
-                    <label>Exp</label>
-                    <input type="text" id="paymentsCardExp" class="form-control" placeholder="MM/YY" autocomplete="cc-exp" />
-                  </div>
-                  <div class="form-group">
-                    <label>CVV</label>
-                    <input type="text" id="paymentsCardCvv" class="form-control" placeholder="CVV" autocomplete="cc-csc" />
-                  </div>
-                  <div class="form-group">
-                    <label>Zip</label>
-                    <input type="text" id="paymentsZip" class="form-control" placeholder="Zip" autocomplete="postal-code" />
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label>Name on Card</label>
-                  <input type="text" id="paymentsCardName" class="form-control" placeholder="Cardholder name" autocomplete="cc-name" />
-                </div>
-
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label>Amount</label>
-                    <input type="number" id="paymentsAmount" class="form-control" value="0.00" step="0.01" min="0" />
-                  </div>
-
-                  <div class="form-group" style="display:flex; align-items:flex-end;">
-                    <button type="button" class="btn btn-secondary" id="paymentsClearAmount" style="width: 100%;">Use Outstanding</button>
-                  </div>
-                </div>
-
-                <div class="payments-btn-row">
-                  <button type="button" class="btn btn-primary" data-pay-action="auth_capture">Authorize &amp; Capture</button>
-                  <button type="button" class="btn" data-pay-action="authorize">Authorize</button>
-                  <button type="button" class="btn" data-pay-action="capture">Capture</button>
-                  <button type="button" class="btn" data-pay-action="void">Void</button>
-                  <button type="button" class="btn" data-pay-action="credit">Credit</button>
-                </div>
-
-                <div class="payments-muted" style="margin-top: 10px;">
-                  Note: This window is UI-only right now (no gateway integration).
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" id="paymentsCloseBtn">Close</button>
-        </div>
-      </div>
-    </div>
-
     <!-- Add Contact Modal -->
     <div id="addContactModal" class="modal">
       <div class="modal-content">
@@ -2065,15 +1939,6 @@
         }
         console.log('💾 Stop saved to tripStops:', tripStops);
 
-        // Save this routing address into the account's stored addresses (best-effort)
-        try {
-          if (window.reservationFormInstance && typeof window.reservationFormInstance.saveStopToStoredAddresses === 'function') {
-            window.reservationFormInstance.saveStopToStoredAddresses(stopData);
-          }
-        } catch (e) {
-          console.warn('⚠️ Could not save stop to stored addresses:', e);
-        }
-
         // Get table body
         const tableBody = document.getElementById('addressTableBody');
         
@@ -2637,6 +2502,7 @@
         console.log('✅ FBO details auto-populated successfully');
       }
     </script>
+    <script src="env.js"></script>
     <script type="module" src="reservation-form.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ChatManager.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js"></script>

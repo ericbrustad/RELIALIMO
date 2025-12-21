@@ -1,14 +1,6 @@
 // Import API service
 import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver } from './api-service.js';
-import { wireMainNav, navigateToSection } from './navigation.js';
-import {
-  syncPaymentMethodsFromOfficeTable,
-  getPaymentMethods,
-  setPaymentMethods,
-  syncPaymentGatewaysFromOfficeSection,
-  getPaymentGateways,
-  seedPaymentGateways
-} from './payment-data.js';
+import { wireMainNav } from './navigation.js';
 
 class MyOffice {
   constructor() {
@@ -49,12 +41,6 @@ class MyOffice {
     ];
     this.selectedUserId = this.users[0]?.id || null;
     this.userInputs = {};
-    try {
-      const preview = (document?.body?.innerText || '').slice(0, 200);
-      console.log('[MyOffice init] body text preview:', preview);
-    } catch (err) {
-      console.warn('[MyOffice init] Unable to read body text:', err);
-    }
     this.init();
   }
 
@@ -65,64 +51,10 @@ class MyOffice {
     this.setupMagicLinkHelpers();
     this.setupDriversForm();
     this.setupSystemUsers();
+    this.setupCompanyInfoForm();
     this.checkURLParameters();
     // Initialize API
     this.initializeAPI();
-
-    // Ensure payment lists are available for Reservations/Accounts
-    this.setupPaymentLists();
-  }
-
-  setupPaymentLists() {
-    // Payment Methods: source of truth is List Management table
-    try {
-      // Seed from the current DOM (and persist)
-      syncPaymentMethodsFromOfficeTable(document);
-
-      // Keep localStorage in sync when user flips Active/Inactive
-      const tbody = document.getElementById('paymentMethodsTbody');
-      if (tbody) {
-        tbody.addEventListener('change', (e) => {
-          const select = e.target?.closest('select');
-          if (!select) return;
-          const row = select.closest('tr');
-          if (!row) return;
-
-          const cells = row.querySelectorAll('td');
-          const code = (cells[1]?.textContent || '').trim().toUpperCase().replace(/\s+/g, '_');
-          if (!code) return;
-
-          const methods = getPaymentMethods({ includeInactive: true });
-          const next = methods.map(m => {
-            if (m.code !== code) return m;
-            return { ...m, active: select.value === 'active' };
-          });
-          setPaymentMethods(next);
-        });
-      }
-    } catch (e) {
-      console.warn('⚠️ Failed to initialize payment methods list:', e);
-    }
-
-    // Payment Gateways: source of truth is Company Settings → Payment Gateway section
-    try {
-      seedPaymentGateways();
-      syncPaymentGatewaysFromOfficeSection(document);
-
-      // If the gateway table changes later (future enhancements), we at least re-sync on Update click.
-      const updateBtn = document.querySelector('#payment-section .payment-form-actions .btn.btn-primary');
-      if (updateBtn) {
-        updateBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          syncPaymentGatewaysFromOfficeSection(document);
-          const gateways = getPaymentGateways({ includeInactive: true });
-          console.log('✅ Payment gateways saved:', gateways);
-          alert('Payment gateway settings saved locally.');
-        });
-      }
-    } catch (e) {
-      console.warn('⚠️ Failed to initialize payment gateways list:', e);
-    }
   }
 
   async initializeAPI() {
@@ -160,7 +92,7 @@ class MyOffice {
     const newResBtn = document.querySelector('.btn-new-reservation');
     if (newResBtn) {
       newResBtn.addEventListener('click', () => {
-        navigateToSection('new-reservation');
+        window.location.href = 'reservation-form.html';
       });
     }
 
@@ -192,20 +124,12 @@ class MyOffice {
         } else if (action === 'driver-view') {
           window.location.href = 'index.html?view=driver';
         } else if (action === 'reservations') {
-          navigateToSection('reservations');
+          window.location.href = 'reservations-list.html';
         } else if (action === 'farm-out') {
           window.location.href = 'index.html?view=reservations';
         } else if (action === 'new-reservation') {
-          navigateToSection('new-reservation');
+          window.location.href = 'reservation-form.html';
         }
-      });
-    });
-
-    // Sidebar navigation (only for Company Settings group)
-    document.querySelectorAll('#companySettingsGroup .sidebar-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const section = e.target.dataset.section;
-        this.navigateToSection(section);
       });
     });
 
@@ -217,6 +141,19 @@ class MyOffice {
         if (!btn || !btn.dataset.systemSetting) return;
         this.navigateToSection('system-settings');
         this.navigateToSystemSettingsPage(btn.dataset.systemSetting);
+      });
+    }
+
+    // Company Settings sidebar navigation (Contact Info, Company Prefs, System Users, etc.)
+    const companySettingsGroup = document.getElementById('companySettingsGroup');
+    if (companySettingsGroup) {
+      companySettingsGroup.addEventListener('click', (e) => {
+        const btn = e.target.closest('.sidebar-btn');
+        if (btn && btn.dataset.section) {
+          const section = btn.dataset.section;
+          console.log('Navigating to company settings section:', section);
+          this.navigateToSection(section);
+        }
       });
     }
 
@@ -563,6 +500,327 @@ class MyOffice {
         this.switchRateType(rateType);
       });
     });
+
+    // Company Logo Upload
+    this.setupLogoUpload();
+  }
+
+  setupLogoUpload() {
+    const logoFileInput = document.getElementById('logoFileInput');
+    const logoChooseBtn = document.getElementById('logoChooseBtn');
+    const logoUploadBtn = document.getElementById('logoUploadBtn');
+    const logoFileName = document.getElementById('logoFileName');
+    const logoPreviewImg = document.getElementById('logoPreviewImg');
+    const logoDeleteBtn = document.getElementById('logoDeleteBtn');
+
+    console.log('🖼️ setupLogoUpload - Elements found:', {
+      logoFileInput: !!logoFileInput,
+      logoChooseBtn: !!logoChooseBtn,
+      logoUploadBtn: !!logoUploadBtn,
+      logoFileName: !!logoFileName,
+      logoPreviewImg: !!logoPreviewImg,
+      logoDeleteBtn: !!logoDeleteBtn
+    });
+
+    // Store the selected file for upload
+    this.selectedLogoFile = null;
+
+    // Choose File button opens file picker
+    if (logoChooseBtn && logoFileInput) {
+      logoChooseBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('🖼️ Choose File clicked');
+        logoFileInput.click();
+      });
+    } else {
+      console.warn('⚠️ Logo choose button or file input not found');
+    }
+
+    // When file is selected, show filename and preview
+    if (logoFileInput) {
+      logoFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          // Validate file type
+          if (!file.type.match(/^image\/(jpeg|png)$/)) {
+            alert('Please select a JPG or PNG image file.');
+            logoFileInput.value = '';
+            return;
+          }
+
+          // Validate file size (max 5MB)
+          if (file.size > 5 * 1024 * 1024) {
+            alert('Image file size must be less than 5MB.');
+            logoFileInput.value = '';
+            return;
+          }
+
+          this.selectedLogoFile = file;
+          if (logoFileName) {
+            logoFileName.textContent = file.name;
+          }
+
+          // Show preview
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            if (logoPreviewImg) {
+              logoPreviewImg.src = event.target.result;
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    // Upload button saves the logo to localStorage immediately
+    if (logoUploadBtn) {
+      logoUploadBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.selectedLogoFile) {
+          // Capture file reference before async operation
+          const fileToUpload = this.selectedLogoFile;
+          const fileName = fileToUpload.name;
+          const fileType = fileToUpload.type;
+          
+          // Read file and store as base64 in localStorage
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const logoData = {
+              name: fileName,
+              type: fileType,
+              data: event.target.result
+            };
+            localStorage.setItem('companyLogo', JSON.stringify(logoData));
+            
+            // Also update the companyInfo with logo_url
+            try {
+              const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+              companyInfo.logo_url = event.target.result;
+              localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
+            } catch (err) {
+              console.warn('Could not update companyInfo with logo:', err);
+            }
+            
+            alert('✅ Logo uploaded and saved successfully!');
+            this.selectedLogoFile = null;
+          };
+          reader.readAsDataURL(this.selectedLogoFile);
+        } else {
+          alert('Please choose a file first.');
+        }
+      });
+    }
+
+    // Delete logo
+    if (logoDeleteBtn) {
+      logoDeleteBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (confirm('Are you sure you want to delete the company logo?')) {
+          localStorage.removeItem('companyLogo');
+          this.selectedLogoFile = null;
+          if (logoFileName) {
+            logoFileName.textContent = 'No file chosen';
+          }
+          if (logoFileInput) {
+            logoFileInput.value = '';
+          }
+          // Reset to default placeholder
+          if (logoPreviewImg) {
+            logoPreviewImg.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect fill='%23000' width='200' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-family='Arial' font-size='24' font-weight='bold'%3EERIX%3C/text%3E%3C/svg%3E";
+          }
+          alert('Logo deleted.');
+        }
+      });
+    }
+
+    // Load existing logo on page load
+    this.loadSavedLogo();
+  }
+
+  loadSavedLogo() {
+    const logoPreviewImg = document.getElementById('logoPreviewImg');
+    const logoFileName = document.getElementById('logoFileName');
+    
+    const savedLogo = localStorage.getItem('companyLogo');
+    if (savedLogo) {
+      try {
+        const logoData = JSON.parse(savedLogo);
+        if (logoPreviewImg && logoData.data) {
+          logoPreviewImg.src = logoData.data;
+        }
+        if (logoFileName && logoData.name) {
+          logoFileName.textContent = logoData.name;
+        }
+      } catch (e) {
+        console.error('Error loading saved logo:', e);
+      }
+    }
+  }
+
+  // ===================================
+  // COMPANY INFORMATION FORM
+  // ===================================
+
+  setupCompanyInfoForm() {
+    // Load existing company info on page load
+    this.loadCompanyInfo();
+
+    // Save button handler
+    const saveBtn = document.getElementById('saveCompanyInfoBtn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.saveCompanyInfo();
+      });
+    }
+  }
+
+  async loadCompanyInfo() {
+    try {
+      // First try to load from Supabase
+      const apiModule = await import('./api-service.js');
+      const { supabase } = await apiModule.setupAPI();
+      
+      if (supabase) {
+        const { data: org, error } = await supabase
+          .from('organizations')
+          .select('*')
+          .limit(1)
+          .single();
+
+        if (!error && org) {
+          this.populateCompanyInfoForm(org);
+          // Also cache in localStorage
+          localStorage.setItem('companyInfo', JSON.stringify(org));
+          console.log('✅ Company info loaded from Supabase');
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load from Supabase, trying localStorage:', e.message);
+    }
+
+    // Fallback to localStorage
+    const cached = localStorage.getItem('companyInfo');
+    if (cached) {
+      try {
+        const info = JSON.parse(cached);
+        this.populateCompanyInfoForm(info);
+        console.log('✅ Company info loaded from localStorage');
+      } catch (e) {
+        console.error('Error parsing cached company info:', e);
+      }
+    }
+  }
+
+  populateCompanyInfoForm(info) {
+    const fields = {
+      'companyName': info.name || '',
+      'companyStreetAddress': info.street_address || info.address || '',
+      'companyStreetAddress2': info.street_address_2 || '',
+      'companyCity': info.city || '',
+      'companyState': info.state || '',
+      'companyZipCode': info.postal_code || '',
+      'companyEin': info.ein || '',
+      'companyCountry': info.country || 'US',
+      'companyPrimaryPhone': info.phone || '',
+      'companySecondaryPhone': info.secondary_phone || '',
+      'companyFax': info.fax || '',
+      'companyGeneralEmail': info.general_email || info.email || '',
+      'companyReservationEmail': info.reservation_email || '',
+      'companyQuoteEmail': info.quote_email || '',
+      'companyBillingEmail': info.billing_email || '',
+      'companyWebsite': info.website || ''
+    };
+
+    for (const [id, value] of Object.entries(fields)) {
+      const el = document.getElementById(id);
+      if (el) el.value = value;
+    }
+
+    // Checkbox
+    const showEinCheckbox = document.getElementById('companyShowEinOnDocs');
+    if (showEinCheckbox) {
+      showEinCheckbox.checked = info.show_ein_on_docs || false;
+    }
+  }
+
+  async saveCompanyInfo() {
+    const info = {
+      name: document.getElementById('companyName')?.value?.trim() || '',
+      street_address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
+      street_address_2: document.getElementById('companyStreetAddress2')?.value?.trim() || '',
+      city: document.getElementById('companyCity')?.value?.trim() || '',
+      state: document.getElementById('companyState')?.value?.trim() || '',
+      postal_code: document.getElementById('companyZipCode')?.value?.trim() || '',
+      country: document.getElementById('companyCountry')?.value?.trim() || 'US',
+      ein: document.getElementById('companyEin')?.value?.trim() || '',
+      show_ein_on_docs: document.getElementById('companyShowEinOnDocs')?.checked || false,
+      phone: document.getElementById('companyPrimaryPhone')?.value?.trim() || '',
+      secondary_phone: document.getElementById('companySecondaryPhone')?.value?.trim() || '',
+      fax: document.getElementById('companyFax')?.value?.trim() || '',
+      general_email: document.getElementById('companyGeneralEmail')?.value?.trim() || '',
+      reservation_email: document.getElementById('companyReservationEmail')?.value?.trim() || '',
+      quote_email: document.getElementById('companyQuoteEmail')?.value?.trim() || '',
+      billing_email: document.getElementById('companyBillingEmail')?.value?.trim() || '',
+      website: document.getElementById('companyWebsite')?.value?.trim() || '',
+      // Also set email to general_email for backwards compatibility
+      email: document.getElementById('companyGeneralEmail')?.value?.trim() || '',
+      // Also set address to street_address for backwards compatibility
+      address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
+      updated_at: new Date().toISOString()
+    };
+
+    if (!info.name) {
+      alert('Company Name is required.');
+      return;
+    }
+
+    // Save to localStorage immediately
+    localStorage.setItem('companyInfo', JSON.stringify(info));
+
+    // Try to save to Supabase
+    try {
+      const apiModule = await import('./api-service.js');
+      const { supabase } = await apiModule.setupAPI();
+
+      if (supabase) {
+        // Check if organization exists
+        const { data: existing } = await supabase
+          .from('organizations')
+          .select('id')
+          .limit(1)
+          .single();
+
+        if (existing?.id) {
+          // Update existing
+          const { error } = await supabase
+            .from('organizations')
+            .update(info)
+            .eq('id', existing.id);
+
+          if (error) throw error;
+          console.log('✅ Company info updated in Supabase');
+        } else {
+          // Insert new
+          const { error } = await supabase
+            .from('organizations')
+            .insert([{ ...info, created_at: new Date().toISOString() }]);
+
+          if (error) throw error;
+          console.log('✅ Company info created in Supabase');
+        }
+
+        alert('✅ Company information saved successfully!');
+        return;
+      }
+    } catch (e) {
+      console.error('Error saving to Supabase:', e);
+      alert('⚠️ Saved locally. Could not sync to cloud: ' + e.message);
+      return;
+    }
+
+    alert('✅ Company information saved locally.');
   }
 
   setupSystemUsers() {

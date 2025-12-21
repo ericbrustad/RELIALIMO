@@ -55,9 +55,8 @@
 
 /* Content Section */
 .content-section {
-    max-width: none;
-    width: 100%;
-    margin: 0;
+    max-width: 1400px;
+    margin: 0 auto;
 }
 
 .section-title {

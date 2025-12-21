@@ -1,30 +1,8 @@
-import { wireMainNav, navigateToSection } from './navigation.js';
+import { wireMainNav } from './navigation.js';
 
 class ReservationsList {
   constructor() {
     this.init();
-  }
-
-  async openReservation(confNumber) {
-    let url;
-    if (confNumber) {
-      url = `reservation-form.html?conf=${encodeURIComponent(confNumber)}`;
-    } else {
-      // Prefill with next confirmation number for new reservation
-      try {
-        const dbModule = await import('./assets/db.js');
-        const nextConf = dbModule.db.getNextConfirmationNumber();
-        url = `reservation-form.html?conf=${encodeURIComponent(nextConf)}`;
-      } catch {
-        url = 'reservation-form.html';
-      }
-    }
-    if (window.history && window.history.pushState) {
-      window.history.pushState({}, '', url);
-      window.location.href = url;
-    } else {
-      navigateToSection('new-reservation', { url });
-    }
   }
 
   async init() {
@@ -149,7 +127,7 @@ class ReservationsList {
       }
 
       // Fallback if the row isn't rendered
-      this.openReservation(openConf);
+      window.location.href = `reservation-form.html?conf=${encodeURIComponent(openConf)}`;
     } catch (e) {
       console.warn('⚠️ Failed to open reservation from calendar:', e);
     }
@@ -161,7 +139,7 @@ class ReservationsList {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const confNumber = e.target.dataset.conf;
-        this.openReservation(confNumber);
+        window.location.href = `reservation-form.html?conf=${confNumber}`;
       });
     });
 
@@ -245,7 +223,7 @@ class ReservationsList {
         } else if (action === 'farm-out') {
           window.location.href = 'index.html?view=reservations';
         } else if (action === 'new-reservation') {
-          this.openReservation(null);
+          window.location.href = 'reservation-form.html';
         }
       });
     });
@@ -264,7 +242,7 @@ class ReservationsList {
         e.preventDefault();
         // Navigate to reservation form with this reservation ID
         const confNumber = e.target.textContent;
-        this.openReservation(confNumber);
+        window.location.href = `reservation-form.html?conf=${confNumber}`;
       });
     });
 
@@ -294,7 +272,7 @@ class ReservationsList {
   selectReservation(confNumber) {
     console.log('Selected reservation:', confNumber);
     // Navigate to the reservation details
-    this.openReservation(confNumber);
+    window.location.href = `reservation-form.html?conf=${confNumber}`;
   }
 }
 

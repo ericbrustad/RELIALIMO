@@ -7,116 +7,115 @@ const STORAGE_KEYS = {
   QUOTES: 'relia_quotes',
   PASSENGERS: 'relia_passengers',
   BOOKING_AGENTS: 'relia_booking_agents',
+  RESERVATION_STATUS_DETAILS: 'relia_reservation_status_details',
   NEXT_ACCOUNT_NUMBER: 'nextAccountNumber',
   NEXT_CONFIRMATION_NUMBER: 'nextConfirmationNumber'
 };
-
-function normalizeAddressValue(value) {
-  return (value ?? '')
-    .toString()
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
-}
-
-function addressDedupKey(addr) {
-  if (!addr || typeof addr !== 'object') return '';
-  const line1 = normalizeAddressValue(addr.address_line1);
-  const line2 = normalizeAddressValue(addr.address_line2);
-  const city = normalizeAddressValue(addr.city);
-  const state = normalizeAddressValue(addr.state);
-  const zip = normalizeAddressValue(addr.zip_code);
-  const country = normalizeAddressValue(addr.country);
-  return [line1, line2, city, state, zip, country].join('|');
-}
-
-function isDemoAddress(addr) {
-  const name = normalizeAddressValue(addr?.address_name);
-  const line1 = normalizeAddressValue(addr?.address_line1);
-
-  // Heuristic cleanup: common demo placeholders used during development.
-  if (name.includes('demo')) return true;
-
-  const demoNames = new Set([
-    'home office',
-    'warehouse',
-    'beverly hills hotel',
-    'the ritz-carlton',
-    'ritz-carlton'
-  ]);
-  if (demoNames.has(name)) return true;
-
-  const demoLine1s = new Set([
-    '123 main st',
-    '123 main street',
-    '456 industrial ave',
-    '456 industrial avenue',
-    '9641 sunset blvd',
-    '9641 sunset boulevard',
-    '900 w olympic blvd',
-    '900 w olympic boulevard',
-    '900 west olympic blvd',
-    '900 west olympic boulevard',
-
-    // Additional generic placeholders
-    '456 oak ave',
-    '456 oak avenue',
-    '789 pine st',
-    '789 pine street',
-    '101 maple dr',
-    '101 maple drive'
-  ]);
-  if (demoLine1s.has(line1)) return true;
-
-  return false;
-}
-
-function dedupeAddresses(addresses) {
-  const list = Array.isArray(addresses) ? addresses : [];
-  const seen = new Set();
-  const out = [];
-
-  for (const addr of list) {
-    if (!addr || typeof addr !== 'object') continue;
-    const key = addressDedupKey(addr);
-    if (!key) continue;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(addr);
-  }
-
-  return out;
-}
 
 export const db = {
   // ===================================
   // ACCOUNTS
   // ===================================
   
-  async saveAccount(accountData) {
-    try {
-      // Ensure stored addresses are mirrored onto the account record.
-      try {
-        const id = (accountData?.id ?? '').toString().trim();
-        if (id) {
-          const maybeAddresses = Array.isArray(accountData?.stored_addresses)
-            ? accountData.stored_addresses
-            : this.getAccountAddresses(id);
-
-          accountData = {
-            ...accountData,
-            stored_addresses: dedupeAddresses((maybeAddresses || []).filter(a => !isDemoAddress(a)))
-          };
-        }
-      } catch {
-        // ignore
+  /**
+   * Check for potential duplicate accounts
+   * @param {Object} accountData - The account data to check
+   * @param {boolean} excludeSelf - If true, excludes the account with matching id from results
+   * @returns {Object} { isDuplicate: boolean, duplicates: Array, matchType: string }
+   */
+  checkForDuplicateAccount(accountData, excludeSelf = false) {
+    const accounts = this.getAllAccounts();
+    const duplicates = [];
+    let matchType = '';
+    
+    const normalizePhone = (phone) => (phone || '').replace(/\D/g, '');
+    const normalizeEmail = (email) => (email || '').toLowerCase().trim();
+    const normalizeName = (name) => (name || '').toLowerCase().trim();
+    
+    const inputEmail = normalizeEmail(accountData.email);
+    const inputPhone = normalizePhone(accountData.phone || accountData.cell_phone);
+    const inputFirstName = normalizeName(accountData.first_name);
+    const inputLastName = normalizeName(accountData.last_name);
+    const inputCompany = normalizeName(accountData.company_name);
+    
+    for (const account of accounts) {
+      // Skip self when updating
+      if (excludeSelf && (account.id === accountData.id || account.account_number === accountData.account_number)) {
+        continue;
       }
-
+      
+      const acctEmail = normalizeEmail(account.email);
+      const acctPhone = normalizePhone(account.phone || account.cell_phone);
+      const acctFirstName = normalizeName(account.first_name);
+      const acctLastName = normalizeName(account.last_name);
+      const acctCompany = normalizeName(account.company_name);
+      
+      // Exact email match (strongest indicator)
+      if (inputEmail && acctEmail && inputEmail === acctEmail) {
+        duplicates.push({ ...account, matchReason: 'Same email address' });
+        matchType = matchType || 'email';
+        continue;
+      }
+      
+      // Exact phone match
+      if (inputPhone && acctPhone && inputPhone.length >= 10 && inputPhone === acctPhone) {
+        duplicates.push({ ...account, matchReason: 'Same phone number' });
+        matchType = matchType || 'phone';
+        continue;
+      }
+      
+      // Exact name match (first + last)
+      if (inputFirstName && inputLastName && acctFirstName && acctLastName) {
+        if (inputFirstName === acctFirstName && inputLastName === acctLastName) {
+          duplicates.push({ ...account, matchReason: 'Same first and last name' });
+          matchType = matchType || 'name';
+          continue;
+        }
+      }
+      
+      // Company name match (if both have company names)
+      if (inputCompany && acctCompany && inputCompany === acctCompany) {
+        duplicates.push({ ...account, matchReason: 'Same company name' });
+        matchType = matchType || 'company';
+        continue;
+      }
+    }
+    
+    return {
+      isDuplicate: duplicates.length > 0,
+      duplicates: duplicates.slice(0, 5), // Limit to 5 potential matches
+      matchType
+    };
+  },
+  
+  async saveAccount(accountData, options = {}) {
+    const { skipDuplicateCheck = false, forceCreate = false } = options;
+    
+    try {
       const accounts = this.getAllAccounts();
       
-      // Check if account already exists (by id or email)
+      // Check if this is an update (has existing id)
+      const isUpdate = accountData.id && accounts.some(a => a.id === accountData.id);
+      
+      // Check for duplicates on new accounts (unless skipped or forced)
+      if (!isUpdate && !skipDuplicateCheck && !forceCreate) {
+        const duplicateCheck = this.checkForDuplicateAccount(accountData, false);
+        if (duplicateCheck.isDuplicate) {
+          console.warn('⚠️ Potential duplicate account detected:', duplicateCheck);
+          // Return duplicate info so caller can handle it
+          return {
+            success: false,
+            duplicateDetected: true,
+            duplicates: duplicateCheck.duplicates,
+            matchType: duplicateCheck.matchType,
+            accountData: accountData
+          };
+        }
+      }
+      
+      // Check if account already exists (by id or email) for update
       const existingIndex = accounts.findIndex(a => 
-        a.id === accountData.id || a.email === accountData.email
+        a.id === accountData.id || (accountData.email && a.email === accountData.email)
       );
       
       if (existingIndex >= 0) {
@@ -138,43 +137,17 @@ export const db = {
         console.warn('⚠️ Could not sync account to Supabase:', error.message);
       }
       
-      return accountData;
+      return { success: true, account: accountData };
     } catch (error) {
       console.error('Error saving account:', error);
-      return null;
+      return { success: false, error: error.message };
     }
   },
   
   getAllAccounts() {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      const parsed = stored ? JSON.parse(stored) : [];
-      const accounts = Array.isArray(parsed) ? parsed : [];
-
-      // Auto-clean demo/duplicate stored_addresses embedded on the account.
-      let changed = false;
-      const cleanedAccounts = accounts.map(a => {
-        if (!a || typeof a !== 'object') return a;
-        const storedAddresses = Array.isArray(a.stored_addresses) ? a.stored_addresses : null;
-        if (!storedAddresses) return a;
-
-        const cleaned = dedupeAddresses(storedAddresses.filter(addr => !isDemoAddress(addr)));
-        if (JSON.stringify(cleaned) !== JSON.stringify(storedAddresses)) {
-          changed = true;
-          return { ...a, stored_addresses: cleaned };
-        }
-        return a;
-      });
-
-      if (changed) {
-        try {
-          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cleanedAccounts));
-        } catch {
-          // ignore
-        }
-      }
-
-      return cleanedAccounts;
+      return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.error('Error loading accounts:', error);
       return [];
@@ -282,6 +255,34 @@ export const db = {
   },
   
   // ===================================
+  // RESERVATION STATUS DETAILS
+  // ===================================
+  
+  getReservationStatusDetails() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.RESERVATION_STATUS_DETAILS);
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error loading reservation status details:', error);
+      return [];
+    }
+  },
+  
+  saveReservationStatusDetails(details) {
+    try {
+      if (!Array.isArray(details)) {
+        console.warn('saveReservationStatusDetails: expected array, got', typeof details);
+        return false;
+      }
+      localStorage.setItem(STORAGE_KEYS.RESERVATION_STATUS_DETAILS, JSON.stringify(details));
+      return true;
+    } catch (error) {
+      console.error('Error saving reservation status details:', error);
+      return false;
+    }
+  },
+  
+  // ===================================
   // QUOTES
   // ===================================
   
@@ -326,43 +327,28 @@ export const db = {
   
   saveAccountAddress(accountId, addressData) {
     try {
-      const raw = this.getAccountAddresses(accountId);
-      const cleaned = dedupeAddresses((raw || []).filter(a => !isDemoAddress(a)));
-      const addresses = cleaned.slice();
-
-      const incoming = { ...addressData };
-      const incomingKey = addressDedupKey(incoming);
-
-      // Check for duplicate address (normalized full key)
-      const existingAddr = addresses.find(addr => addressDedupKey(addr) === incomingKey);
-      const isDuplicate = !!existingAddr;
+      const addresses = this.getAccountAddresses(accountId);
+      
+      // Check for duplicate address (same address_line1, city, zip)
+      const isDuplicate = addresses.some(addr => 
+        addr.address_line1?.toLowerCase() === addressData.address_line1?.toLowerCase() &&
+        addr.city?.toLowerCase() === addressData.city?.toLowerCase() &&
+        addr.zip_code === addressData.zip_code
+      );
       
       if (isDuplicate) {
         // Update use_count and last_used_at for existing address
+        const existingAddr = addresses.find(addr => 
+          addr.address_line1?.toLowerCase() === addressData.address_line1?.toLowerCase() &&
+          addr.city?.toLowerCase() === addressData.city?.toLowerCase() &&
+          addr.zip_code === addressData.zip_code
+        );
+        
         if (existingAddr) {
           existingAddr.use_count = (existingAddr.use_count || 1) + 1;
           existingAddr.last_used_at = new Date().toISOString();
-          // Keep latest metadata/labels while preserving id.
-          existingAddr.address_type = incoming.address_type ?? existingAddr.address_type;
-          existingAddr.address_name = incoming.address_name ?? existingAddr.address_name;
           const key = `relia_account_${accountId}_addresses`;
-          const deduped = dedupeAddresses(addresses);
-          localStorage.setItem(key, JSON.stringify(deduped));
-
-          // Best-effort: also store on the account object for Supabase sync
-          try {
-            const accounts = this.getAllAccounts();
-            const idx = accounts.findIndex(a => (a?.id ?? '').toString() === (accountId ?? '').toString());
-            if (idx >= 0) {
-              accounts[idx] = { ...accounts[idx], stored_addresses: deduped };
-              localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
-              import('../api-service.js')
-                .then(apiModule => apiModule.saveAccountToSupabase?.(accounts[idx]))
-                .catch(() => {});
-            }
-          } catch {
-            // ignore
-          }
+          localStorage.setItem(key, JSON.stringify(addresses));
         }
         
         return existingAddr;
@@ -380,23 +366,7 @@ export const db = {
       
       addresses.push(newAddress);
       const key = `relia_account_${accountId}_addresses`;
-      const deduped = dedupeAddresses(addresses);
-      localStorage.setItem(key, JSON.stringify(deduped));
-
-      // Best-effort: also store on the account object for Supabase sync
-      try {
-        const accounts = this.getAllAccounts();
-        const idx = accounts.findIndex(a => (a?.id ?? '').toString() === (accountId ?? '').toString());
-        if (idx >= 0) {
-          accounts[idx] = { ...accounts[idx], stored_addresses: deduped };
-          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
-          import('../api-service.js')
-            .then(apiModule => apiModule.saveAccountToSupabase?.(accounts[idx]))
-            .catch(() => {});
-        }
-      } catch {
-        // ignore
-      }
+      localStorage.setItem(key, JSON.stringify(addresses));
       
       return newAddress;
     } catch (error) {
@@ -409,16 +379,7 @@ export const db = {
     try {
       const key = `relia_account_${accountId}_addresses`;
       const stored = localStorage.getItem(key);
-      const parsed = stored ? JSON.parse(stored) : [];
-
-      // Auto-clean demo addresses and duplicates.
-      const cleaned = dedupeAddresses((parsed || []).filter(a => !isDemoAddress(a)));
-      const changed = JSON.stringify(parsed || []) !== JSON.stringify(cleaned);
-      if (changed) {
-        localStorage.setItem(key, JSON.stringify(cleaned));
-      }
-
-      return cleaned;
+      return stored ? JSON.parse(stored) : [];
     } catch (error) {
       console.error('Error loading account addresses:', error);
       return [];
@@ -430,41 +391,24 @@ export const db = {
       const addresses = this.getAccountAddresses(accountId);
       const filtered = addresses.filter(a => a.id !== addressId);
       const key = `relia_account_${accountId}_addresses`;
-      const deduped = dedupeAddresses(filtered);
-      localStorage.setItem(key, JSON.stringify(deduped));
-
-      // Best-effort: also store on the account object for Supabase sync
-      try {
-        const accounts = this.getAllAccounts();
-        const idx = accounts.findIndex(a => (a?.id ?? '').toString() === (accountId ?? '').toString());
-        if (idx >= 0) {
-          accounts[idx] = { ...accounts[idx], stored_addresses: deduped };
-          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
-          import('../api-service.js')
-            .then(apiModule => apiModule.saveAccountToSupabase?.(accounts[idx]))
-            .catch(() => {});
-        }
-      } catch {
-        // ignore
-      }
-
+      localStorage.setItem(key, JSON.stringify(filtered));
       return true;
     } catch (error) {
       console.error('Error deleting account address:', error);
       return false;
     }
   },
-  
+
   // ===================================
   // PASSENGERS
   // ===================================
-  
+
   async savePassenger(passenger) {
     try {
       const passengers = this.getAllPassengers();
       
       // Check for duplicate by name and email
-      const existingIndex = passengers.findIndex(p => 
+      const existingIndex = passengers.findIndex(p =>
         p.firstName?.toLowerCase() === passenger.firstName?.toLowerCase() &&
         p.lastName?.toLowerCase() === passenger.lastName?.toLowerCase() &&
         p.email?.toLowerCase() === passenger.email?.toLowerCase()

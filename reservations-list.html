@@ -4,16 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Reservations - RELIA🐂LIMO™</title>
-    <script src="env.js"></script>
     <link rel="stylesheet" href="reservations-list.css" />
-    <script type="module" src="entrypoint-guard.js"></script>
     <script>
       // Hide main navigation if in iframe
       if (window.self !== window.top) {
         document.addEventListener('DOMContentLoaded', function() {
-          document.body.classList.add('embedded');
-          const header = document.querySelector('header.header');
-          if (header) header.style.display = 'none';
+          const headerContent = document.querySelector('.header-content');
+          if (headerContent) {
+            headerContent.style.display = 'none';
+          }
         });
       }
     </script>
@@ -41,23 +40,27 @@
             <button class="nav-btn" data-section="reports">📈 Reports</button>
           </div>
         </div>
-      </header>
-
-      <!-- Reservation Tabs -->
-      <div class="window-tabs-bar">
-        <div class="window-tabs">
-          <button class="window-tab active" data-tab="new-reservations">New Reservations</button>
-          <button class="window-tab" data-tab="online-efarm-in">Online & eFarm-in</button>
-          <button class="window-tab" data-tab="unfinalized">Unfinalized</button>
-          <button class="window-tab" data-tab="deleted">Deleted Reservations</button>
-          <button class="window-tab" data-tab="import">Import/Res</button>
+        
+        <!-- Reservation Tabs -->
+        <div class="window-tabs-bar">
+          <div class="window-tabs">
+            <button class="window-tab active" data-tab="new-reservations">New Reservations</button>
+            <button class="window-tab" data-tab="online-efarm-in">Online & eFarm-in</button>
+            <button class="window-tab" data-tab="unfinalized">Unfinalized</button>
+            <button class="window-tab" data-tab="deleted">Deleted Reservations</button>
+            <button class="window-tab" data-tab="import">Import/Res</button>
+          </div>
         </div>
-      </div>
+      </header>
 
       <!-- Main Content -->
       <main class="main-content">
         <!-- New Reservations Tab -->
         <div class="reservations-layout" id="newReservationsTab">
+          <aside class="reservations-sidebar">
+            <h3 class="sidebar-title">pretty</h3>
+          </aside>
+
           <div class="reservations-content">
             <!-- Search Section -->
             <div class="search-section">
@@ -868,6 +871,7 @@
       </main>
     </div>
 
+    <script src="env.js"></script>
     <script type="module" src="reservations-list.js"></script>
   </body>
 </html>

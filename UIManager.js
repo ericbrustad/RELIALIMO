@@ -11,11 +11,9 @@ export class UIManager {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const time = now.toTimeString().slice(0, 5);
-
-    const pickupDate = document.getElementById('pickupDate');
-    if (pickupDate) pickupDate.value = today;
-    const pickupTime = document.getElementById('pickupTime');
-    if (pickupTime) pickupTime.value = time;
+    
+    document.getElementById('pickupDate').value = today;
+    document.getElementById('pickupTime').value = time;
   }
 
   switchView(viewId) {
@@ -196,6 +194,13 @@ export class UIManager {
     this.updateReservationContainer(allReservationsContainer, allReservations);
   }
 
+  renderReservationsFromDb(allReservations, farmOutReservations) {
+    const allReservationsContainer = document.getElementById('allReservationsList');
+    const farmOutContainer = document.getElementById('allReservations');
+    this.updateReservationContainer(allReservationsContainer, allReservations || []);
+    this.updateReservationContainer(farmOutContainer, farmOutReservations || []);
+  }
+
   updateReservationContainer(container, reservations) {
     if (!container) return;
 
@@ -224,6 +229,9 @@ export class UIManager {
     `;
 
     reservations.forEach(reservation => {
+      const statusClass = (reservation.status || '').toString().toLowerCase() || 'pending';
+      const statusLabel = reservation.statusLabel || reservation.status || '—';
+
       html += `
         <div class="table-row">
           <div class="table-cell">#${reservation.id}</div>
@@ -233,7 +241,7 @@ export class UIManager {
           <div class="table-cell">${reservation.pickupDate}</div>
           <div class="table-cell">${reservation.pickupTime}</div>
           <div class="table-cell">
-            <span class="status-badge ${reservation.status}">${reservation.status}</span>
+            <span class="status-badge ${statusClass}">${statusLabel}</span>
           </div>
           <div class="table-cell">${reservation.driverName || '-'}</div>
         </div>

@@ -1,4 +1,3 @@
-import { getPaymentMethods, getPaymentGateways, getDefaultPaymentGatewayId, getCardLast4 } from './payment-data.js';
 import { wireMainNav, navigateToSection } from './navigation.js';
 
 class Accounts {
@@ -17,76 +16,6 @@ class Accounts {
     const passwordEl = document.getElementById('dres4LoginPassword');
     if (emailEl) emailEl.value = '';
     if (passwordEl) passwordEl.value = '';
-  }
-
-  getAccountPrimaryAddressFromInfoTab() {
-    const line1 = document.getElementById('acctPrimaryAddress')?.value?.trim() || '';
-    const line2 = document.getElementById('acctAddressLine2')?.value?.trim() || '';
-    const city = document.getElementById('acctCity')?.value?.trim() || '';
-    const state = document.getElementById('acctState')?.value || '';
-    const zip = document.getElementById('acctZip')?.value?.trim() || '';
-    const country = document.getElementById('acctCountry')?.value || '';
-
-    return { line1, line2, city, state, zip, country };
-  }
-
-  prefillAddressTabFromAccountPrimary({ force = false } = {}) {
-    const primary = this.getAccountPrimaryAddressFromInfoTab();
-    if (!primary.line1 && !primary.city && !primary.zip) return;
-
-    const setIfEmpty = (el, value) => {
-      if (!el) return;
-      const current = (el.value ?? '').toString().trim();
-      const next = (value ?? '').toString();
-      if (!next) return;
-      if (force || !current) el.value = next;
-    };
-
-    // Addrs / Bill / Pax "Add New Address" fields
-    setIfEmpty(document.getElementById('primaryAddress'), primary.line1);
-    setIfEmpty(document.getElementById('addressApt'), primary.line2);
-    setIfEmpty(document.getElementById('addressCity'), primary.city);
-
-    const stateEl = document.getElementById('addressState');
-    if (stateEl && primary.state && (force || !(stateEl.value ?? '').toString().trim())) {
-      stateEl.value = primary.state;
-    }
-
-    setIfEmpty(document.getElementById('addressZip'), primary.zip);
-
-    const countryEl = document.getElementById('addressCountry');
-    if (countryEl && primary.country && (force || !(countryEl.value ?? '').toString().trim())) {
-      countryEl.value = primary.country;
-    }
-  }
-
-  prefillBillingCcFromAccountPrimary({ force = false } = {}) {
-    const primary = this.getAccountPrimaryAddressFromInfoTab();
-    if (!primary.line1 && !primary.city && !primary.zip) return;
-
-    const setIfEmpty = (el, value) => {
-      if (!el) return;
-      const current = (el.value ?? '').toString().trim();
-      const next = (value ?? '').toString();
-      if (!next) return;
-      if (force || !current) el.value = next;
-    };
-
-    setIfEmpty(document.getElementById('billingAddressCC'), primary.line1);
-    setIfEmpty(document.getElementById('billingAddressLine2CC'), primary.line2);
-    setIfEmpty(document.getElementById('billingCityCC'), primary.city);
-
-    const stateEl = document.getElementById('billingStateCC');
-    if (stateEl && primary.state && (force || !(stateEl.value ?? '').toString().trim())) {
-      stateEl.value = primary.state;
-    }
-
-    setIfEmpty(document.getElementById('billingZipCC'), primary.zip);
-
-    const countryEl = document.getElementById('billingCountryCC');
-    if (countryEl && primary.country && (force || !(countryEl.value ?? '').toString().trim())) {
-      countryEl.value = primary.country;
-    }
   }
 
   getSelectedAccountId() {
@@ -225,15 +154,32 @@ class Accounts {
       // Load accounts list
       await this.loadAccountsList();
       
-      // Check if we should load a specific account
-      const currentAccountId = localStorage.getItem('currentAccountId');
-      if (currentAccountId) {
-        this.loadAccount(currentAccountId);
-        localStorage.removeItem('currentAccountId'); // Clear after loading
+      // Check URL parameters for mode and account
+      const params = new URLSearchParams(window.location.search);
+      const mode = params.get('mode');
+      const accountId = params.get('account');
+      const fromReservation = params.get('from') === 'reservation';
+      
+      if (mode === 'edit' && accountId) {
+        // Edit existing account mode
+        console.log('📝 Edit mode - loading account:', accountId);
+        this.loadAccount(accountId);
+        
+        // Show notification that we're editing existing account
+        if (fromReservation) {
+          setTimeout(() => {
+            const accountName = document.getElementById('acctFirstName')?.value + ' ' + 
+                               document.getElementById('acctLastName')?.value;
+            console.log(`✏️ Editing existing account: ${accountName.trim() || accountId}`);
+          }, 100);
+        }
+      } else {
+        // Always start with a fresh new account form
+        this.addNewAccount();
+        
+        // Apply draft if present (used by Reservation "Create Account" and similar flows)
+        this.applyDraftIfPresent();
       }
-
-      // Always apply any draft (used by Reservation "Create Account" and similar flows)
-      this.applyDraftIfPresent();
 
       // Never prefill DRES4 / Passenger App login credentials (even if browser tries)
       this.clearDres4LoginFields();
@@ -321,28 +267,6 @@ class Accounts {
       const cellPhone1El = document.getElementById('acctCellPhone1'); // Top-left cell field
       const cellularPhone1El = document.getElementById('acctCellularPhone1'); // Contact Info > Cellular Phone 1
       const emailEl = document.getElementById('acctEmail2'); // Maps to email
-
-      // Account Info > Address (used to prefill Addrs/Bill/Pax and billing CC)
-      const acctAddr1El = document.getElementById('acctPrimaryAddress');
-      const acctAddr2El = document.getElementById('acctAddressLine2');
-      const acctCityEl = document.getElementById('acctCity');
-      const acctStateEl = document.getElementById('acctState');
-      const acctZipEl = document.getElementById('acctZip');
-      const acctCountryEl = document.getElementById('acctCountry');
-
-      // Department / Job Title
-      const deptEl = document.getElementById('acctDepartment');
-      const jobTitleEl = document.getElementById('acctJobTitle');
-
-      // Account Types
-      const billingTicker = document.getElementById('acctTypeBilling');
-      const passengerTicker = document.getElementById('acctTypePassenger');
-      const bookingTicker = document.getElementById('acctTypeBooking');
-
-      // Notes
-      const internalNotesEl = document.getElementById('acctInternalPrivateNotes');
-      const tripNotesEl = document.getElementById('acctPreferencesTripNotes');
-      const notesForOthersEl = document.getElementById('acctNotesForOthers');
       
       if (accountNumberEl) {
         accountNumberEl.value = account.account_number || account.id;
@@ -352,158 +276,221 @@ class Accounts {
       if (firstNameEl) firstNameEl.value = account.first_name || '';
       if (lastNameEl) lastNameEl.value = account.last_name || '';
       if (companyEl) companyEl.value = account.company_name || '';
-
-      if (deptEl) deptEl.value = account.department || '';
-      if (jobTitleEl) jobTitleEl.value = account.job_title || '';
-
       const cellValue = account.cell_phone || '';
       if (cellPhone1El) cellPhone1El.value = cellValue;
       if (cellularPhone1El) cellularPhone1El.value = cellValue;
-        if (emailEl) emailEl.value = account.email || ''; // Accounts Email
+      if (emailEl) emailEl.value = account.email || ''; // Accounts Email
 
-        // Account types
-        const types = account.account_types || account.types || {};
-        if (billingTicker) billingTicker.checked = !!types.billing;
-        if (passengerTicker) passengerTicker.checked = !!types.passenger;
-        if (bookingTicker) bookingTicker.checked = !!types.booking;
-
-        // Notes
-        const notes = account.account_notes || account.notes || {};
-        if (internalNotesEl) internalNotesEl.value = (notes.internal_private || notes.internal || '').toString();
-        if (tripNotesEl) tripNotesEl.value = (notes.preferences_trip || notes.trip || '').toString();
-        if (notesForOthersEl) notesForOthersEl.value = (notes.for_others || notes.others || '').toString();
-
-        // Load account primary address (if stored on the account)
-        if (acctAddr1El) acctAddr1El.value = account.primary_address1 || '';
-        if (acctAddr2El) acctAddr2El.value = account.primary_address2 || '';
-        if (acctCityEl) acctCityEl.value = account.primary_city || '';
-        if (acctStateEl && account.primary_state) acctStateEl.value = account.primary_state;
-        if (acctZipEl) acctZipEl.value = account.primary_zip || '';
-        if (acctCountryEl && account.primary_country) acctCountryEl.value = account.primary_country;
-
-        // Backfill from stored addresses if the account-level fields are empty
-        try {
-          const haveAny = !!(
-            (acctAddr1El?.value || '').trim() ||
-            (acctCityEl?.value || '').trim() ||
-            (acctZipEl?.value || '').trim()
-          );
-
-          if (!haveAny) {
-            const list = this.db?.getAccountAddresses?.(accountId) || [];
-            const primary = list.find(a => (a.address_type || '').toLowerCase() === 'primary') || list[0];
-            if (primary) {
-              if (acctAddr1El) acctAddr1El.value = primary.address_line1 || '';
-              if (acctAddr2El) acctAddr2El.value = primary.address_line2 || '';
-              if (acctCityEl) acctCityEl.value = primary.city || '';
-              if (acctStateEl && primary.state) acctStateEl.value = primary.state;
-              if (acctZipEl) acctZipEl.value = primary.zip || primary.zip_code || '';
-              if (acctCountryEl && primary.country) acctCountryEl.value = primary.country;
-            }
-          }
-        } catch {
-          // ignore
-        }
-
-        // Financial + Payment Profile (shared with Reservation payment tab/modal)
-        this.applyFinancialData(account);
-
-        // Account Emails
-        try {
-          const emails = account.account_emails || account.emails || [];
-          const fallback = account.email ? [{
-            email: account.email,
-            exclude_from_scheduled_messaging: false,
-            types: ['confirmation', 'payment-receipt', 'invoices', 'other']
-          }] : [];
-          this.writeAccountEmailsToUi((Array.isArray(emails) && emails.length) ? emails : fallback);
-        } catch {
-          // ignore
-        }
-
-        // Always ensure Account Emails has at least the main Email if blank
-        try {
-          this.prefillAccountEmailsFromPrimaryEmail(account.email);
-        } catch {
-          // ignore
-        }
+      // Department and Job Title
+      const departmentEl = document.getElementById('acctDepartment');
+      const jobTitleEl = document.getElementById('acctJobTitle');
+      if (departmentEl) departmentEl.value = account.department || '';
+      if (jobTitleEl) jobTitleEl.value = account.job_title || '';
+      
+      // Address fields
+      const address1El = document.getElementById('acctAddress1');
+      const address2El = document.getElementById('acctAddress2');
+      const cityEl = document.getElementById('acctCity');
+      const stateEl = document.getElementById('acctState');
+      const zipEl = document.getElementById('acctZip');
+      const countryEl = document.getElementById('acctCountry');
+      if (address1El) address1El.value = account.address_line1 || '';
+      if (address2El) address2El.value = account.address_line2 || '';
+      if (cityEl) cityEl.value = account.city || '';
+      if (stateEl) stateEl.value = account.state || '';
+      if (zipEl) zipEl.value = account.zip || '';
+      if (countryEl) countryEl.value = account.country || 'US';
+      
+      // Notes fields
+      const internalNotesEl = document.getElementById('acctInternalNotes');
+      const tripNotesEl = document.getElementById('acctTripNotes');
+      const notesOthersEl = document.getElementById('acctNotesOthers');
+      if (internalNotesEl) internalNotesEl.value = account.internal_notes || '';
+      if (tripNotesEl) tripNotesEl.value = account.trip_notes || '';
+      if (notesOthersEl) notesOthersEl.value = account.notes_others || '';
+      
+      // Settings and restrictions
+      const sourceEl = document.getElementById('acctSource');
+      const rentalAgreementEl = document.getElementById('acctRentalAgreement');
+      const settingsEl = document.getElementById('acctSettings');
+      const statusEl = document.getElementById('acctStatus');
+      const webAccessEl = document.getElementById('acctWebAccess');
+      if (sourceEl) sourceEl.value = account.source || '';
+      if (rentalAgreementEl) rentalAgreementEl.value = account.rental_agreement || '';
+      if (settingsEl) settingsEl.value = account.account_settings || 'normal';
+      if (statusEl) statusEl.value = account.status || 'active';
+      if (webAccessEl) webAccessEl.value = account.web_access || 'allow';
+      
+      // Account type checkboxes
+      const billingCheckEl = document.getElementById('acctTypeBilling');
+      const passengerCheckEl = document.getElementById('acctTypePassenger');
+      const bookingCheckEl = document.getElementById('acctTypeBooking');
+      if (billingCheckEl) billingCheckEl.checked = account.is_billing_client || false;
+      if (passengerCheckEl) passengerCheckEl.checked = account.is_passenger || false;
+      if (bookingCheckEl) bookingCheckEl.checked = account.is_booking_contact || false;
+      
+      // Additional phone fields
+      const officePhoneEl = document.getElementById('acctOfficePhone');
+      const officePhoneExtEl = document.getElementById('acctOfficePhoneExt');
+      const homePhoneEl = document.getElementById('acctHomePhone');
+      const homePhoneExtEl = document.getElementById('acctHomePhoneExt');
+      const cellPhone2El = document.getElementById('acctCellularPhone2');
+      const cellPhone3El = document.getElementById('acctCellularPhone3');
+      const fax1El = document.getElementById('acctFax1');
+      const fax2El = document.getElementById('acctFax2');
+      const fax3El = document.getElementById('acctFax3');
+      if (officePhoneEl) officePhoneEl.value = account.office_phone || '';
+      if (officePhoneExtEl) officePhoneExtEl.value = account.office_phone_ext || '';
+      if (homePhoneEl) homePhoneEl.value = account.home_phone || '';
+      if (homePhoneExtEl) homePhoneExtEl.value = account.home_phone_ext || '';
+      if (cellPhone2El) cellPhone2El.value = account.cell_phone_2 || '';
+      if (cellPhone3El) cellPhone3El.value = account.cell_phone_3 || '';
+      if (fax1El) fax1El.value = account.fax_1 || '';
+      if (fax2El) fax2El.value = account.fax_2 || '';
+      if (fax3El) fax3El.value = account.fax_3 || '';
+      
+      // Email preferences (default to true if not set)
+      const emailPrefAllEl = document.getElementById('emailPrefAll');
+      const emailPrefConfirmationEl = document.getElementById('emailPrefConfirmation');
+      const emailPrefPaymentReceiptEl = document.getElementById('emailPrefPaymentReceipt');
+      const emailPrefInvoiceEl = document.getElementById('emailPrefInvoice');
+      const emailPrefOtherEl = document.getElementById('emailPrefOther');
+      if (emailPrefAllEl) emailPrefAllEl.checked = account.email_pref_all !== false;
+      if (emailPrefConfirmationEl) emailPrefConfirmationEl.checked = account.email_pref_confirmation !== false;
+      if (emailPrefPaymentReceiptEl) emailPrefPaymentReceiptEl.checked = account.email_pref_payment_receipt !== false;
+      if (emailPrefInvoiceEl) emailPrefInvoiceEl.checked = account.email_pref_invoice !== false;
+      if (emailPrefOtherEl) emailPrefOtherEl.checked = account.email_pref_other !== false;
+      
+      // Multi-select fields (restricted drivers/cars)
+      this.setMultiSelectValues('acctRestrictedDrivers', account.restricted_drivers || []);
+      this.setMultiSelectValues('acctRestrictedCars', account.restricted_cars || []);
 
       // Ensure DRES4 fields never prefill from account data
       this.clearDres4LoginFields();
       
       // Switch to accounts tab
       this.switchAccountTab('info');
+      
     } catch (error) {
       console.error('❌ Error loading account:', error);
     }
   }
-
-  applyFinancialData(account) {
-    const financial = account?.financial_settings || {};
-    const profile = account?.payment_profile || {};
-
-    const postMethodEl = document.getElementById('postMethod');
-    const postTermsEl = document.getElementById('postTerms');
-    if (postMethodEl) postMethodEl.value = financial.post_method || postMethodEl.value;
-    if (postTermsEl) postTermsEl.value = financial.post_terms || postTermsEl.value;
-
-    // Populate selects (methods/gateways) then set values
-    this.populatePaymentSelects();
-
-    const methodEl = document.getElementById('accountPaymentMethod');
-    const gatewayEl = document.getElementById('accountPaymentGateway');
-    if (methodEl && profile.method_code) methodEl.value = profile.method_code;
-    if (gatewayEl && profile.gateway_id) gatewayEl.value = profile.gateway_id;
-
-    const ccNumberEl = document.getElementById('creditCardNumber');
-    const expMonthEl = document.getElementById('expMonth');
-    const expYearEl = document.getElementById('expYear');
-    const nameOnCardEl = document.getElementById('nameOnCard');
-    const billingAddressEl = document.getElementById('billingAddressCC');
-    const billingCityEl = document.getElementById('billingCityCC');
-    const billingStateEl = document.getElementById('billingStateCC');
-    const billingZipEl = document.getElementById('billingZipCC');
-    const billingLine2El = document.getElementById('billingAddressLine2CC');
-    const billingCountryEl = document.getElementById('billingCountryCC');
-    const ccTypeEl = document.getElementById('ccType');
-    const notesEl = document.getElementById('creditCardNotes');
-
-    if (ccNumberEl) ccNumberEl.value = profile.card_number || '';
-    if (expMonthEl) expMonthEl.value = profile.exp_month || '';
-    if (expYearEl) expYearEl.value = profile.exp_year || '';
-    if (nameOnCardEl) nameOnCardEl.value = profile.name_on_card || '';
-    if (billingAddressEl) billingAddressEl.value = profile.billing_address1 || '';
-    if (billingLine2El) billingLine2El.value = profile.billing_address2 || '';
-    if (billingCityEl) billingCityEl.value = profile.billing_city || '';
-    if (billingStateEl && profile.billing_state) billingStateEl.value = profile.billing_state;
-    if (billingZipEl) billingZipEl.value = profile.billing_zip || '';
-    if (billingCountryEl && profile.billing_country) billingCountryEl.value = profile.billing_country;
-    if (ccTypeEl && profile.cc_type) ccTypeEl.value = profile.cc_type;
-    if (notesEl) notesEl.value = profile.notes || '';
-
-    // Never persist CVV; always clear when loading
-    const cvvEl = document.getElementById('cvv');
-    if (cvvEl) cvvEl.value = '';
+  
+  // Helper function to get values from multi-select
+  getMultiSelectValues(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return [];
+    return Array.from(el.selectedOptions)
+      .map(opt => opt.value)
+      .filter(v => v && v !== '');
   }
-
-  populatePaymentSelects() {
-    const methodEl = document.getElementById('accountPaymentMethod');
-    if (methodEl && methodEl.dataset.optionsLoaded !== '1') {
-      const methods = getPaymentMethods();
-      methodEl.innerHTML = '<option value="">-- NOT SELECTED --</option>' +
-        methods.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
-      methodEl.dataset.optionsLoaded = '1';
+  
+  // Helper function to set values on multi-select
+  setMultiSelectValues(elementId, values) {
+    const el = document.getElementById(elementId);
+    if (!el || !Array.isArray(values)) return;
+    Array.from(el.options).forEach(opt => {
+      opt.selected = values.includes(opt.value);
+    });
+  }
+  
+  // Address verification using OpenStreetMap Nominatim
+  async verifyAddress() {
+    const address1 = document.getElementById('acctAddress1')?.value?.trim() || '';
+    const city = document.getElementById('acctCity')?.value?.trim() || '';
+    const state = document.getElementById('acctState')?.value || '';
+    const zip = document.getElementById('acctZip')?.value?.trim() || '';
+    const country = document.getElementById('acctCountry')?.value || 'US';
+    
+    if (!address1 || !city) {
+      alert('Please enter at least Address and City to verify.');
+      return;
     }
-
-    const gatewayEl = document.getElementById('accountPaymentGateway');
-    if (gatewayEl && gatewayEl.dataset.optionsLoaded !== '1') {
-      const gateways = getPaymentGateways();
-      const defaultId = getDefaultPaymentGatewayId();
-      gatewayEl.innerHTML = '<option value="">-- NOT SELECTED --</option>' +
-        gateways.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-      if (!gatewayEl.value && defaultId) gatewayEl.value = defaultId;
-      gatewayEl.dataset.optionsLoaded = '1';
+    
+    const fullAddress = `${address1}, ${city}, ${state} ${zip}, ${country}`;
+    console.log('🔍 Verifying address:', fullAddress);
+    
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&limit=5&addressdetails=1`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'RELIA-LIMO-APP'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Address verification service unavailable');
+      }
+      
+      const results = await response.json();
+      
+      if (results.length === 0) {
+        alert('⚠️ Address could not be verified. Please check the address and try again.');
+        return;
+      }
+      
+      const best = results[0];
+      const addr = best.address || {};
+      
+      // Show verification result
+      const verified = confirm(
+        `✅ ADDRESS VERIFIED\n\n` +
+        `Verified Address:\n${best.display_name}\n\n` +
+        `Would you like to update the form with the verified address?\n\n` +
+        `Street: ${addr.road || addr.house_number ? (addr.house_number || '') + ' ' + (addr.road || '') : address1}\n` +
+        `City: ${addr.city || addr.town || addr.village || city}\n` +
+        `State: ${addr.state || state}\n` +
+        `Zip: ${addr.postcode || zip}\n` +
+        `Country: ${addr.country || country}`
+      );
+      
+      if (verified) {
+        // Update fields with verified data
+        if (addr.road) {
+          const streetNum = addr.house_number || '';
+          document.getElementById('acctAddress1').value = (streetNum + ' ' + addr.road).trim();
+        }
+        if (addr.city || addr.town || addr.village) {
+          document.getElementById('acctCity').value = addr.city || addr.town || addr.village;
+        }
+        if (addr.postcode) {
+          document.getElementById('acctZip').value = addr.postcode;
+        }
+        // Try to match state abbreviation
+        if (addr.state) {
+          const stateEl = document.getElementById('acctState');
+          const stateAbbr = this.getStateAbbreviation(addr.state);
+          if (stateAbbr && stateEl) {
+            stateEl.value = stateAbbr;
+          }
+        }
+        console.log('✅ Address updated with verified data');
+      }
+    } catch (error) {
+      console.error('❌ Address verification error:', error);
+      alert('Error verifying address: ' + error.message);
     }
+  }
+  
+  // Helper to convert state name to abbreviation
+  getStateAbbreviation(stateName) {
+    const states = {
+      'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+      'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+      'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+      'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+      'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+      'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+      'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+      'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+      'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+      'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+      'district of columbia': 'DC'
+    };
+    return states[stateName.toLowerCase()] || null;
   }
 
   applyDraftIfPresent() {
@@ -559,13 +546,6 @@ class Accounts {
       const acctEmailContactEl = document.getElementById('acctEmail');
       setIfEmpty(acctEmailContactEl, draft.email);
 
-      // Also prefill the Account Emails row (first email-input)
-      try {
-        this.prefillAccountEmailsFromPrimaryEmail(draft.email);
-      } catch {
-        // ignore
-      }
-
       // Prefill account type tickers
       const types = draft.types || {};
       const billingTicker = document.getElementById('acctTypeBilling');
@@ -588,25 +568,6 @@ class Accounts {
       const addressCountryEl = document.getElementById('addressCountry');
 
       if (addr && typeof addr === 'object') {
-        // Also fill Account Info "Address" fields (so they can be saved and reused)
-        const acctAddr1El = document.getElementById('acctPrimaryAddress');
-        const acctAddr2El = document.getElementById('acctAddressLine2');
-        const acctCityEl = document.getElementById('acctCity');
-        const acctStateEl = document.getElementById('acctState');
-        const acctZipEl = document.getElementById('acctZip');
-        const acctCountryEl = document.getElementById('acctCountry');
-
-        setIfEmpty(acctAddr1El, addr.address_line1);
-        setIfEmpty(acctAddr2El, addr.address_line2);
-        setIfEmpty(acctCityEl, addr.city);
-        if (acctStateEl && (acctStateEl.value ?? '').toString().trim() === '') {
-          acctStateEl.value = addr.state || acctStateEl.value;
-        }
-        setIfEmpty(acctZipEl, addr.zip);
-        if (acctCountryEl && (acctCountryEl.value ?? '').toString().trim() === '') {
-          acctCountryEl.value = addr.country || acctCountryEl.value;
-        }
-
         // For selects, only set if empty/current default
         if (addressTypeEl && (addressTypeEl.value ?? '').toString().trim() === '') {
           addressTypeEl.value = addr.address_type || addressTypeEl.value;
@@ -622,53 +583,6 @@ class Accounts {
         if (addressCountryEl && (addressCountryEl.value ?? '').toString().trim() === '') {
           addressCountryEl.value = addr.country || addressCountryEl.value;
         }
-      }
-
-      // Prefill Financial Data payment profile if present
-      const payment = draft.payment_profile || {};
-      if (payment && typeof payment === 'object') {
-        // Ensure selects are populated from Office lists
-        this.populatePaymentSelects();
-
-        const methodEl = document.getElementById('accountPaymentMethod');
-        const gatewayEl = document.getElementById('accountPaymentGateway');
-        if (methodEl && (methodEl.value ?? '').toString().trim() === '') {
-          methodEl.value = payment.method_code || methodEl.value;
-        }
-        if (gatewayEl && (gatewayEl.value ?? '').toString().trim() === '') {
-          gatewayEl.value = payment.gateway_id || gatewayEl.value;
-        }
-
-        setIfEmpty(document.getElementById('creditCardNumber'), payment.card_number);
-        setIfEmpty(document.getElementById('expMonth'), payment.exp_month);
-        setIfEmpty(document.getElementById('expYear'), payment.exp_year);
-        setIfEmpty(document.getElementById('nameOnCard'), payment.name_on_card);
-        setIfEmpty(document.getElementById('billingAddressCC'), payment.billing_address1);
-        setIfEmpty(document.getElementById('billingAddressLine2CC'), payment.billing_address2);
-        setIfEmpty(document.getElementById('billingCityCC'), payment.billing_city);
-
-        const billingStateEl = document.getElementById('billingStateCC');
-        if (billingStateEl && (billingStateEl.value ?? '').toString().trim() === '') {
-          billingStateEl.value = payment.billing_state || billingStateEl.value;
-        }
-
-        setIfEmpty(document.getElementById('billingZipCC'), payment.billing_zip);
-
-        const billingCountryEl = document.getElementById('billingCountryCC');
-        if (billingCountryEl && (billingCountryEl.value ?? '').toString().trim() === '') {
-          billingCountryEl.value = payment.billing_country || billingCountryEl.value;
-        }
-
-        const ccTypeEl = document.getElementById('ccType');
-        if (ccTypeEl && (ccTypeEl.value ?? '').toString().trim() === '') {
-          ccTypeEl.value = payment.cc_type || ccTypeEl.value;
-        }
-
-        setIfEmpty(document.getElementById('creditCardNotes'), payment.notes);
-
-        // Never prefill CVV
-        const cvvEl = document.getElementById('cvv');
-        if (cvvEl) cvvEl.value = '';
       }
 
       // Clear the draft so it doesn't keep refilling
@@ -700,6 +614,16 @@ class Accounts {
       console.warn('⚠️ saveAccountBtn not found');
     }
 
+    // New Account button (next to SAVE)
+    const newAccountBtn = document.getElementById('newAccountBtn');
+    if (newAccountBtn) {
+      newAccountBtn.addEventListener('click', () => {
+        console.log('🆕 New Account button clicked');
+        this.addNewAccount();
+      });
+      console.log('✅ New Account button listener attached');
+    }
+
     // Clear Account form button (next to SAVE)
     const clearAccountFormBtn = document.getElementById('clearAccountFormBtn');
     if (clearAccountFormBtn) {
@@ -708,6 +632,16 @@ class Accounts {
         this.addNewAccount();
       });
       console.log('✅ Clear Account form button listener attached');
+    }
+    
+    // Verify Address button
+    const verifyAddressBtn = document.getElementById('verifyAddressBtn');
+    if (verifyAddressBtn) {
+      verifyAddressBtn.addEventListener('click', () => {
+        console.log('🔍 Verify Address button clicked');
+        this.verifyAddress();
+      });
+      console.log('✅ Verify Address button listener attached');
     }
     
     // Main navigation buttons
@@ -740,12 +674,11 @@ class Accounts {
         } else if (action === 'driver-view') {
           window.location.href = 'index.html?view=driver';
         } else if (action === 'reservations') {
-          navigateToSection('reservations');
+          window.location.href = 'reservations-list.html';
         } else if (action === 'farm-out') {
-          navigateToSection('reservations', { url: 'reservations-list.html?filter=farm-out' });
+          window.location.href = 'reservations-list.html?filter=farm-out';
         } else if (action === 'new-reservation') {
-          // Route through the index shell so it doesn't open inside this iframe
-          navigateToSection('new-reservation');
+          window.location.href = 'reservation-form.html';
         }
       });
     });
@@ -843,24 +776,6 @@ class Accounts {
       addAddressBtn.addEventListener('click', () => this.addAddress());
     }
 
-    // Addresses tab "Copy from Primary" checkbox
-    const copyFromPrimary = document.getElementById('copyFromPrimary');
-    if (copyFromPrimary && copyFromPrimary.dataset.wired !== '1') {
-      // Copy now happens on ADD click (see addAddress)
-      copyFromPrimary.dataset.wired = '1';
-    }
-
-    // Prefill Account Emails from main Email when the user types it
-    const acctEmail2 = document.getElementById('acctEmail2');
-    if (acctEmail2 && acctEmail2.dataset.wiredPrefillEmails !== '1') {
-      const handler = () => {
-        try { this.prefillAccountEmailsFromPrimaryEmail(acctEmail2.value); } catch { /* ignore */ }
-      };
-      acctEmail2.addEventListener('blur', handler);
-      acctEmail2.addEventListener('change', handler);
-      acctEmail2.dataset.wiredPrefillEmails = '1';
-    }
-
     // Email Lists - Include All Dates checkbox
     const emailIncludeAllDates = document.getElementById('emailIncludeAllDates');
     if (emailIncludeAllDates) {
@@ -888,23 +803,6 @@ class Accounts {
         this.generateEmailExport();
       });
     }
-  }
-
-  prefillAccountEmailsFromPrimaryEmail(email) {
-    const primaryEmail = (email || '').toString().trim();
-    if (!primaryEmail) return;
-
-    const container = document.getElementById('account-emails-container');
-    if (!container) return;
-
-    const firstRow = container.querySelector('.account-email-row');
-    const firstEmailInput = firstRow?.querySelector('.email-input');
-    if (!firstEmailInput) return;
-
-    const current = (firstEmailInput.value || '').toString().trim();
-    if (current) return;
-
-    firstEmailInput.value = primaryEmail;
   }
 
   switchAccountTab(tabName) {
@@ -939,9 +837,6 @@ class Accounts {
         el.classList.add('active');
         el.style.display = '';
       }
-
-      // Ensure dropdowns are filled from Office lists
-      this.populatePaymentSelects();
     } else if (tabName === 'addresses') {
       const el = document.getElementById('addressesTab');
       if (el) {
@@ -1010,35 +905,6 @@ class Accounts {
       return;
     }
 
-    // If "Copy from Primary" is checked, copy FROM the Financial Data billing address
-    // into the Addrs/Bill/Pax "Add New Address" fields on ADD click.
-    const copyFromPrimary = document.getElementById('copyFromPrimary');
-    if (copyFromPrimary?.checked) {
-      const src1 = document.getElementById('billingAddressCC')?.value?.trim() || '';
-      const src2 = document.getElementById('billingAddressLine2CC')?.value?.trim() || '';
-      const srcCity = document.getElementById('billingCityCC')?.value?.trim() || '';
-      const srcState = document.getElementById('billingStateCC')?.value || '';
-      const srcZip = document.getElementById('billingZipCC')?.value?.trim() || '';
-      const srcCountry = document.getElementById('billingCountryCC')?.value || '';
-
-      const dst1 = document.getElementById('primaryAddress');
-      const dst2 = document.getElementById('addressApt');
-      const dstCity = document.getElementById('addressCity');
-      const dstState = document.getElementById('addressState');
-      const dstZip = document.getElementById('addressZip');
-      const dstCountry = document.getElementById('addressCountry');
-
-      if (dst1) dst1.value = src1;
-      if (dst2) dst2.value = src2;
-      if (dstCity) dstCity.value = srcCity;
-      if (dstState) dstState.value = srcState;
-      if (dstZip) dstZip.value = srcZip;
-      if (dstCountry) dstCountry.value = srcCountry || dstCountry.value;
-
-      // One-shot behavior
-      copyFromPrimary.checked = false;
-    }
-
     const addressData = {
       address_type: document.getElementById('addressType')?.value?.trim() || 'primary',
       address_name: document.getElementById('addressName')?.value?.trim() || '',
@@ -1055,119 +921,42 @@ class Accounts {
       return;
     }
 
+    // Check for duplicate address before saving
+    const existingAddresses = this.db?.getAccountAddresses(accountId) || [];
+    const duplicate = existingAddresses.find(addr => 
+      addr.address_line1?.toLowerCase() === addressData.address_line1?.toLowerCase() &&
+      addr.city?.toLowerCase() === addressData.city?.toLowerCase() &&
+      addr.zip_code === addressData.zip_code
+    );
+
+    if (duplicate) {
+      const dupLabel = `${duplicate.address_name || duplicate.address_type || 'Address'}: ${duplicate.address_line1}, ${duplicate.city || ''} ${duplicate.zip_code || ''}`;
+      const proceed = confirm(`⚠️ Duplicate Address Found!\n\nThis address already exists:\n${dupLabel}\n\nDo you want to update the existing record instead?`);
+      if (!proceed) {
+        return; // User cancelled
+      }
+    }
+
     const saved = this.db?.saveAccountAddress(accountId, addressData);
     if (!saved) {
       alert('Failed to save address.');
       return;
     }
 
+    // Clear the input fields after successful save
+    ['primaryAddress', 'addressApt', 'addressCity', 'addressState', 'addressZip', 'addressName'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const addressTypeEl = document.getElementById('addressType');
+    if (addressTypeEl) addressTypeEl.value = 'primary';
+
     this.loadStoredAddresses();
-  }
-
-  readAccountEmailsFromUi() {
-    const container = document.getElementById('account-emails-container');
-    if (!container) return [];
-
-    const rows = Array.from(container.querySelectorAll('.account-email-row'));
-    const out = [];
-
-    for (const row of rows) {
-      const email = row.querySelector('.email-input')?.value?.trim() || '';
-      if (!email) continue;
-
-      const exclude = !!row.querySelector('.email-active-checkbox')?.checked;
-      const typeCbs = Array.from(row.querySelectorAll('.email-type-option:not([value="select-all"])'));
-      const types = typeCbs.filter(cb => cb.checked).map(cb => cb.value);
-
-      out.push({
-        email,
-        exclude_from_scheduled_messaging: exclude,
-        types
-      });
-    }
-
-    return out;
-  }
-
-  writeAccountEmailsToUi(emails) {
-    const container = document.getElementById('account-emails-container');
-    if (!container) return;
-
-    const list = Array.isArray(emails) ? emails : [];
-
-    // Clear and rebuild to match stored order
-    container.innerHTML = '';
-
-    const buildRow = () => {
-      const newRow = document.createElement('div');
-      newRow.className = 'account-email-row';
-      newRow.style.cssText = 'display: flex; gap: 10px; align-items: center; margin-bottom: 8px; position: relative;';
-      newRow.innerHTML = `
-        <input type="checkbox" class="email-active-checkbox" style="width: 16px; height: 16px;" />
-        <input type="text" class="form-control email-input" placeholder="Include in scheduled messaging" style="flex: 1;" />
-        <div class="email-type-selector" style="position: relative; width: 300px;">
-          <button type="button" class="form-control email-type-button" style="text-align: left; cursor: pointer; background: white; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border: 1px solid #ccc;">
-            <span class="selected-types-display">Select email types...</span>
-            <span style="color: #999;">▼</span>
-          </button>
-          <div class="email-type-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #666; margin-top: 1px; z-index: 1000; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
-            <label style="display: flex; align-items: center; padding: 6px 12px; cursor: pointer; font-size: 12px; border-bottom: 1px solid #e0e0e0;" onmouseover="this.style.background='#e8f4ff'" onmouseout="this.style.background='white'">
-              <input type="checkbox" class="email-type-option" value="select-all" style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;" />
-              <span class="checkbox-label">Select All</span>
-            </label>
-            <label style="display: flex; align-items: center; padding: 6px 12px; cursor: pointer; font-size: 12px; border-bottom: 1px solid #e0e0e0;" onmouseover="this.style.background='#e8f4ff'" onmouseout="this.style.background='white'">
-              <input type="checkbox" class="email-type-option" value="confirmation" style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;" />
-              <span class="checkbox-label">Confirmation</span>
-            </label>
-            <label style="display: flex; align-items: center; padding: 6px 12px; cursor: pointer; font-size: 12px; border-bottom: 1px solid #e0e0e0;" onmouseover="this.style.background='#e8f4ff'" onmouseout="this.style.background='white'">
-              <input type="checkbox" class="email-type-option" value="payment-receipt" style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;" />
-              <span class="checkbox-label">Payment Receipt</span>
-            </label>
-            <label style="display: flex; align-items: center; padding: 6px 12px; cursor: pointer; font-size: 12px; border-bottom: 1px solid #e0e0e0;" onmouseover="this.style.background='#e8f4ff'" onmouseout="this.style.background='white'">
-              <input type="checkbox" class="email-type-option" value="invoices" style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;" />
-              <span class="checkbox-label">Invoices</span>
-            </label>
-            <label style="display: flex; align-items: center; padding: 6px 12px; cursor: pointer; font-size: 12px;" onmouseover="this.style.background='#e8f4ff'" onmouseout="this.style.background='white'">
-              <input type="checkbox" class="email-type-option" value="other" style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;" />
-              <span class="checkbox-label">Other</span>
-            </label>
-          </div>
-        </div>
-      `;
-      return newRow;
-    };
-
-    const ensureAtLeastOne = list.length ? list : [{ email: '', exclude_from_scheduled_messaging: false, types: [] }];
-
-    for (const entry of ensureAtLeastOne) {
-      const row = buildRow();
-      const emailInput = row.querySelector('.email-input');
-      const activeCb = row.querySelector('.email-active-checkbox');
-
-      if (emailInput) emailInput.value = (entry?.email || '').toString();
-      if (activeCb) {
-        activeCb.checked = !!entry?.exclude_from_scheduled_messaging;
-        try { toggleScheduledMessagingPlaceholder(activeCb); } catch { /* ignore */ }
-      }
-
-      const types = new Set(Array.isArray(entry?.types) ? entry.types : []);
-      const typeCbs = Array.from(row.querySelectorAll('.email-type-option:not([value="select-all"])'));
-      typeCbs.forEach(cb => {
-        cb.checked = types.has(cb.value);
-      });
-
-      // Keep Select All consistent and refresh display
-      const selectAll = row.querySelector('.email-type-option[value="select-all"]');
-      const allChecked = typeCbs.length > 0 && typeCbs.every(cb => cb.checked);
-      if (selectAll) selectAll.checked = allChecked;
-      try {
-        // Update the display text/labels
-        updateSelectedTypes(selectAll || typeCbs[0]);
-      } catch {
-        // ignore
-      }
-
-      container.appendChild(row);
+    
+    if (duplicate) {
+      alert('✅ Existing address record updated successfully.');
+    } else {
+      alert('✅ New address saved successfully.');
     }
   }
   
@@ -1182,14 +971,63 @@ class Accounts {
   }
 
   addNewAccount() {
-    console.log('🆕 Add New Account clicked');
+    console.log('🆕 Add New Account / Clear Form');
     
-    // Clear all form fields
-    document.getElementById('acctFirstName').value = '';
-    document.getElementById('acctLastName').value = '';
-    document.getElementById('acctCompany').value = '';
-    document.getElementById('acctCellPhone1').value = '';
-    document.getElementById('acctEmail2').value = '';
+    // Clear all basic form fields
+    const textFields = [
+      'acctFirstName', 'acctLastName', 'acctCompany', 'acctDepartment', 'acctJobTitle',
+      'acctCellPhone1', 'acctCellularPhone1', 'acctEmail2',
+      // Phone fields
+      'acctOfficePhone', 'acctOfficePhoneExt', 'acctHomePhone', 'acctHomePhoneExt',
+      'acctCellularPhone2', 'acctCellularPhone3', 'acctFax1', 'acctFax2', 'acctFax3',
+      // Address fields
+      'acctAddress1', 'acctAddress2', 'acctCity', 'acctZip',
+      // Notes fields
+      'acctInternalNotes', 'acctTripNotes', 'acctNotesOthers'
+    ];
+    
+    textFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    
+    // Reset dropdowns to defaults
+    const selectDefaults = {
+      'acctState': '',
+      'acctCountry': 'US',
+      'acctSource': '',
+      'acctRentalAgreement': '',
+      'acctSettings': 'normal',
+      'acctStatus': 'active',
+      'acctWebAccess': 'allow'
+    };
+    
+    Object.entries(selectDefaults).forEach(([id, defaultVal]) => {
+      const el = document.getElementById(id);
+      if (el) el.value = defaultVal;
+    });
+    
+    // Reset checkboxes
+    const checkboxDefaults = {
+      'acctTypeBilling': false,
+      'acctTypePassenger': false,
+      'acctTypeBooking': false,
+      // Email preferences default to true
+      'emailPrefAll': true,
+      'emailPrefConfirmation': true,
+      'emailPrefPaymentReceipt': true,
+      'emailPrefInvoice': true,
+      'emailPrefOther': true
+    };
+    
+    Object.entries(checkboxDefaults).forEach(([id, defaultVal]) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = defaultVal;
+    });
+    
+    // Clear multi-selects
+    this.setMultiSelectValues('acctRestrictedDrivers', []);
+    this.setMultiSelectValues('acctRestrictedCars', []);
 
     // Never carry DRES4 login fields between accounts
     this.clearDres4LoginFields();
@@ -1229,14 +1067,22 @@ class Accounts {
     }
     
     const searchTerm = query.toLowerCase().trim();
+    
+    // Require at least 3 characters before searching
+    if (searchTerm.length < 3) {
+      console.log('🔍 Search requires at least 3 characters');
+      return;
+    }
+    
     console.log('🔍 Searching accounts for:', searchTerm);
     
     // Get all accounts
     const allAccounts = this.db?.getAllAccounts() || [];
     
-    // Search across ALL fields
+    // Search across ALL fields - only match if first 3 letters match
     const filtered = allAccounts.filter(acc => {
-      const searchableText = [
+      // Check each field for a match starting with the search term
+      const fieldsToSearch = [
         acc.account_number,
         acc.first_name,
         acc.last_name,
@@ -1244,9 +1090,12 @@ class Accounts {
         acc.email,
         acc.phone,
         acc.cell_phone
-      ].filter(Boolean).join(' ').toLowerCase();
+      ].filter(Boolean);
       
-      return searchableText.includes(searchTerm);
+      // Match if any field STARTS WITH the search term (first 3+ chars)
+      return fieldsToSearch.some(field => 
+        field.toLowerCase().startsWith(searchTerm)
+      );
     });
     
     // Update listbox
@@ -1358,9 +1207,6 @@ class Accounts {
       // Auto-fill: Email → Account Emails
       const email = document.getElementById('acctEmail2')?.value?.trim();
 
-      // Prefill Account Emails from the main Email if blank
-      this.prefillAccountEmailsFromPrimaryEmail(email);
-
       // Use Contact Info "Cellular Phone 1" if present; otherwise use the top-left cell field
       const cellPhone =
         document.getElementById('acctCellularPhone1')?.value?.trim() ||
@@ -1383,9 +1229,10 @@ class Accounts {
       
       // Get account number (readonly field) or assign new one
       let accountNumber = document.getElementById('accountNumber')?.value?.trim();
+      const isNewAccount = !accountNumber;
       
       // If no account number, this is a NEW account - assign next number
-      if (!accountNumber) {
+      if (isNewAccount) {
         accountNumber = this.db.getNextAccountNumber().toString();
         console.log('🆕 New account - assigning account number:', accountNumber);
         
@@ -1405,32 +1252,6 @@ class Accounts {
           miscAccountNumberEl.value = accountNumber;
         }
       }
-
-      // Preserve existing nested data when updating an account
-      const existingAccount = this.db.getAccountById?.(accountNumber) || {};
-
-      const accountTypes = {
-        billing: !!document.getElementById('acctTypeBilling')?.checked,
-        passenger: !!document.getElementById('acctTypePassenger')?.checked,
-        booking: !!document.getElementById('acctTypeBooking')?.checked
-      };
-
-      const accountNotes = {
-        internal_private: document.getElementById('acctInternalPrivateNotes')?.value?.trim() || '',
-        preferences_trip: document.getElementById('acctPreferencesTripNotes')?.value?.trim() || '',
-        for_others: document.getElementById('acctNotesForOthers')?.value?.trim() || ''
-      };
-
-      const accountEmails = this.readAccountEmailsFromUi();
-
-      // If user never touched Account Emails, still persist the primary Email there
-      if ((!accountEmails || !accountEmails.length) && email) {
-        accountEmails.push({
-          email,
-          exclude_from_scheduled_messaging: false,
-          types: ['confirmation', 'payment-receipt', 'invoices', 'other']
-        });
-      }
       
       // Collect form data with proper field mappings
       const accountData = {
@@ -1441,54 +1262,62 @@ class Accounts {
         company_name: document.getElementById('acctCompany')?.value?.trim() || '',
         department: document.getElementById('acctDepartment')?.value?.trim() || '',
         job_title: document.getElementById('acctJobTitle')?.value?.trim() || '',
-        phone: document.getElementById('acctPhone')?.value?.trim() || '',
+        
+        // Phone numbers
+        office_phone: document.getElementById('acctOfficePhone')?.value?.trim() || '',
+        office_phone_ext: document.getElementById('acctOfficePhoneExt')?.value?.trim() || '',
+        home_phone: document.getElementById('acctHomePhone')?.value?.trim() || '',
+        home_phone_ext: document.getElementById('acctHomePhoneExt')?.value?.trim() || '',
         cell_phone: cellPhone, // Cellular Phone 1
+        cell_phone_2: document.getElementById('acctCellularPhone2')?.value?.trim() || '',
+        cell_phone_3: document.getElementById('acctCellularPhone3')?.value?.trim() || '',
+        fax_1: document.getElementById('acctFax1')?.value?.trim() || '',
+        fax_2: document.getElementById('acctFax2')?.value?.trim() || '',
+        fax_3: document.getElementById('acctFax3')?.value?.trim() || '',
+        
+        // Legacy phone field (for backwards compatibility)
+        phone: document.getElementById('acctOfficePhone')?.value?.trim() || '',
+        
         email: document.getElementById('acctEmail2')?.value?.trim() || '', // Accounts Email
-        account_types: accountTypes,
-        account_notes: accountNotes,
-        account_emails: accountEmails,
-
-        // Account Info "Address"
-        primary_address1: document.getElementById('acctPrimaryAddress')?.value?.trim() || '',
-        primary_address2: document.getElementById('acctAddressLine2')?.value?.trim() || '',
-        primary_city: document.getElementById('acctCity')?.value?.trim() || '',
-        primary_state: document.getElementById('acctState')?.value || '',
-        primary_zip: document.getElementById('acctZip')?.value?.trim() || '',
-        primary_country: document.getElementById('acctCountry')?.value || '',
-        status: 'active',
+        
+        // Email preferences (all default to true)
+        email_pref_all: document.getElementById('emailPrefAll')?.checked ?? true,
+        email_pref_confirmation: document.getElementById('emailPrefConfirmation')?.checked ?? true,
+        email_pref_payment_receipt: document.getElementById('emailPrefPaymentReceipt')?.checked ?? true,
+        email_pref_invoice: document.getElementById('emailPrefInvoice')?.checked ?? true,
+        email_pref_other: document.getElementById('emailPrefOther')?.checked ?? true,
+        
+        // Address fields
+        address_line1: document.getElementById('acctAddress1')?.value?.trim() || '',
+        address_line2: document.getElementById('acctAddress2')?.value?.trim() || '',
+        city: document.getElementById('acctCity')?.value?.trim() || '',
+        state: document.getElementById('acctState')?.value || '',
+        zip: document.getElementById('acctZip')?.value?.trim() || '',
+        country: document.getElementById('acctCountry')?.value || 'US',
+        
+        // Notes fields
+        internal_notes: document.getElementById('acctInternalNotes')?.value?.trim() || '',
+        trip_notes: document.getElementById('acctTripNotes')?.value?.trim() || '',
+        notes_others: document.getElementById('acctNotesOthers')?.value?.trim() || '',
+        
+        // Restrictions
+        restricted_drivers: this.getMultiSelectValues('acctRestrictedDrivers'),
+        restricted_cars: this.getMultiSelectValues('acctRestrictedCars'),
+        
+        // Settings
+        source: document.getElementById('acctSource')?.value || '',
+        rental_agreement: document.getElementById('acctRentalAgreement')?.value || '',
+        account_settings: document.getElementById('acctSettings')?.value || 'normal',
+        status: document.getElementById('acctStatus')?.value || 'active',
+        web_access: document.getElementById('acctWebAccess')?.value || 'allow',
+        
+        // Account type checkboxes
+        is_billing_client: document.getElementById('acctTypeBilling')?.checked || false,
+        is_passenger: document.getElementById('acctTypePassenger')?.checked || false,
+        is_booking_contact: document.getElementById('acctTypeBooking')?.checked || false,
+        
         type: 'individual',
-        updated_at: new Date().toISOString(),
-
-        // Financial settings + shared payment profile
-        financial_settings: {
-          ...(existingAccount.financial_settings || {}),
-          post_method: document.getElementById('postMethod')?.value || '',
-          post_terms: document.getElementById('postTerms')?.value?.trim() || ''
-        },
-        payment_profile: {
-          ...(existingAccount.payment_profile || {}),
-          method_code: document.getElementById('accountPaymentMethod')?.value || '',
-          gateway_id: document.getElementById('accountPaymentGateway')?.value || '',
-
-          // Card details (stored with account per your workflow)
-          // NOTE: CVV is intentionally NOT stored.
-          card_number: document.getElementById('creditCardNumber')?.value?.trim() || '',
-          card_last4: getCardLast4(document.getElementById('creditCardNumber')?.value),
-          exp_month: document.getElementById('expMonth')?.value?.trim() || '',
-          exp_year: document.getElementById('expYear')?.value?.trim() || '',
-          name_on_card: document.getElementById('nameOnCard')?.value?.trim() || '',
-          billing_address1: document.getElementById('billingAddressCC')?.value?.trim() || '',
-          billing_address2: document.getElementById('billingAddressLine2CC')?.value?.trim() || '',
-          billing_city: document.getElementById('billingCityCC')?.value?.trim() || '',
-          billing_state: document.getElementById('billingStateCC')?.value || '',
-          billing_zip: document.getElementById('billingZipCC')?.value?.trim() || '',
-          billing_country: document.getElementById('billingCountryCC')?.value || '',
-          cc_type: document.getElementById('ccType')?.value || '',
-          notes: document.getElementById('creditCardNotes')?.value?.trim() || ''
-        },
-
-        // Stored addresses list (Addrs/Bill/Pax)
-        stored_addresses: this.db?.getAccountAddresses?.(accountNumber) || []
+        updated_at: new Date().toISOString()
       };
 
       console.log('📝 Account data to save:', accountData);
@@ -1508,40 +1337,63 @@ class Accounts {
       }
       
       console.log('✅ Saving account with Supabase sync...');
-      const saved = await this.db.saveAccount(accountData);
+      const result = await this.db.saveAccount(accountData);
       
-      if (!saved) {
-        console.error('❌ saveAccount returned null/false');
-        alert('Error saving account. Please try again.');
+      // Handle duplicate detection
+      if (result && result.duplicateDetected) {
+        console.warn('⚠️ Duplicate account detected:', result.duplicates);
+        
+        // Build duplicate info message
+        const dupList = result.duplicates.map(d => {
+          const name = `${d.first_name || ''} ${d.last_name || ''}`.trim() || d.company_name || 'Unknown';
+          const acctNum = d.account_number || d.id || '?';
+          return `• ${name} (Acct #${acctNum}) - ${d.matchReason}`;
+        }).join('\n');
+        
+        const confirmCreate = confirm(
+          `⚠️ POTENTIAL DUPLICATE DETECTED\n\n` +
+          `The following existing account(s) may be duplicates:\n\n${dupList}\n\n` +
+          `Do you want to create this account anyway?\n\n` +
+          `Click OK to create the account, or Cancel to review existing accounts.`
+        );
+        
+        if (!confirmCreate) {
+          console.log('🚫 User cancelled duplicate account creation');
+          // Optionally select the first duplicate for review
+          if (result.duplicates.length > 0) {
+            const firstDup = result.duplicates[0];
+            this.selectAccount(firstDup.id || firstDup.account_number);
+          }
+          return;
+        }
+        
+        // User confirmed - force create
+        console.log('✅ User confirmed duplicate creation, forcing save...');
+        const forcedResult = await this.db.saveAccount(accountData, { forceCreate: true });
+        if (!forcedResult || !forcedResult.success) {
+          console.error('❌ Forced saveAccount failed:', forcedResult);
+          alert('Error saving account. Please try again.');
+          return;
+        }
+        console.log('✅ Account saved (user override):', forcedResult.account);
+      } else if (!result || !result.success) {
+        console.error('❌ saveAccount returned error:', result);
+        alert(result?.error || 'Error saving account. Please try again.');
         return;
+      } else {
+        console.log('✅ Account saved successfully:', result.account);
       }
       
-      console.log('✅ Account saved successfully:', saved);
-      alert('Account saved successfully!\nData synced to Supabase database.');
+      const saved = result?.account || accountData;
 
       // If this page was opened from Reservation, notify the opener/parent and return
       try {
         const params = new URLSearchParams(window.location.search);
         const from = (params.get('from') || '').toLowerCase();
-
-        const safeAccountForReservation = {
-          id: accountData.id,
-          account_number: accountData.account_number,
-          first_name: accountData.first_name,
-          last_name: accountData.last_name,
-          company_name: accountData.company_name,
-          phone: accountData.phone,
-          cell_phone: accountData.cell_phone,
-          email: accountData.email
-        };
-
         const payload = {
           action: 'relia:accountSaved',
-          from,
           accountId: accountNumber,
-          accountName: this.getCurrentAccountDisplayName?.() || '',
-          account: safeAccountForReservation,
-          types: accountTypes
+          accountName: this.getCurrentAccountDisplayName?.() || ''
         };
 
         if (window.opener && !window.opener.closed) {
@@ -1558,8 +1410,8 @@ class Accounts {
           window.parent.postMessage(payload, '*');
         }
 
-        // Fallback: same-window return (only when running top-level)
-        if (window.self === window.top && from === 'reservation' && (!window.opener || window.opener.closed)) {
+        // Fallback: same-window return
+        if (from === 'reservation' && (!window.opener || window.opener.closed)) {
           const returnUrl = localStorage.getItem('relia_return_to_reservation_url');
           if (returnUrl) {
             try {
@@ -1569,22 +1421,20 @@ class Accounts {
               window.location.href = u.toString();
             } catch {
               // If URL parsing fails, just go back to reservation form
-              try {
-                sessionStorage.setItem('relia_nav_override', JSON.stringify({
-                  section: 'new-reservation',
-                  url: 'reservation-form.html',
-                  ts: Date.now()
-                }));
-              } catch {
-                // ignore
-              }
-              window.location.href = `index.html?section=${encodeURIComponent('new-reservation')}`;
+              window.location.href = 'reservation-form.html';
             }
           }
         }
       } catch (e) {
         console.warn('⚠️ Failed to return-to-reservation flow:', e);
       }
+
+      if (isNewAccount) {
+        await this.createReservationForAccount(saved, { redirect: true, notify: true });
+        return;
+      }
+
+      alert('Account saved successfully!\nData synced to Supabase database.');
 
       // Show success feedback
       const btn = document.getElementById('saveAccountBtn');
@@ -1606,6 +1456,120 @@ class Accounts {
     } catch (error) {
       console.error('❌ Error saving account:', error);
     }
+  }
+
+  async createReservationForAccount(accountData, options = {}) {
+    if (!accountData) {
+      console.warn('⚠️ No account data provided for reservation creation.');
+      return null;
+    }
+
+    if (!this.db || typeof this.db.createReservationFromAccount !== 'function') {
+      console.warn('⚠️ Reservation helper is unavailable.');
+      return null;
+    }
+
+    const { redirect = false, notify = false } = options;
+    let reservationRecord = null;
+
+    try {
+      reservationRecord = this.db.createReservationFromAccount(accountData);
+    } catch (error) {
+      console.error('❌ Failed to generate reservation from account:', error);
+      return null;
+    }
+
+    if (!reservationRecord) {
+      console.warn('⚠️ Reservation record could not be created from account data.');
+      return null;
+    }
+
+    const firstName = accountData.first_name || accountData.firstName || '';
+    const lastName = accountData.last_name || accountData.lastName || '';
+    const company = accountData.company_name || accountData.company || '';
+    const phone = accountData.cell_phone || accountData.cellPhone || accountData.phone || '';
+    const email = accountData.email || '';
+    const accountId = reservationRecord.billing_account || accountData.account_number || accountData.id || '';
+
+    if (this.api && typeof this.api.createReservation === 'function') {
+      try {
+        await this.api.createReservation({
+          status: reservationRecord.status,
+          status_detail_code: reservationRecord.status_detail_code,
+          status_detail_label: reservationRecord.status_detail_label,
+          status_detail_category: reservationRecord.status_detail_category,
+          statusDetail: {
+            code: reservationRecord.status_detail_code,
+            label: reservationRecord.status_detail_label,
+            category: reservationRecord.status_detail_category,
+            status: reservationRecord.status
+          },
+          billingAccount: {
+            account: accountId,
+            company,
+            firstName,
+            lastName,
+            phone,
+            email
+          },
+          bookedBy: {
+            firstName,
+            lastName,
+            phone,
+            email
+          },
+          passenger: {
+            firstName,
+            lastName,
+            phone,
+            email
+          },
+          routing: {
+            stops: [],
+            tripNotes: reservationRecord.trip_notes || '',
+            billPaxNotes: reservationRecord.bill_pax_notes || '',
+            dispatchNotes: reservationRecord.dispatch_notes || ''
+          },
+          details: {
+            efarmStatus: reservationRecord.efarm_status || 'NOT FARMED OUT'
+          },
+          costs: {
+            flat: { qty: '0', rate: '0' },
+            hour: { qty: '0', rate: '0' },
+            unit: { qty: '0', rate: '0' },
+            ot: { qty: '0', rate: '0' },
+            stops: { qty: '0', rate: '0' }
+          },
+          grandTotal: reservationRecord.grand_total || 0
+        });
+      } catch (error) {
+        console.warn('⚠️ Could not sync stub reservation to Supabase:', error);
+      }
+    }
+
+    if (notify) {
+      const confirmationNumber = reservationRecord.confirmation_number || reservationRecord.id || 'new';
+      alert(
+        `Account saved successfully!\nReservation #${confirmationNumber} created and added to the list.`
+      );
+    }
+
+    if (redirect) {
+      try {
+        localStorage.removeItem('relia_reservation_draft');
+      } catch {
+        // ignore storage errors
+      }
+
+      const confirmationNumber = reservationRecord.confirmation_number || reservationRecord.id;
+      if (confirmationNumber) {
+        window.location.href = `reservations-list.html?openConf=${encodeURIComponent(confirmationNumber)}`;
+      } else {
+        window.location.href = 'reservations-list.html';
+      }
+    }
+
+    return reservationRecord;
   }
 
   generateEmailExport() {

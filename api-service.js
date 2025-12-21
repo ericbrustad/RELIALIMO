@@ -1,87 +1,3 @@
-/**
- * Bulk delete all rate data in Supabase (admin only)
- */
-export async function deleteAllRatesSupabase() {
-  const client = getSupabaseClient();
-  if (!client) return null;
-  try {
-    lastApiError = null;
-    const { organizationId } = await getOrgContextOrThrow(client);
-    const { error } = await client
-      .from('rates')
-      .delete()
-      .eq('organization_id', organizationId);
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error deleting all rate data:', error);
-    lastApiError = error;
-    return false;
-  }
-}
-/**
- * Bulk delete all drivers in Supabase (admin only)
- */
-export async function deleteAllDriversSupabase() {
-  const client = getSupabaseClient();
-  if (!client) return null;
-  try {
-    lastApiError = null;
-    const { organizationId } = await getOrgContextOrThrow(client);
-    const { error } = await client
-      .from('drivers')
-      .delete()
-      .eq('organization_id', organizationId);
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error deleting all drivers:', error);
-    lastApiError = error;
-    return false;
-  }
-}
-/**
- * Bulk delete all accounts in Supabase (admin only)
- */
-export async function deleteAllAccountsSupabase() {
-  const client = getSupabaseClient();
-  if (!client) return null;
-  try {
-    lastApiError = null;
-    const { organizationId } = await getOrgContextOrThrow(client);
-    const { error } = await client
-      .from('accounts')
-      .delete()
-      .eq('organization_id', organizationId);
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error deleting all accounts:', error);
-    lastApiError = error;
-    return false;
-  }
-}
-/**
- * Bulk delete all reservations in Supabase (admin only)
- */
-export async function deleteAllReservationsSupabase() {
-  const client = getSupabaseClient();
-  if (!client) return null;
-  try {
-    lastApiError = null;
-    const { organizationId } = await getOrgContextOrThrow(client);
-    const { error } = await client
-      .from('reservations')
-      .delete()
-      .eq('organization_id', organizationId);
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error deleting all reservations:', error);
-    lastApiError = error;
-    return false;
-  }
-}
 // API Service for RELIA🐂LIMO™
 import { supabaseConfig, initSupabase } from './config.js';
 
@@ -220,6 +136,149 @@ export async function deleteDriver(driverId) {
   }
 }
 
+function normalizeSpaces(value) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+export function normalizeAffiliateName(rawName) {
+  if (typeof rawName !== 'string') {
+    return '';
+  }
+  const normalized = normalizeSpaces(rawName);
+  return normalized;
+}
+
+export async function fetchAllAffiliates() {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    lastApiError = null;
+    const { data, error } = await client
+      .from('affiliate_organizations')
+      .select('id, name')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error fetching affiliates:', error);
+    lastApiError = error;
+    return [];
+  }
+}
+
+export async function fetchOrganizationAffiliates() {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    const { data, error } = await client
+      .from('organization_affiliates')
+      .select('affiliate_id, affiliate:affiliate_organizations(id, name)')
+      .eq('organization_id', organizationId)
+      .order('affiliate(name)', { ascending: true });
+
+    if (error) throw error;
+
+    const rows = Array.isArray(data) ? data : [];
+    return rows
+      .map(row => {
+        const affiliate = row?.affiliate;
+        const id = affiliate?.id || row?.affiliate_id;
+        const name = affiliate?.name || '';
+        if (!id || !name) {
+          return null;
+        }
+        return { id, name };
+      })
+      .filter(Boolean);
+  } catch (error) {
+    console.error('Error fetching organization affiliates:', error);
+    lastApiError = error;
+    return [];
+  }
+}
+
+export async function ensureAffiliateForOrganization(rawName) {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  const name = normalizeAffiliateName(rawName);
+  if (!name) {
+    throw new Error('Affiliate name is required');
+  }
+
+  try {
+    lastApiError = null;
+    const literal = name.replace(/[%_]/g, match => `\\${match}`);
+
+    const { data: existingRows, error: existingError } = await client
+      .from('affiliate_organizations')
+      .select('id, name')
+      .ilike('name', literal)
+      .limit(1);
+
+    if (existingError) throw existingError;
+
+    let affiliate = Array.isArray(existingRows) && existingRows.length > 0 ? existingRows[0] : null;
+
+    if (!affiliate) {
+      const { data: inserted, error: insertError } = await client
+        .from('affiliate_organizations')
+        .insert([{ name }])
+        .select('id, name')
+        .single();
+
+      if (insertError) {
+        if (insertError.code === '23505' || /duplicate/i.test(insertError.message || '')) {
+          const { data: retryRows, error: retryError } = await client
+            .from('affiliate_organizations')
+            .select('id, name')
+            .ilike('name', literal)
+            .limit(1);
+
+          if (retryError) throw retryError;
+          affiliate = Array.isArray(retryRows) && retryRows.length > 0 ? retryRows[0] : null;
+        } else {
+          throw insertError;
+        }
+      } else {
+        affiliate = inserted;
+      }
+    }
+
+    if (!affiliate) {
+      throw new Error('Unable to resolve affiliate');
+    }
+
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    const { error: linkError } = await client
+      .from('organization_affiliates')
+      .upsert({
+        organization_id: organizationId,
+        affiliate_id: affiliate.id
+      }, { onConflict: 'organization_id,affiliate_id' });
+
+    if (linkError && linkError.code !== '23505') {
+      throw linkError;
+    }
+
+    return {
+      affiliateId: affiliate.id,
+      affiliateName: affiliate.name
+    };
+  } catch (error) {
+    console.error('Error ensuring affiliate:', error);
+    lastApiError = error;
+    throw error;
+  }
+}
+
 /**
  * Create new reservation
  */
@@ -244,7 +303,8 @@ export async function createReservation(reservationData) {
         billing_notes: reservationData.routing?.billPaxNotes || '',
         dispatch_notes: reservationData.routing?.dispatchNotes || '',
         total_cost: reservationData.grandTotal || 0,
-        status: 'pending'
+        status: 'pending',
+        affiliate_id: reservationData.affiliateId || reservationData.affiliate_id || null
       }]);
     
     if (error) throw error;
@@ -276,7 +336,8 @@ export async function updateReservation(reservationId, reservationData) {
         trip_notes: reservationData.routing?.tripNotes || '',
         billing_notes: reservationData.routing?.billPaxNotes || '',
         dispatch_notes: reservationData.routing?.dispatchNotes || '',
-        total_cost: reservationData.grandTotal || 0
+        total_cost: reservationData.grandTotal || 0,
+        affiliate_id: reservationData.affiliateId || reservationData.affiliate_id || null
       })
       .eq('id', reservationId);
     
@@ -511,61 +572,88 @@ export async function saveAccountToSupabase(accountData) {
     lastApiError = null;
     const { user, organizationId } = await getOrgContextOrThrow(client);
     
-    const financial = accountData?.financial_settings || {};
-    const payment = accountData?.payment_profile || {};
-
-    // Prepare account data for Supabase
+    // Prepare account data for Supabase with all fields
     const supabaseAccount = {
       organization_id: organizationId,
       account_number: accountData.account_number || accountData.id,
       first_name: accountData.first_name,
       last_name: accountData.last_name,
       company_name: accountData.company_name,
+      department: accountData.department,
+      job_title: accountData.job_title,
       email: accountData.email,
       phone: accountData.phone,
       cell_phone: accountData.cell_phone || accountData.phone,
+      
+      // Additional phone fields
+      office_phone: accountData.office_phone,
+      office_phone_ext: accountData.office_phone_ext,
+      home_phone: accountData.home_phone,
+      home_phone_ext: accountData.home_phone_ext,
+      cell_phone_2: accountData.cell_phone_2,
+      cell_phone_3: accountData.cell_phone_3,
+      fax_1: accountData.fax_1,
+      fax_2: accountData.fax_2,
+      fax_3: accountData.fax_3,
+      
+      // Address fields
+      address_line1: accountData.address_line1,
+      address_line2: accountData.address_line2,
+      city: accountData.city,
+      state: accountData.state,
+      zip: accountData.zip,
+      country: accountData.country || 'US',
+      
+      // Notes
+      internal_notes: accountData.internal_notes,
+      trip_notes: accountData.trip_notes,
+      notes_others: accountData.notes_others,
+      
+      // Restrictions (stored as JSON arrays)
+      restricted_drivers: accountData.restricted_drivers || [],
+      restricted_cars: accountData.restricted_cars || [],
+      
+      // Settings
+      source: accountData.source,
+      rental_agreement: accountData.rental_agreement,
+      account_settings: accountData.account_settings || 'normal',
       status: accountData.status || 'active',
-      post_method: accountData.post_method || financial.post_method,
-      post_terms: accountData.post_terms || financial.post_terms,
+      web_access: accountData.web_access || 'allow',
+      
+      // Account types
+      is_billing_client: accountData.is_billing_client || false,
+      is_passenger: accountData.is_passenger || false,
+      is_booking_contact: accountData.is_booking_contact || false,
+      
+      // Email preferences (default to true if not explicitly set)
+      email_pref_all: accountData.email_pref_all !== false,
+      email_pref_confirmation: accountData.email_pref_confirmation !== false,
+      email_pref_payment_receipt: accountData.email_pref_payment_receipt !== false,
+      email_pref_invoice: accountData.email_pref_invoice !== false,
+      email_pref_other: accountData.email_pref_other !== false,
+      
+      // Financial/legacy fields
+      post_method: accountData.post_method,
+      post_terms: accountData.post_terms,
       primary_agent_assigned: accountData.primary_agent_assigned,
       secondary_agent_assigned: accountData.secondary_agent_assigned,
-      credit_card_number: accountData.credit_card_number || payment.card_number,
-      name_on_card: accountData.name_on_card || payment.name_on_card,
-      billing_address: accountData.billing_address || payment.billing_address1,
-      billing_address2: accountData.billing_address2 || payment.billing_address2,
-      billing_city: accountData.billing_city || payment.billing_city,
-      billing_state: accountData.billing_state || payment.billing_state,
-      billing_zip: accountData.billing_zip || payment.billing_zip,
-      billing_country: accountData.billing_country || payment.billing_country,
-      exp_month: accountData.exp_month || payment.exp_month,
-      exp_year: accountData.exp_year || payment.exp_year,
-      cc_type: accountData.cc_type || payment.cc_type,
-
-      // New fields
-      department: accountData.department,
-      job_title: accountData.job_title,
-      primary_address1: accountData.primary_address1,
-      primary_address2: accountData.primary_address2,
-      primary_city: accountData.primary_city,
-      primary_state: accountData.primary_state,
-      primary_zip: accountData.primary_zip,
-      primary_country: accountData.primary_country,
-
-      account_types: accountData.account_types || accountData.types,
-      account_emails: accountData.account_emails,
-      account_notes: accountData.account_notes,
-      stored_addresses: accountData.stored_addresses,
-      financial_settings: accountData.financial_settings,
-      payment_profile: accountData.payment_profile,
-      credit_card_notes: payment.notes,
-
-      // Legacy notes column: keep something readable
-      notes: (accountData.account_notes?.internal_private || accountData.notes || '').toString(),
+      credit_card_number: accountData.credit_card_number,
+      name_on_card: accountData.name_on_card,
+      billing_address: accountData.billing_address,
+      billing_city: accountData.billing_city,
+      billing_state: accountData.billing_state,
+      billing_zip: accountData.billing_zip,
+      exp_month: accountData.exp_month,
+      exp_year: accountData.exp_year,
+      cc_type: accountData.cc_type,
+      cvv: accountData.cvv,
+      notes: accountData.notes,
+      
       created_by: user.id,
       updated_by: user.id
     };
     
-    // Check if account exists by account_number
+    // Check for existing account by account number
     const { data: existingRows, error: existingError } = await client
       .from('accounts')
       .select('id')

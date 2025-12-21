@@ -453,12 +453,6 @@ body.show-holiday-ticker .holiday-ticker {
   color: #000;
 }
 
-/* User-created events */
-.event-gray {
-  background: #e6e6e6;
-  color: #000;
-}
-
 .event-time {
   font-weight: 600;
   margin-bottom: 2px;
