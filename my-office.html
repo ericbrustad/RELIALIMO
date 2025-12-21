@@ -3779,49 +3779,33 @@ further assistance.</textarea>
               <!-- Header with Title and Add Button -->
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 15px;">
                 <h2 style="font-size: 16px; font-weight: 600; margin: 0; color: #333;">Drivers</h2>
-                <button class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">+ Add New Driver</button>
+                <div style="display: flex; gap: 10px;">
+                  <button id="deleteDriverBtn" class="btn btn-danger" style="padding: 8px 16px; font-size: 13px; background: #d9534f; color: #fff; border: none;">🗑️ Delete Driver</button>
+                  <button id="addNewDriverBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">+ Add New Driver</button>
+                </div>
               </div>
 
               <div class="drivers-layout" style="display: flex; gap: 15px; height: calc(100vh - 300px); padding: 0 15px;">
                 
                 <!-- Left: Driver List Panel -->
-                <div class="drivers-list-panel" style="flex: 0 0 160px; border: 1px solid #ddd; background: #f9f9f9; padding: 12px; border-radius: 4px; overflow-y: auto; display: flex; flex-direction: column;">
+                <div class="drivers-list-panel" style="flex: 0 0 180px; border: 1px solid #ddd; background: #f9f9f9; padding: 12px; border-radius: 4px; overflow-y: auto; display: flex; flex-direction: column;">
                   <div class="drivers-list-header" style="margin-bottom: 12px; flex-shrink: 0;">
                     <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 8px 0; color: #333;">Drivers</h3>
                     <label class="drivers-show-all" style="font-size: 10px; display: flex; gap: 4px; align-items: center;">
-                      <span>Show All</span>
-                      <input type="checkbox" />
+                      <span>Show All (incl. Inactive)</span>
+                      <input type="checkbox" id="showAllDriversCheckbox" />
                     </label>
                   </div>
                   
-                  <div class="drivers-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
-                    <button class="driver-item active" data-driver="amich-tony" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 500;">Amich, Tony</button>
-                    <button class="driver-item" data-driver="boushad-eric" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Boushad, Eric</button>
-                    <button class="driver-item" data-driver="boushad-eric-2" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Boushad, Eric(driver 2)</button>
-                    <button class="driver-item" data-driver="buranje-dukes" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Buranje, Dukes</button>
-                    <button class="driver-item" data-driver="c-eric" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">C, Eric</button>
-                    <button class="driver-item" data-driver="catanyangi-ruben" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Catanyangi, Ruben</button>
-                    <button class="driver-item" data-driver="doyle-mike" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Doyle, Mike</button>
-                    <button class="driver-item" data-driver="gunaji-bimal" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Gunaji, Bimal</button>
-                    <button class="driver-item" data-driver="hines-joel" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Hines, Joel</button>
-                    <button class="driver-item" data-driver="insaengmay-tune" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Insaengmay, Tune</button>
-                    <button class="driver-item" data-driver="jake-eric" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Jake, Eric</button>
-                    <button class="driver-item" data-driver="kudrovch-dan" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Kudrovch, Dan</button>
-                    <button class="driver-item" data-driver="luvinda-rolando" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">LUVINDA, Rolando</button>
-                    <button class="driver-item" data-driver="mitchell-ervin" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Mitchell, Ervin</button>
-                    <button class="driver-item" data-driver="ng-gary" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Ng, Gary</button>
-                    <button class="driver-item" data-driver="ontiveros-juan" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Ontiveros, Juan</button>
-                    <button class="driver-item" data-driver="pulido-jonathan" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Pulido, Jonathan</button>
-                    <button class="driver-item" data-driver="pulido-juan" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Pulido, Juan</button>
-                    <button class="driver-item" data-driver="s-vladimir" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">S, Vladimir</button>
+                  <!-- Dynamic driver list - populated from Supabase -->
+                  <div id="driversListContainer" class="drivers-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+                    <div style="padding: 10px; color: #666; font-size: 11px;">Loading drivers...</div>
                   </div>
-
-                  <button class="btn btn-secondary" style="width: 100%; font-size: 10px; padding: 6px; margin-top: 10px; flex-shrink: 0;">EDIT DRIVER</button>
                 </div>
 
                 <!-- Center: Add/Edit Driver Form -->
                 <div class="drivers-form-panel" style="flex: 1; border: 1px solid #ddd; padding: 15px; background: #fff; border-radius: 4px; overflow-y: auto;">
-                  <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #333;">Add New Driver</h3>
+                  <h3 id="driverFormTitle" style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #333;">Add New Driver</h3>
                   
                   <div class="drivers-form-columns">
                     <!-- Left Column - Personal Information -->
