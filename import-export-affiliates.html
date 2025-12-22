@@ -193,8 +193,36 @@
   <div class="section">
     <h2>📋 Download Template</h2>
     <div class="template-info">
-      <h4>All Columns (required marked with *):</h4>
-      <p style="line-height:1.8;">
+      <h4>Supported Import Formats:</h4>
+      <p style="margin-bottom:12px;"><strong>✅ Legacy Format (auto-mapped):</strong></p>
+      <p style="line-height:1.8; font-size:12px;">
+        <code>First_Name</code>, 
+        <code>Last_Name</code>, 
+        <code>Company</code>, 
+        <code>Address</code>, 
+        <code>AptSte</code>, 
+        <code>City</code>, 
+        <code>State</code>, 
+        <code>Zip</code>, 
+        <code>PhoneW</code>, 
+        <code>PhoneFax</code>, 
+        <code>PhoneOth</code>, 
+        <code>Email</code>, 
+        <code>NotifyEmail</code>, 
+        <code>NotifySMS</code>, 
+        <code>AltFName</code>, 
+        <code>AltLName</code>, 
+        <code>AltPhoneW</code>, 
+        <code>AltEmail</code>, 
+        <code>Notes</code>, 
+        <code>Status</code>, 
+        <code>Code</code>,
+        <code>EINNumber</code>,
+        <code>NetworkCode</code>,
+        <code>LANetLogin</code>
+      </p>
+      <p style="margin-top:12px;"><strong>✅ Standard Format:</strong></p>
+      <p style="line-height:1.8; font-size:12px;">
         <code>company_name*</code>, 
         <code>primary_address</code>, 
         <code>address_line2</code>, 
@@ -202,40 +230,17 @@
         <code>state</code>, 
         <code>zip</code>, 
         <code>country</code>, 
-        <code>school</code>, 
-        <code>tax_id_ssn</code>, 
-        <code>markets_serviced</code>, 
         <code>first_name</code>, 
         <code>last_name</code>, 
         <code>phone</code>, 
-        <code>phone_ext</code>, 
         <code>fax</code>, 
-        <code>fax_ext</code>, 
         <code>email</code>, 
-        <code>website</code>, 
         <code>send_trip_email</code>, 
         <code>send_trip_sms</code>, 
-        <code>send_trip_fax</code>, 
-        <code>dont_send_auto_notifications</code>, 
         <code>internal_notes</code>, 
-        <code>status</code>, 
-        <code>learned_priority</code>, 
-        <code>turnaround_monitor_code</code>, 
-        <code>web_username</code>, 
-        <code>web_password</code>, 
-        <code>rental_agreement</code>, 
-        <code>alt_first_name</code>, 
-        <code>alt_last_name</code>, 
-        <code>alt_phone</code>, 
-        <code>alt_phone_ext</code>, 
-        <code>alt_fax</code>, 
-        <code>alt_fax_ext</code>, 
-        <code>alt_cell_phone</code>, 
-        <code>alt_cell_provider</code>, 
-        <code>alt_email</code>, 
-        <code>alt_send_trip_email</code>, 
-        <code>alt_send_trip_sms</code>
+        <code>status</code>
       </p>
+      <p style="margin-top:12px; color:#666;"><em>Both formats are automatically detected and mapped.</em></p>
     </div>
     <button class="btn btn-warning" id="templateBtn">Download Blank Template</button>
     <div id="templateStatus" class="status"></div>
@@ -571,6 +576,161 @@ function downloadTemplate() {
   statusEl.textContent = '✓ Template downloaded: affiliates_template.xls';
 }
 
+// Convert Excel serial date to ISO string
+function excelDateToISO(excelDate) {
+  if (!excelDate) return null;
+  
+  // If it's already a valid date string, return it
+  if (typeof excelDate === 'string' && excelDate.includes('-')) {
+    return excelDate;
+  }
+  
+  // If it's a number (Excel serial date), convert it
+  if (typeof excelDate === 'number' || !isNaN(parseFloat(excelDate))) {
+    const serial = parseFloat(excelDate);
+    // Excel dates start from Jan 1, 1900 (serial 1)
+    // But there's a bug: Excel thinks 1900 was a leap year, so we adjust
+    const utcDays = Math.floor(serial - 25569); // 25569 = days from 1900-01-01 to 1970-01-01
+    const utcValue = utcDays * 86400 * 1000; // Convert to milliseconds
+    const fractionalDay = serial - Math.floor(serial);
+    const millisecondsInDay = fractionalDay * 86400 * 1000;
+    const date = new Date(utcValue + millisecondsInDay);
+    
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toISOString();
+  }
+  
+  // Try to parse as date string
+  const parsed = new Date(excelDate);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+  
+  return null;
+}
+
+// Header mapping: Source column names → Database column names
+// Supports multiple source formats (e.g., legacy exports, standard template)
+const HEADER_MAP = {
+  // Primary contact
+  'First_Name': 'first_name',
+  'Last_Name': 'last_name',
+  'first_name': 'first_name',
+  'last_name': 'last_name',
+  
+  // Company
+  'Company': 'company_name',
+  'company_name': 'company_name',
+  
+  // Address fields
+  'Address': 'primary_address',
+  'primary_address': 'primary_address',
+  'AptSte': 'address_line2',
+  'address_line2': 'address_line2',
+  'City': 'city',
+  'city': 'city',
+  'State': 'state',
+  'state': 'state',
+  'Zip': 'zip',
+  'zip': 'zip',
+  'Country': 'country',
+  'country': 'country',
+  
+  // Phone fields
+  'PhoneW': 'phone',
+  'phone': 'phone',
+  'PhoneFax': 'fax',
+  'fax': 'fax',
+  'PhoneOth': 'alt_cell_phone',
+  'PhoneOthProvider': 'alt_cell_provider',
+  
+  // Email
+  'Email': 'email',
+  'email': 'email',
+  
+  // Notification preferences
+  'NotifyEmail': 'send_trip_email',
+  'send_trip_email': 'send_trip_email',
+  'NotifySMS': 'send_trip_sms',
+  'send_trip_sms': 'send_trip_sms',
+  'affNotifyFax': 'send_trip_fax',
+  'send_trip_fax': 'send_trip_fax',
+  
+  // Alternate contact
+  'AltFName': 'alt_first_name',
+  'alt_first_name': 'alt_first_name',
+  'AltLName': 'alt_last_name',
+  'alt_last_name': 'alt_last_name',
+  'AltPhoneW': 'alt_phone',
+  'alt_phone': 'alt_phone',
+  'AltPhoneFax': 'alt_fax',
+  'alt_fax': 'alt_fax',
+  'AltPhoneOth': 'alt_cell_phone',
+  'AltPhoneOthProvider': 'alt_cell_provider',
+  'alt_cell_phone': 'alt_cell_phone',
+  'alt_cell_provider': 'alt_cell_provider',
+  'AltEmail': 'alt_email',
+  'alt_email': 'alt_email',
+  'AltNotifyEmail': 'alt_send_trip_email',
+  'alt_send_trip_email': 'alt_send_trip_email',
+  'AltNotifySMS': 'alt_send_trip_sms',
+  'alt_send_trip_sms': 'alt_send_trip_sms',
+  'AltNotifyFax': 'alt_send_trip_fax',
+  
+  // Notes and Status
+  'Notes': 'internal_notes',
+  'internal_notes': 'internal_notes',
+  'Status': 'status',
+  'status': 'status',
+  'Code': 'turnaround_monitor_code',
+  'turnaround_monitor_code': 'turnaround_monitor_code',
+  'Date Created': 'created_at',
+  'created_at': 'created_at',
+  
+  // Tax and network fields
+  'EINNumber': 'tax_id_ssn',
+  'tax_id_ssn': 'tax_id_ssn',
+  'NetworkCode': 'markets_serviced',
+  'markets_serviced': 'markets_serviced',
+  'LANetLogin': 'web_username',
+  'web_username': 'web_username',
+  
+  // Extra fields → store in internal_notes or ignore
+  'ExtraFldNV1': '_extra_nv1',
+  'ExtraFldNV2': '_extra_nv2',
+  'ExtraFldNV3': '_extra_nv3',
+  'ExtraFldFL1': '_extra_fl1',
+  'ExtraFldFL2': '_extra_fl2',
+  'ExtraFldFL3': '_extra_fl3'
+};
+
+// Normalize a row using header mapping
+function normalizeRow(row) {
+  const normalized = {};
+  for (const [sourceKey, value] of Object.entries(row)) {
+    const targetKey = HEADER_MAP[sourceKey] || sourceKey.toLowerCase().replace(/\s+/g, '_');
+    // Skip internal/extra fields that start with _
+    if (!targetKey.startsWith('_')) {
+      normalized[targetKey] = value;
+    }
+  }
+  
+  // Handle company-only contacts: if no first/last name but has company, fill in defaults
+  if (!normalized.first_name && !normalized.last_name && normalized.company_name) {
+    normalized.first_name = 'Company';
+    normalized.last_name = normalized.company_name;
+  }
+  
+  // Ensure company_name exists (fallback to first + last name if missing)
+  if (!normalized.company_name && (normalized.first_name || normalized.last_name)) {
+    normalized.company_name = `${normalized.first_name || ''} ${normalized.last_name || ''}`.trim();
+  }
+  
+  return normalized;
+}
+
 // Handle file selection
 function handleFileSelect(e) {
   const file = e.target.files[0];
@@ -591,35 +751,44 @@ function handleFileSelect(e) {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      importData = XLSX.utils.sheet_to_json(firstSheet);
+      const rawData = XLSX.utils.sheet_to_json(firstSheet);
 
-      if (importData.length === 0) {
+      if (rawData.length === 0) {
         statusEl.className = 'status error';
         statusEl.textContent = 'No data found in file';
         importBtn.disabled = true;
         return;
       }
 
-      // Validate required columns
-      const requiredCols = ['company_name'];
-      const headers = Object.keys(importData[0]);
-      const missing = requiredCols.filter(col => !headers.includes(col));
-
-      if (missing.length > 0) {
+      // Normalize all rows using header mapping
+      importData = rawData.map(normalizeRow);
+      
+      // Check for required data (company_name or first/last name)
+      const validRows = importData.filter(row => 
+        row.company_name || row.first_name || row.last_name
+      );
+      
+      if (validRows.length === 0) {
         statusEl.className = 'status error';
-        statusEl.textContent = `Missing required columns: ${missing.join(', ')}`;
+        statusEl.textContent = 'No valid rows found. Need Company, First_Name, or Last_Name column.';
         importBtn.disabled = true;
         return;
       }
 
-      // Show preview
+      // Show mapping info
+      const sourceHeaders = Object.keys(rawData[0]);
+      const mappedHeaders = sourceHeaders.map(h => HEADER_MAP[h] || h.toLowerCase());
+      console.log('📋 Header mapping:', sourceHeaders.map((s, i) => `${s} → ${mappedHeaders[i]}`));
+
+      // Show preview with normalized data
+      const displayHeaders = ['company_name', 'first_name', 'last_name', 'phone', 'email', 'city', 'state', 'status'];
       let html = '<tr>';
-      headers.forEach(h => html += `<th>${h}</th>`);
+      displayHeaders.forEach(h => html += `<th>${h}</th>`);
       html += '</tr>';
 
       importData.slice(0, 10).forEach(row => {
         html += '<tr>';
-        headers.forEach(h => html += `<td>${row[h] || ''}</td>`);
+        displayHeaders.forEach(h => html += `<td>${row[h] || ''}</td>`);
         html += '</tr>';
       });
 
@@ -627,7 +796,7 @@ function handleFileSelect(e) {
       previewSection.style.display = 'block';
 
       statusEl.className = 'status info';
-      statusEl.textContent = `Found ${importData.length} affiliates to import`;
+      statusEl.textContent = `Found ${importData.length} affiliates to import (${sourceHeaders.length} columns mapped)`;
       importBtn.disabled = false;
 
     } catch (err) {
@@ -670,6 +839,7 @@ async function importAffiliates() {
 
   for (const row of importData) {
     try {
+      // Data is already normalized by normalizeRow() during file selection
       const affiliateData = {
         company_name: row.company_name || '',
         primary_address: row.primary_address || '',
@@ -689,9 +859,9 @@ async function importAffiliates() {
         fax_ext: row.fax_ext || '',
         email: row.email || '',
         website: row.website || '',
-        send_trip_email: row.send_trip_email === true || row.send_trip_email === 'true',
-        send_trip_sms: row.send_trip_sms === true || row.send_trip_sms === 'true',
-        send_trip_fax: row.send_trip_fax === true || row.send_trip_fax === 'true',
+        send_trip_email: row.send_trip_email === true || row.send_trip_email === 'true' || row.send_trip_email === 'Y' || row.send_trip_email === '1',
+        send_trip_sms: row.send_trip_sms === true || row.send_trip_sms === 'true' || row.send_trip_sms === 'Y' || row.send_trip_sms === '1',
+        send_trip_fax: row.send_trip_fax === true || row.send_trip_fax === 'true' || row.send_trip_fax === 'Y' || row.send_trip_fax === '1',
         dont_send_auto_notifications: row.dont_send_auto_notifications === true || row.dont_send_auto_notifications === 'true',
         internal_notes: row.internal_notes || '',
         status: row.status || 'ACTIVE',
@@ -709,9 +879,9 @@ async function importAffiliates() {
         alt_cell_phone: row.alt_cell_phone || '',
         alt_cell_provider: row.alt_cell_provider || '',
         alt_email: row.alt_email || '',
-        alt_send_trip_email: row.alt_send_trip_email === true || row.alt_send_trip_email === 'true',
-        alt_send_trip_sms: row.alt_send_trip_sms === true || row.alt_send_trip_sms === 'true',
-        created_at: new Date().toISOString()
+        alt_send_trip_email: row.alt_send_trip_email === true || row.alt_send_trip_email === 'true' || row.alt_send_trip_email === 'Y' || row.alt_send_trip_email === '1',
+        alt_send_trip_sms: row.alt_send_trip_sms === true || row.alt_send_trip_sms === 'true' || row.alt_send_trip_sms === 'Y' || row.alt_send_trip_sms === '1',
+        created_at: excelDateToISO(row.created_at) || new Date().toISOString()
       };
 
       const { error } = await supabaseClient
@@ -720,13 +890,13 @@ async function importAffiliates() {
 
       if (error) {
         errorCount++;
-        errors.push(`${row.company_name}: ${error.message}`);
+        errors.push(`${row.company_name || row.first_name}: ${error.message}`);
       } else {
         successCount++;
       }
     } catch (err) {
       errorCount++;
-      errors.push(`${row.company_name}: ${err.message}`);
+      errors.push(`${row.company_name || row.first_name}: ${err.message}`);
     }
   }
 
