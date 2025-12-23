@@ -3774,6 +3774,24 @@ body {
   height: 100%;
 }
 
+/* Affiliate list row styles */
+.affiliate-row:hover {
+  background: #f0f7ff !important;
+}
+
+.affiliate-row.selected {
+  background: #e3f2fd !important;
+}
+
+/* Resource tabs styling */
+.resource-tabs {
+  background: #f8f9fa;
+}
+
+.resource-tab:hover {
+  background: #e9ecef;
+}
+
 .affiliates-list-header {
   display: flex;
   justify-content: space-between;

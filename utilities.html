@@ -35,7 +35,7 @@ enforceSectionAccess();
     h2 { margin-bottom: 24px; }
     ul { list-style: none; padding: 0; }
     li { margin-bottom: 18px; }
-    a.btn {
+    a.btn, button.btn {
       display: inline-block;
       padding: 12px 28px;
       background: #1976d2;
@@ -45,13 +45,62 @@ enforceSectionAccess();
       font-size: 16px;
       font-weight: 500;
       transition: background 0.2s;
+      border: none;
+      cursor: pointer;
     }
-    a.btn:hover { background: #125ea2; }
+    a.btn:hover, button.btn:hover { background: #125ea2; }
+    button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Frozen header like Magic Link */
+    .frozen-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: linear-gradient(135deg, #8B0000 0%, #a01515 100%);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .frozen-header .logo {
+      color: #fff;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .frozen-header .back-btn {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .frozen-header .back-btn:hover { background: rgba(255,255,255,0.3); }
+    .utilities-container { padding-top: 60px; }
+    .embedded .frozen-header { display: none; }
   </style>
 </head>
 <body>
+  <header class="frozen-header">
+    <div class="logo">RELIALIMO™ Utilities</div>
+    <button class="back-btn" onclick="window.location.href='index.html'">← Back to App</button>
+  </header>
+  <script>
+    if (window.self !== window.top) {
+      document.body.classList.add('embedded');
+    }
+  </script>
+  <div class="utilities-container">
   <div style="display:flex; justify-content:space-between; align-items:center;">
-    <h2>Utilities</h2>
+    <h2 style="margin:0;">Utilities</h2>
     <div id="profileBox" style="min-width:180px; text-align:right;"></div>
   </div>
   <div id="authWarning" style="display:none; color:#b71c1c; background:#ffebee; border:1px solid #d32f2f; padding:16px; margin-bottom:24px; border-radius:4px; font-weight:600;">
@@ -65,15 +114,52 @@ enforceSectionAccess();
     <li><a class="btn" href="magic-link.html" target="_top" style="background:#7b1fa2;">Magic Link</a></li>
     <li><a class="btn" href="import-export-accounts.html" target="_top" style="background:#0288d1;">📊 Import/Export Accounts</a></li>
     <li><a class="btn" href="import-export-affiliates.html" target="_top" style="background:#7b1fa2;">🤝 Import/Export Affiliates</a></li>
+    <li><a class="btn" href="import-export-drivers.html" target="_top" style="background:#7b1fa2;">👥 Import/Export Drivers</a></li>
+    <li><a class="btn" href="import-export-vehicles.html" target="_top" style="background:#2d5016;">🚗 Import/Export Vehicles</a></li>
+    <li><button id="removeDuplicateAffiliatesBtn" class="btn" style="background:#ff9800;" onclick="handleRemoveDuplicates()">🔄 Remove Duplicate Affiliates</button></li>
+    <li><button id="ensureAffiliateColumnsBtn" class="btn" style="background:#4caf50;" onclick="ensureAffiliateColumns()">🔧 Ensure Affiliate Columns Exist</button></li>
+    <li><button id="ensureDriverSchemaBtn" class="btn" style="background:#4caf50;" onclick="ensureDriverTablesAndColumns()">🔧 Ensure Driver Schema Exists</button></li>
+    <li><button id="ensureVehicleSchemaBtn" class="btn" style="background:#4caf50;" onclick="ensureVehicleTablesAndColumns()">🔧 Ensure Vehicle Schema Exists</button></li>
+    <li><button id="migrateAddressFieldsBtn" class="btn" style="background:#2196f3;" onclick="migrateAddressFields()">📋 Migrate Address Fields</button></li>
+    <li><button id="deleteAllAffiliatesBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Affiliates</button></li>
     <li><button id="deleteAllReservationsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Reservations (Supabase)</button></li>
     <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Accounts (Supabase)</button></li>
     <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Drivers (Supabase)</button></li>
     <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Rate Data (Supabase)</button></li>
   </ul>
+
+  <div style="margin-top:24px; padding:16px; border:1px solid #e0e0e0; border-radius:6px;">
+    <h3 style="margin-top:0;">Driver Tools</h3>
+    <div style="margin-bottom:12px;">
+      <label for="driverIdInput" style="display:block; font-weight:600; margin-bottom:6px;">Delete Driver by ID</label>
+      <input id="driverIdInput" type="text" placeholder="Paste driver UUID" style="width:360px; padding:8px; border:1px solid #ccc; border-radius:4px;" />
+      <button id="deleteDriverByIdBtn" class="btn" style="background:#d32f2f; margin-left:8px;">Delete</button>
+    </div>
+    <div style="margin-top:16px;">
+      <button id="checkDriverTablesBtn" class="btn" style="background:#1976d2;">Check Driver Tables</button>
+      <div id="checkDriverTablesStatus" class="status" style="display:none;"></div>
+    </div>
+    <div style="margin-top:16px;">
+      <label for="assignOrgIdInput" style="display:block; font-weight:600; margin-bottom:6px;">Assign Org ID to Drivers with NULL organization_id</label>
+      <input id="assignOrgIdInput" type="text" placeholder="Organization UUID" style="width:360px; padding:8px; border:1px solid #ccc; border-radius:4px;" />
+      <button id="assignOrgIdBtn" class="btn" style="background:#2e7d32; margin-left:8px;">Assign Org to NULL</button>
+      <button id="assignCurrentOrgBtn" class="btn" style="background:#388e3c; margin-left:8px;">Assign Current Org to NULL</button>
+    </div>
+    <div style="margin-top:12px;">
+      <label for="mergeOrgIdInput" style="display:block; font-weight:600; margin-bottom:6px;">Merge Duplicate Drivers by Email (within Org)</label>
+      <input id="mergeOrgIdInput" type="text" placeholder="Organization UUID" style="width:360px; padding:8px; border:1px solid #ccc; border-radius:4px;" />
+      <button id="mergeDupDriversBtn" class="btn" style="background:#ff9800; margin-left:8px;">Merge Duplicates</button>
+    </div>
+    <div style="margin-top:16px;">
+      <label for="addMembershipOrgIdInput" style="display:block; font-weight:600; margin-bottom:6px;">Add Current User to Organization (org membership)</label>
+      <input id="addMembershipOrgIdInput" type="text" placeholder="Organization UUID" style="width:360px; padding:8px; border:1px solid #ccc; border-radius:4px;" />
+      <button id="addMembershipBtn" class="btn" style="background:#6a1b9a; margin-left:8px;">Add Membership</button>
+    </div>
+  </div>
 <script type="module">
+console.log('=== UTILITIES MODULE LOADING ===');
 
-
-import { deleteAllReservationsSupabase, deleteAllAccountsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase, setupAPI, getSupabaseClient } from './api-service.js';
+import { removeDuplicateAffiliates, setupAPI, getSupabaseClient } from './api-service.js';
 // Show login/profile info in top right
 async function showProfileBox() {
   await setupAPI();
@@ -127,6 +213,12 @@ async function ensureSupabaseReady() {
   }
 }
 
+// Expose helpers to non-module scripts
+// These shims allow inline and non-module handlers to call auth-aware helpers.
+window.ensureSupabaseReady = ensureSupabaseReady;
+window.getSupabaseClient = getSupabaseClient;
+window.setupAPI = setupAPI;
+
 ensureSupabaseReady();
 
 
@@ -151,10 +243,1095 @@ function setupDeleteButton(btnId, fn, label) {
   }
 }
 
-setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
-setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
-setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
-setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+// Note: These delete functions don't exist yet in api-service.js
+// Uncomment when available:
+// setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
+// setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
+// setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
+// setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+
+// Remove Duplicate Affiliates button
+const removeDupBtn = document.getElementById('removeDuplicateAffiliatesBtn');
+console.log('Looking for remove dup button:', removeDupBtn);
+if (removeDupBtn) {
+  // Don't let the auth check disable this button
+  removeDupBtn.disabled = false;
+  
+  removeDupBtn.addEventListener('click', async function(e) {
+    e.preventDefault();
+    console.log('Remove duplicates button clicked');
+    
+    // Just initialize API, don't require auth
+    try {
+      await setupAPI();
+    } catch (err) {
+      console.error('Setup API error:', err);
+    }
+    
+    if (confirm('This will remove duplicate affiliates (keeping the first occurrence of each). Continue?')) {
+      removeDupBtn.disabled = true;
+      removeDupBtn.textContent = 'Removing duplicates...';
+      try {
+        const result = await removeDuplicateAffiliates();
+        console.log('Remove duplicates result:', result);
+        if (result && result.success) {
+          alert(result.message || `Removed ${result.removed} duplicate affiliates.`);
+        } else {
+          alert(`Failed to remove duplicates: ${result?.error || 'Unknown error'}`);
+        }
+      } catch (err) {
+        console.error('Error removing duplicates:', err);
+        alert(`Error: ${err.message}`);
+      }
+      removeDupBtn.disabled = false;
+      removeDupBtn.textContent = '🔄 Remove Duplicate Affiliates';
+    }
+  });
+  console.log('Remove duplicate affiliates button handler attached');
+} else {
+  console.error('Remove duplicate button not found!');
+}
 </script>
+
+<script>
+// Non-module script for Remove Duplicates - uses fetch directly with proper auth
+async function handleRemoveDuplicates() {
+  if (!confirm('This will remove duplicate affiliates (keeping the first occurrence of each). Continue?')) {
+    return;
+  }
+  
+  const btn = document.getElementById('removeDuplicateAffiliatesBtn');
+  btn.disabled = true;
+  btn.textContent = 'Removing duplicates...';
+  
+  try {
+    // Get Supabase config from env.js
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase not configured');
+    }
+    
+    // Get the auth token from localStorage
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey; // fallback to anon key
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session.access_token) {
+          authToken = session.access_token;
+        }
+      } catch (e) {
+        console.log('Could not parse session, using anon key');
+      }
+    }
+    
+    // Fetch all affiliates
+    const response = await fetch(`${supabaseUrl}/rest/v1/affiliates?select=*&order=id`, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch affiliates: ' + response.status);
+    
+    const affiliates = await response.json();
+    console.log('Found affiliates:', affiliates.length);
+    
+    if (affiliates.length === 0) {
+      alert('No affiliates found. Make sure you are logged in.');
+      btn.disabled = false;
+      btn.textContent = '🔄 Remove Duplicate Affiliates';
+      return;
+    }
+    
+    // Log sample to see field names
+    console.log('Sample affiliate:', affiliates[0]);
+    
+    // Group by company_name - keep first, mark rest as duplicates
+    const seen = new Map();
+    const duplicateIds = [];
+    
+    for (const aff of affiliates) {
+      // Create a unique key from company name
+      const companyName = (aff.company_name || '').toLowerCase().trim();
+      
+      if (!companyName) {
+        console.log(`Affiliate ${aff.id} has no company_name, skipping`);
+        continue;
+      }
+      
+      if (seen.has(companyName)) {
+        duplicateIds.push(aff.id);
+        console.log(`Duplicate: ${aff.id} "${companyName}" (keeping ${seen.get(companyName)})`);
+      } else {
+        seen.set(companyName, aff.id);
+      }
+    }
+    
+    console.log('Unique companies:', seen.size);
+    console.log('Duplicate IDs to remove:', duplicateIds.length);
+    
+    if (duplicateIds.length === 0) {
+      alert(`No duplicates found. ${seen.size} unique affiliates.`);
+      btn.disabled = false;
+      btn.textContent = '🔄 Remove Duplicate Affiliates';
+      return;
+    }
+    
+    // Confirm before deleting
+    if (!confirm(`Found ${duplicateIds.length} duplicates out of ${affiliates.length} total. Delete them?`)) {
+      btn.disabled = false;
+      btn.textContent = '🔄 Remove Duplicate Affiliates';
+      return;
+    }
+    
+    // Delete duplicates in batches
+    let deleted = 0;
+    for (const id of duplicateIds) {
+      const delResponse = await fetch(`${supabaseUrl}/rest/v1/affiliates?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      if (delResponse.ok) {
+        deleted++;
+        btn.textContent = `Deleting... ${deleted}/${duplicateIds.length}`;
+      }
+    }
+    
+    alert(`Removed ${deleted} duplicate affiliates! ${seen.size} unique affiliates remain.`);
+  } catch (err) {
+    console.error('Error:', err);
+    alert('Error: ' + err.message);
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '🔄 Remove Duplicate Affiliates';
+}
+
+// Ensure all affiliate columns exist in Supabase
+async function ensureAffiliateColumns() {
+  const btn = document.getElementById('ensureAffiliateColumnsBtn');
+  btn.disabled = true;
+  btn.textContent = 'Checking columns...';
+  
+  try {
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    
+    // Required columns for affiliates table
+    const requiredColumns = [
+      { name: 'id', type: 'uuid', default: 'gen_random_uuid()' },
+      { name: 'company_name', type: 'text' },
+      { name: 'primary_address', type: 'text' },
+      { name: 'address_line2', type: 'text' },
+      { name: 'city', type: 'text' },
+      { name: 'state', type: 'text' },
+      { name: 'zip', type: 'text' },
+      { name: 'country', type: 'text', default: "'US'" },
+      { name: 'school', type: 'text' },
+      { name: 'tax_id_ssn', type: 'text' },
+      { name: 'markets_serviced', type: 'text' },
+      { name: 'first_name', type: 'text' },
+      { name: 'last_name', type: 'text' },
+      { name: 'phone', type: 'text' },
+      { name: 'phone_ext', type: 'text' },
+      { name: 'fax', type: 'text' },
+      { name: 'fax_ext', type: 'text' },
+      { name: 'email', type: 'text' },
+      { name: 'website', type: 'text' },
+      { name: 'send_trip_email', type: 'boolean', default: 'false' },
+      { name: 'send_trip_sms', type: 'boolean', default: 'false' },
+      { name: 'send_trip_fax', type: 'boolean', default: 'false' },
+      { name: 'dont_send_auto_notifications', type: 'boolean', default: 'false' },
+      { name: 'internal_notes', type: 'text' },
+      { name: 'status', type: 'text', default: "'ACTIVE'" },
+      { name: 'learned_priority', type: 'text' },
+      { name: 'turnaround_monitor_code', type: 'text' },
+      { name: 'web_username', type: 'text' },
+      { name: 'web_password', type: 'text' },
+      { name: 'rental_agreement', type: 'text' },
+      { name: 'alt_first_name', type: 'text' },
+      { name: 'alt_last_name', type: 'text' },
+      { name: 'alt_phone', type: 'text' },
+      { name: 'alt_phone_ext', type: 'text' },
+      { name: 'alt_fax', type: 'text' },
+      { name: 'alt_fax_ext', type: 'text' },
+      { name: 'alt_email', type: 'text' },
+      { name: 'alt_send_trip_email', type: 'boolean', default: 'false' },
+      { name: 'alt_send_trip_sms', type: 'boolean', default: 'false' },
+      { name: 'created_at', type: 'timestamptz', default: 'now()' }
+    ];
+    
+    // Generate SQL for adding missing columns
+    let sql = '';
+    for (const col of requiredColumns) {
+      if (col.name === 'id') continue; // Skip id column
+      const defaultClause = col.default ? ` DEFAULT ${col.default}` : '';
+      sql += `ALTER TABLE affiliates ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}${defaultClause};\n`;
+    }
+    
+    console.log('SQL to run in Supabase SQL Editor:');
+    console.log(sql);
+    
+    // Copy to clipboard
+    try {
+      await navigator.clipboard.writeText(sql);
+      alert('SQL copied to clipboard! Paste it in Supabase SQL Editor and run it.\n\nAlternatively, you can view the SQL in the browser console (F12).');
+    } catch (e) {
+      alert('SQL generated - check browser console (F12) to copy it.\n\nPaste it in Supabase SQL Editor and run it.');
+    }
+    
+  } catch (err) {
+    console.error('Error:', err);
+    alert('Error: ' + err.message);
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '🔧 Ensure Affiliate Columns Exist';
+}
+
+// Generate SQL to ensure driver-related schema exists (columns + tables)
+async function ensureDriverTablesAndColumns() {
+  const btn = document.getElementById('ensureDriverSchemaBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating driver schema SQL...';
+
+  try {
+    // SQL for driver columns on public.drivers
+    const driverColumnsSql = [
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS organization_id uuid;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS driver_level text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS address_line2 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS fax text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS other_phone text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS other_phone_provider text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS pager_phone text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS pager_provider text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS notify_email boolean DEFAULT false;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS notify_fax boolean DEFAULT false;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS notify_sms boolean DEFAULT false;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS ssn text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS license_number text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS license_state text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS license_exp_date date;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS badge_id text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS badge_exp_date date;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS dob date;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS type text DEFAULT 'Driver';",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS status text DEFAULT 'ACTIVE';",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS web_access text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS web_username text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS web_password text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS voucher_fee numeric;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS driver_notes text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_nv_1 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_nv_2 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_nv_3 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_fl_1 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_fl_2 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_fl_3 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS country text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS include_phone_1 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS include_phone_2 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS include_phone_3 text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS dispatch_display_name text;",
+      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS trip_sheets_display_name text;"
+    ].join('\n');
+
+    const enforceStatusDefaultSql = `-- Ensure status defaults to ACTIVE and backfill
+  ALTER TABLE public.drivers ALTER COLUMN status SET DEFAULT 'ACTIVE';
+  UPDATE public.drivers SET status='ACTIVE' WHERE status IS NULL OR status=''`;
+
+    const enforceTypeDefaultSql = `-- Ensure type defaults to Driver and backfill
+  ALTER TABLE public.drivers ALTER COLUMN type SET DEFAULT 'Driver';
+  UPDATE public.drivers SET type='Driver' WHERE type IS NULL OR trim(type)=''`;
+
+    const ensureUuidDefaultSql = `-- Ensure id auto-generates as UUID
+ALTER TABLE public.drivers ALTER COLUMN id SET DEFAULT gen_random_uuid();`;
+
+    // SQL for driver pay rates
+    const payRatesSql = `CREATE TABLE IF NOT EXISTS public.driver_pay_rates (\n  id bigserial PRIMARY KEY,\n  organization_id uuid,\n  driver_id uuid REFERENCES public.drivers(id) ON DELETE CASCADE,\n  trip_regular_rate numeric,\n  trip_overtime_rate numeric,\n  trip_double_time_rate numeric,\n  created_at timestamptz DEFAULT now()\n);`;
+
+    // SQL for driver schedules
+    const schedulesSql = `CREATE TABLE IF NOT EXISTS public.driver_schedules (\n  id bigserial PRIMARY KEY,\n  organization_id uuid,\n  driver_id uuid REFERENCES public.drivers(id) ON DELETE CASCADE,\n  day_of_week text NOT NULL,\n  start_time time,\n  end_time time,\n  created_at timestamptz DEFAULT now()\n);`;
+
+    // Ensure org_id columns exist on related tables even if they already exist
+    const ensureRelatedOrgColumnsSql = [
+      "ALTER TABLE public.driver_pay_rates ADD COLUMN IF NOT EXISTS organization_id uuid;",
+      "ALTER TABLE public.driver_schedules ADD COLUMN IF NOT EXISTS organization_id uuid;"
+    ].join('\n');
+
+    // Trigger to set organization_id automatically when missing (uses auth.uid())
+    const setOrgTriggerSql = `CREATE OR REPLACE FUNCTION public.set_driver_org_if_null()\nRETURNS trigger\nLANGUAGE plpgsql\nSECURITY DEFINER\nAS $$\nBEGIN\n  IF NEW.organization_id IS NULL THEN\n    SELECT organization_id INTO NEW.organization_id\n    FROM public.organization_members\n    WHERE user_id = auth.uid()\n    LIMIT 1;\n  END IF;\n  RETURN NEW;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS drivers_set_org ON public.drivers;\nCREATE TRIGGER drivers_set_org\nBEFORE INSERT ON public.drivers\nFOR EACH ROW EXECUTE FUNCTION public.set_driver_org_if_null();`;
+
+    // Keep related tables' organization_id in sync with drivers and backfill existing
+    const propagateOrgSql = `CREATE OR REPLACE FUNCTION public.set_rate_org_from_driver()\nRETURNS trigger\nLANGUAGE plpgsql\nAS $$\nDECLARE dorg uuid;\nBEGIN\n  SELECT organization_id INTO dorg FROM public.drivers WHERE id = NEW.driver_id;\n  IF dorg IS NOT NULL THEN\n    NEW.organization_id := dorg;\n  END IF;\n  RETURN NEW;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS driver_pay_rates_set_org ON public.driver_pay_rates;\nCREATE TRIGGER driver_pay_rates_set_org\nBEFORE INSERT OR UPDATE ON public.driver_pay_rates\nFOR EACH ROW EXECUTE FUNCTION public.set_rate_org_from_driver();\n\nCREATE OR REPLACE FUNCTION public.set_schedule_org_from_driver()\nRETURNS trigger\nLANGUAGE plpgsql\nAS $$\nDECLARE dorg uuid;\nBEGIN\n  SELECT organization_id INTO dorg FROM public.drivers WHERE id = NEW.driver_id;\n  IF dorg IS NOT NULL THEN\n    NEW.organization_id := dorg;\n  END IF;\n  RETURN NEW;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS driver_schedules_set_org ON public.driver_schedules;\nCREATE TRIGGER driver_schedules_set_org\nBEFORE INSERT OR UPDATE ON public.driver_schedules\nFOR EACH ROW EXECUTE FUNCTION public.set_schedule_org_from_driver();\n\n-- Backfill organization_id on related tables from drivers\nUPDATE public.driver_pay_rates r\nSET organization_id = d.organization_id\nFROM public.drivers d\nWHERE r.driver_id = d.id AND (r.organization_id IS NULL OR r.organization_id <> d.organization_id);\n\nUPDATE public.driver_schedules s\nSET organization_id = d.organization_id\nFROM public.drivers d\nWHERE s.driver_id = d.id AND (s.organization_id IS NULL OR s.organization_id <> d.organization_id);`;
+
+    const rlsSql = `-- Enable RLS and add org-scoped policies (idempotent, no DO/EXECUTE)
+-- Drivers table
+ALTER TABLE IF EXISTS public.drivers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS drivers_select ON public.drivers;
+CREATE POLICY drivers_select ON public.drivers FOR SELECT USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+DROP POLICY IF EXISTS drivers_insert ON public.drivers;
+CREATE POLICY drivers_insert ON public.drivers FOR INSERT WITH CHECK (
+  organization_id IS NULL OR organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+DROP POLICY IF EXISTS drivers_update ON public.drivers;
+CREATE POLICY drivers_update ON public.drivers FOR UPDATE USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+) WITH CHECK (
+  organization_id IS NULL OR organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+DROP POLICY IF EXISTS drivers_delete ON public.drivers;
+CREATE POLICY drivers_delete ON public.drivers FOR DELETE USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+
+-- Driver pay rates
+ALTER TABLE IF EXISTS public.driver_pay_rates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS driver_pay_rates_rw ON public.driver_pay_rates;
+CREATE POLICY driver_pay_rates_rw ON public.driver_pay_rates FOR ALL USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+) WITH CHECK (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+
+-- Driver schedules
+ALTER TABLE IF EXISTS public.driver_schedules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS driver_schedules_rw ON public.driver_schedules;
+CREATE POLICY driver_schedules_rw ON public.driver_schedules FOR ALL USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+) WITH CHECK (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);`;
+
+    const extensionsSql = `-- Required for gen_random_uuid()\nCREATE EXTENSION IF NOT EXISTS pgcrypto;`;
+
+    const fullSql = `-- Enable required extensions\n${extensionsSql}\n\n-- Ensure driver columns\n${driverColumnsSql}\n\n-- Enforce status default and backfill\n${enforceStatusDefaultSql}\n\n-- Enforce type default and backfill\n${enforceTypeDefaultSql}\n\n-- Ensure UUID default for id\n${ensureUuidDefaultSql}\n\n-- Ensure driver pay rates table\n${payRatesSql}\n\n-- Ensure driver schedules table\n${schedulesSql}\n\n-- Ensure organization_id exists on related tables (idempotent)\n${ensureRelatedOrgColumnsSql}\n\n-- Auto-assign organization_id on insert if NULL (drivers)\n${setOrgTriggerSql}\n\n-- Propagate organization_id to pay_rates/schedules and backfill\n${propagateOrgSql}\n\n-- Row Level Security policies to allow inserts/updates under org membership\n${rlsSql}\n`;
+
+    console.log('Driver Schema SQL to run in Supabase SQL Editor:');
+    console.log(fullSql);
+
+    try {
+      await navigator.clipboard.writeText(fullSql);
+      alert('Driver schema SQL copied to clipboard!\n\nPaste it in Supabase SQL Editor and run it. Also visible in console.');
+    } catch (e) {
+      alert('Driver schema SQL generated. Check browser console (F12) to copy it.');
+    }
+  } catch (err) {
+    console.error('Error generating driver schema:', err);
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔧 Ensure Driver Schema Exists';
+  }
+}
+
+// Ensure Vehicle Tables And Columns
+async function ensureVehicleTablesAndColumns() {
+  const btn = document.getElementById('ensureVehicleSchemaBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating vehicle schema SQL...';
+
+  try {
+    // SQL for vehicle columns on public.vehicles
+    const vehicleColumnsSql = [
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS organization_id uuid;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_type text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_title text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS base_rate numeric;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS min_hrs numeric;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS sys_entry text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_active text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_days text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_mon_tm_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_mon_tm_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_tue_tm_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_tue_tm_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_wed_tm_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_wed_tm_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_thu_tm_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_thu_tm_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_fri_tm_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_fri_tm_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_sat_tm_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_sat_tm_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_sun_tm_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_peak_sun_tm_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS base_peak_rate numeric;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS min_peak_hrs numeric;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_type_cap_pax integer;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_type_cap_lug integer;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_type_show_ors text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_disp_name text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_days text;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_sun_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_sun_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_mon_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_mon_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_tue_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_tue_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_wed_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_wed_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_thu_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_thu_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_fri_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_fri_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_sat_in time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS veh_avl_sat_out time;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS created_by uuid;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS updated_by uuid;",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now();",
+      "ALTER TABLE public.vehicles ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now();"
+    ].join('\n');
+
+    // RLS policies for vehicles
+    const rlsSql = `-- Enable RLS and add org-scoped policies for vehicles
+ALTER TABLE IF EXISTS public.vehicles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS vehicles_select ON public.vehicles;
+CREATE POLICY vehicles_select ON public.vehicles FOR SELECT USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+DROP POLICY IF EXISTS vehicles_insert ON public.vehicles;
+CREATE POLICY vehicles_insert ON public.vehicles FOR INSERT WITH CHECK (
+  organization_id IS NULL OR organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+DROP POLICY IF EXISTS vehicles_update ON public.vehicles;
+CREATE POLICY vehicles_update ON public.vehicles FOR UPDATE USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+) WITH CHECK (
+  organization_id IS NULL OR organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);
+DROP POLICY IF EXISTS vehicles_delete ON public.vehicles;
+CREATE POLICY vehicles_delete ON public.vehicles FOR DELETE USING (
+  organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid())
+);`;
+
+    // Combine all SQL
+    const fullSql = [
+      '-- =================================',
+      '-- VEHICLE SCHEMA SETUP',
+      '-- =================================',
+      vehicleColumnsSql,
+      rlsSql
+    ].join('\n\n');
+
+    console.log('Vehicle Schema SQL to run in Supabase SQL Editor:');
+    console.log(fullSql);
+
+    try {
+      await navigator.clipboard.writeText(fullSql);
+      alert('Vehicle schema SQL copied to clipboard!\n\nPaste it in Supabase SQL Editor and run it. Also visible in console.');
+    } catch (e) {
+      alert('Vehicle schema SQL generated. Check browser console (F12) to copy it.');
+    }
+  } catch (err) {
+    console.error('Error generating vehicle schema:', err);
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔧 Ensure Vehicle Schema Exists';
+  }
+}
+
+// Migrate address_1 to primary_address for all affiliates
+async function migrateAddressFields() {
+  const btn = document.getElementById('migrateAddressFieldsBtn');
+  btn.disabled = true;
+  btn.textContent = 'Migrating...';
+  
+  try {
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session.access_token) authToken = session.access_token;
+      } catch (e) {}
+    }
+    
+    // Fetch all affiliates
+    const response = await fetch(`${supabaseUrl}/rest/v1/affiliates?select=*`, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch affiliates');
+    
+    const affiliates = await response.json();
+    console.log('Found affiliates:', affiliates.length);
+    
+    let migrated = 0;
+    for (const aff of affiliates) {
+      const updates = {};
+      
+      // Check for address_1 or "address 1" and migrate to primary_address
+      if (!aff.primary_address && (aff.address_1 || aff['address 1'])) {
+        updates.primary_address = aff.address_1 || aff['address 1'];
+      }
+      
+      // Check for address_2 or "address 2" and migrate to address_line2
+      if (!aff.address_line2 && (aff.address_2 || aff['address 2'])) {
+        updates.address_line2 = aff.address_2 || aff['address 2'];
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        const updateResponse = await fetch(`${supabaseUrl}/rest/v1/affiliates?id=eq.${aff.id}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(updates)
+        });
+        
+        if (updateResponse.ok) {
+          migrated++;
+          btn.textContent = `Migrating... ${migrated}`;
+        }
+      }
+    }
+    
+    alert(`Migrated ${migrated} affiliates with address field fixes.`);
+    
+  } catch (err) {
+    console.error('Error:', err);
+    alert('Error: ' + err.message);
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '📋 Migrate Address Fields';
+}
+
+// Delete ALL Affiliates
+async function deleteAllAffiliates() {
+  const btn = document.getElementById('deleteAllAffiliatesBtn');
+  
+  // First confirmation
+  if (!confirm('⚠️ WARNING: This will PERMANENTLY DELETE all affiliates from the database. This cannot be undone. Continue?')) {
+    console.log('Delete cancelled by user');
+    return;
+  }
+  
+  // Second confirmation for safety
+  if (!confirm('Are you absolutely sure? This is a permanent action.')) {
+    console.log('Delete cancelled by user on second confirmation');
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'Deleting all affiliates...';
+  
+  try {
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    
+    console.log('🗑️ Starting delete with URL:', supabaseUrl);
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase not configured');
+    }
+    
+    // Get the auth token from localStorage
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey; // fallback to anon key
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session.access_token) {
+          authToken = session.access_token;
+          console.log('✅ Using access token from session');
+        }
+      } catch (e) {
+        console.log('Could not parse session, using anon key');
+      }
+    }
+    
+    // First, fetch all affiliates to get their IDs
+    console.log('📥 Fetching all affiliates...');
+    const fetchResponse = await fetch(`${supabaseUrl}/rest/v1/affiliates?select=id`, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    console.log('📥 Fetch response status:', fetchResponse.status);
+    
+    if (!fetchResponse.ok) {
+      const errorText = await fetchResponse.text();
+      throw new Error(`Failed to fetch affiliates: ${fetchResponse.status} - ${errorText}`);
+    }
+    
+    const affiliates = await fetchResponse.json();
+    console.log('📊 Affiliates found:', affiliates?.length);
+    
+    if (!affiliates || affiliates.length === 0) {
+      console.log('ℹ️ No affiliates to delete');
+      alert('No affiliates found to delete');
+      btn.disabled = false;
+      btn.textContent = '🗑️ Delete ALL Affiliates';
+      return;
+    }
+    
+    console.log(`🗑️ Starting to delete ${affiliates.length} affiliates...`);
+    
+    // Delete each affiliate by ID
+    let deleted = 0;
+    let failed = 0;
+    
+    for (let i = 0; i < affiliates.length; i++) {
+      const aff = affiliates[i];
+      console.log(`🗑️ Deleting ${i+1}/${affiliates.length} (ID: ${aff.id})`);
+      
+      const deleteResponse = await fetch(`${supabaseUrl}/rest/v1/affiliates?id=eq.${aff.id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      console.log(`  Response: ${deleteResponse.status}`);
+      
+      if (deleteResponse.ok) {
+        deleted++;
+        btn.textContent = `Deleting... ${deleted}/${affiliates.length}`;
+      } else {
+        failed++;
+        console.error(`❌ Failed to delete affiliate ${aff.id}:`, deleteResponse.status);
+      }
+    }
+    
+    console.log(`✅ Delete complete: ${deleted} deleted, ${failed} failed`);
+    alert(`✅ Deleted ${deleted}/${affiliates.length} affiliates successfully!`);
+    
+  } catch (err) {
+    console.error('❌ Error during delete:', err);
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑️ Delete ALL Affiliates';
+    console.log('🔄 Button reset');
+  }
+}
+
+// Set up delete affiliates button
+document.getElementById('deleteAllAffiliatesBtn').addEventListener('click', deleteAllAffiliates);
+
+// Delete ALL Drivers (similar safety flow as affiliates)
+async function deleteAllDrivers() {
+  const btn = document.getElementById('deleteAllDriversSupabaseBtn');
+  if (!btn) return;
+
+  if (!confirm('⚠️ WARNING: This will PERMANENTLY DELETE all drivers from the database. This cannot be undone. Continue?')) {
+    return;
+  }
+  if (!confirm('Are you absolutely sure? This is a permanent action.')) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Deleting all drivers...';
+
+  try {
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) throw new Error('Supabase not configured');
+
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session.access_token) authToken = session.access_token;
+      } catch {}
+    }
+
+    // Fetch all drivers (IDs only)
+    const fetchResponse = await fetch(`${supabaseUrl}/rest/v1/drivers?select=id`, {
+      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!fetchResponse.ok) {
+      const txt = await fetchResponse.text();
+      throw new Error(`Failed to fetch drivers: ${fetchResponse.status} - ${txt}`);
+    }
+    const drivers = await fetchResponse.json();
+    if (!drivers || drivers.length === 0) {
+      alert('No drivers found to delete');
+      btn.disabled = false; btn.textContent = 'Delete ALL Drivers (Supabase)';
+      return;
+    }
+
+    let deleted = 0, failed = 0;
+    for (let i = 0; i < drivers.length; i++) {
+      const drv = drivers[i];
+      const delResponse = await fetch(`${supabaseUrl}/rest/v1/drivers?id=eq.${drv.id}`, {
+        method: 'DELETE',
+        headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+      });
+      if (delResponse.ok) {
+        deleted++;
+        btn.textContent = `Deleting... ${deleted}/${drivers.length}`;
+      } else {
+        failed++;
+        console.error(`Failed to delete driver ${drv.id}:`, delResponse.status);
+      }
+    }
+
+    alert(`✅ Deleted ${deleted}/${drivers.length} drivers. ${failed} failed.`);
+  } catch (err) {
+    console.error('Error deleting drivers:', err);
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Delete ALL Drivers (Supabase)';
+  }
+}
+
+// Set up delete drivers button
+const deleteDriversBtn = document.getElementById('deleteAllDriversSupabaseBtn');
+if (deleteDriversBtn) {
+  deleteDriversBtn.addEventListener('click', deleteAllDrivers);
+}
+
+// Delete ALL Driver Pay Rates and Schedules
+async function deleteAllDriverRatesAndSchedules() {
+  const btn = document.getElementById('deleteAllRatesSupabaseBtn');
+  if (!btn) return;
+
+  if (!confirm('⚠️ WARNING: This will PERMANENTLY DELETE all driver pay rates and schedules. This cannot be undone. Continue?')) {
+    return;
+  }
+  if (!confirm('Are you absolutely sure? This is a permanent action.')) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Deleting all rate data...';
+
+  try {
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) throw new Error('Supabase not configured');
+
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session.access_token) authToken = session.access_token;
+      } catch {}
+    }
+
+    // Helper to delete all rows from a table by IDs
+    async function deleteAllByIds(tableName) {
+      const fetchResponse = await fetch(`${supabaseUrl}/rest/v1/${tableName}?select=id`, {
+        headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!fetchResponse.ok) {
+        const txt = await fetchResponse.text();
+        throw new Error(`Failed to fetch ${tableName}: ${fetchResponse.status} - ${txt}`);
+      }
+      const rows = await fetchResponse.json();
+      if (!rows || rows.length === 0) return { deleted: 0, total: 0 };
+      let deleted = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const delResponse = await fetch(`${supabaseUrl}/rest/v1/${tableName}?id=eq.${r.id}`, {
+          method: 'DELETE',
+          headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+        });
+        if (delResponse.ok) {
+          deleted++;
+          btn.textContent = `Deleting ${tableName}... ${deleted}/${rows.length}`;
+        }
+      }
+      return { deleted, total: rows.length };
+    }
+
+    const schedRes = await deleteAllByIds('driver_schedules');
+    const ratesRes = await deleteAllByIds('driver_pay_rates');
+
+    alert(`✅ Deleted schedules: ${schedRes.deleted}/${schedRes.total}\n✅ Deleted pay rates: ${ratesRes.deleted}/${ratesRes.total}`);
+  } catch (err) {
+    console.error('Error deleting rate data:', err);
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Delete ALL Rate Data (Supabase)';
+  }
+}
+
+// Set up delete rate data button
+const deleteRatesBtn = document.getElementById('deleteAllRatesSupabaseBtn');
+if (deleteRatesBtn) {
+  deleteRatesBtn.addEventListener('click', deleteAllDriverRatesAndSchedules);
+}
+
+// Delete a single driver by ID
+async function deleteDriverById() {
+  const input = document.getElementById('driverIdInput');
+  const id = (input.value || '').trim();
+  if (!id) { alert('Please paste a driver UUID.'); return; }
+  if (!confirm(`Delete driver ${id}? This cannot be undone.`)) return;
+
+  try {
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) { try { const session = JSON.parse(storedSession); if (session.access_token) authToken = session.access_token; } catch {} }
+
+    const resp = await fetch(`${supabaseUrl}/rest/v1/drivers?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      alert(`Failed to delete: ${resp.status} - ${txt}`);
+      return;
+    }
+    alert('Driver deleted.');
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+const delByIdBtn = document.getElementById('deleteDriverByIdBtn');
+if (delByIdBtn) delByIdBtn.addEventListener('click', deleteDriverById);
+
+// Check driver-related tables and columns
+async function checkDriverTables() {
+  const statusEl = document.getElementById('checkDriverTablesStatus');
+  const set = (kind, msg) => { statusEl.style.display='block'; statusEl.className = `status ${kind}`; statusEl.textContent = msg; };
+  try {
+    await ensureSupabaseReady();
+    const supabase = getSupabaseClient();
+
+    // Check driver_id type in pay rates and schedules via information_schema
+    async function getDriverIdType(table) {
+      const { data, error } = await supabase
+        .from('information_schema.columns')
+        .select('column_name,data_type')
+        .eq('table_schema','public')
+        .eq('table_name', table);
+      if (error) return 'unknown';
+      const col = (data||[]).find(c => c.column_name === 'driver_id');
+      return col?.data_type || 'missing';
+    }
+    const rateType = await getDriverIdType('driver_pay_rates');
+    const schedType = await getDriverIdType('driver_schedules');
+
+    // Probe required driver columns via select limit 1
+    const suggested = ['address_line2','fax','other_phone','other_phone_provider','pager_phone','pager_provider','notify_email','notify_fax','notify_sms','web_username','web_password','voucher_fee','driver_notes','extra_nv_1','extra_nv_2','extra_nv_3','extra_fl_1','extra_fl_2','extra_fl_3','license_exp_date','license_state','badge_id','badge_exp_date','country','include_phone_1','include_phone_2','include_phone_3','dispatch_display_name','trip_sheets_display_name'];
+    async function columnExists(col) {
+      const { error } = await supabase.from('drivers').select(col).limit(1);
+      if (error && String(error.message||'').toLowerCase().includes('column')) return false;
+      return true;
+    }
+    const missing = [];
+    for (const c of suggested) { if (!(await columnExists(c))) missing.push(c); }
+
+    const parts = [];
+    parts.push(`driver_pay_rates.driver_id: ${rateType}`);
+    parts.push(`driver_schedules.driver_id: ${schedType}`);
+    parts.push(missing.length ? `drivers missing: ${missing.slice(0,6).join(', ')}${missing.length>6?'…':''}` : 'drivers OK');
+
+    const ok = (rateType.toLowerCase() === 'uuid' || rateType === 'missing') && (schedType.toLowerCase() === 'uuid' || schedType === 'missing') && missing.length === 0;
+    set(ok ? 'success' : 'info', parts.join(' | '));
+  } catch (e) {
+    set('error', e.message);
+  }
+}
+
+const checkBtn = document.getElementById('checkDriverTablesBtn');
+if (checkBtn) checkBtn.addEventListener('click', checkDriverTables);
+
+async function resolveOrgIdFromMembership() {
+  await ensureSupabaseReady();
+  const supabaseUrl = window.ENV.SUPABASE_URL; const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+  const storedSession = localStorage.getItem('supabase_session');
+  let authToken = supabaseKey; if (storedSession) { try { const s = JSON.parse(storedSession); if (s.access_token) authToken = s.access_token; } catch {}
+  }
+  const res = await fetch(`${supabaseUrl}/rest/v1/organization_members?select=organization_id&order=created_at.asc&limit=1`, {
+    headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+  });
+  if (!res.ok) { const t = await res.text(); throw new Error(`Org lookup failed: ${res.status} - ${t}`); }
+  const rows = await res.json();
+  if (!rows || !rows.length) throw new Error('No organization membership found for current user.');
+  return rows[0].organization_id;
+}
+
+// Assign a provided org ID to all drivers where organization_id is NULL
+async function assignOrgIdToNullDrivers() {
+  const btn = document.getElementById('assignOrgIdBtn');
+  const orgId = (document.getElementById('assignOrgIdInput').value || '').trim();
+  if (!orgId) { alert('Enter organization UUID.'); return; }
+  if (!confirm(`Set organization_id='${orgId}' for all drivers with NULL org?`)) return;
+
+  try {
+    await ensureSupabaseReady();
+    const supabase = getSupabaseClient();
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey; if (storedSession) { try { const s = JSON.parse(storedSession); if (s.access_token) authToken = s.access_token; } catch {} }
+
+    btn.disabled = true; btn.textContent = 'Assigning...';
+    const resp = await fetch(`${supabaseUrl}/rest/v1/drivers?organization_id=is.null`, {
+      method: 'PATCH',
+      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({ organization_id: orgId })
+    });
+    if (!resp.ok) { const txt = await resp.text(); throw new Error(`${resp.status} - ${txt}`); }
+    const updated = await resp.json();
+    alert(`Assigned org_id to ${updated.length || 0} drivers.`);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Assign Org to NULL';
+  }
+}
+
+const assignBtn = document.getElementById('assignOrgIdBtn');
+if (assignBtn) assignBtn.addEventListener('click', assignOrgIdToNullDrivers);
+
+// Assign current user's organization_id to NULL drivers
+async function assignCurrentOrgToNullDrivers() {
+  const btn = document.getElementById('assignCurrentOrgBtn');
+  try {
+    btn.disabled = true; btn.textContent = 'Assigning...';
+    const orgId = await resolveOrgIdFromMembership();
+    document.getElementById('assignOrgIdInput').value = orgId;
+    await assignOrgIdToNullDrivers();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Assign Current Org to NULL';
+  }
+}
+const assignCurBtn = document.getElementById('assignCurrentOrgBtn');
+if (assignCurBtn) assignCurBtn.addEventListener('click', assignCurrentOrgToNullDrivers);
+
+// Merge duplicate drivers (same email, within specified org):
+// keep the earliest created_at, reassign dependent rows, then delete others
+async function mergeDuplicateDriversInOrg() {
+  const btn = document.getElementById('mergeDupDriversBtn');
+  let orgId = (document.getElementById('mergeOrgIdInput').value || '').trim();
+  if (!orgId) {
+    try { orgId = await resolveOrgIdFromMembership(); } catch (e) { alert('Enter organization UUID.'); return; }
+  }
+  if (!confirm(`Merge duplicate drivers by email in org ${orgId}?`)) return;
+  try {
+    await ensureSupabaseReady();
+    const supabaseUrl = window.ENV.SUPABASE_URL; const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey; if (storedSession) { try { const s = JSON.parse(storedSession); if (s.access_token) authToken = s.access_token; } catch {} }
+
+    // Fetch drivers for org (id, email, created_at)
+    const res = await fetch(`${supabaseUrl}/rest/v1/drivers?select=id,email,created_at&organization_id=eq.${encodeURIComponent(orgId)}`, {
+      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error(`Fetch failed: ${res.status} - ${t}`); }
+    const drivers = await res.json();
+    const byEmail = new Map(); const dups = []; const toKeepByDelete = new Map();
+    for (const d of drivers) {
+      const email = (d.email || '').trim().toLowerCase(); if (!email) continue;
+      if (!byEmail.has(email)) byEmail.set(email, d);
+      else {
+        const keep = byEmail.get(email);
+        const toDelete = new Date(d.created_at) >= new Date(keep.created_at) ? d : keep;
+        const toKeep = toDelete === d ? keep : d;
+        byEmail.set(email, toKeep);
+        dups.push(toDelete.id);
+        toKeepByDelete.set(toDelete.id, toKeep.id);
+      }
+    }
+    let migrated = 0, deleted = 0;
+    for (let i = 0; i < dups.length; i++) {
+      const id = dups[i]; const keepId = toKeepByDelete.get(id);
+      // Reassign dependent rows to kept driver
+      if (keepId) {
+        const patchHeaders = { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+        const upd1 = await fetch(`${supabaseUrl}/rest/v1/driver_pay_rates?driver_id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: patchHeaders, body: JSON.stringify({ driver_id: keepId }) });
+        if (upd1.ok) migrated++;
+        const upd2 = await fetch(`${supabaseUrl}/rest/v1/driver_schedules?driver_id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: patchHeaders, body: JSON.stringify({ driver_id: keepId }) });
+        if (upd2.ok) migrated++;
+      }
+      // Delete duplicate driver
+      const del = await fetch(`${supabaseUrl}/rest/v1/drivers?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE', headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` }
+      });
+      if (del.ok) { deleted++; btn.textContent = `Merging... moved:${migrated} deleted:${deleted}/${dups.length}`; }
+    }
+    alert(`Merged duplicates. Reassigned ${migrated} related batches. Deleted ${deleted}/${dups.length}.`);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.textContent = 'Merge Duplicates';
+  }
+}
+
+const mergeBtn = document.getElementById('mergeDupDriversBtn');
+if (mergeBtn) mergeBtn.addEventListener('click', mergeDuplicateDriversInOrg);
+
+// Add the current authenticated user to an organization in organization_members
+async function addCurrentUserMembership() {
+  const btn = document.getElementById('addMembershipBtn');
+  const orgId = (document.getElementById('addMembershipOrgIdInput').value || '').trim();
+  if (!orgId) { alert('Enter organization UUID.'); return; }
+  try {
+    await ensureSupabaseReady();
+    const client = getSupabaseClient();
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) throw new Error('No authenticated user');
+
+    const supabaseUrl = window.ENV.SUPABASE_URL; const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey; if (storedSession) { try { const s = JSON.parse(storedSession); if (s.access_token) authToken = s.access_token; } catch {} }
+
+    btn.disabled = true; btn.textContent = 'Adding...';
+    // Check if membership exists
+    const check = await fetch(`${supabaseUrl}/rest/v1/organization_members?select=id&user_id=eq.${encodeURIComponent(user.id)}&organization_id=eq.${encodeURIComponent(orgId)}&limit=1`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${authToken}` }
+    });
+    if (!check.ok) { const t = await check.text(); throw new Error(`Check failed: ${check.status} - ${t}`); }
+    const rows = await check.json();
+    if (rows && rows.length) { alert('Membership already exists.'); return; }
+
+    // Insert membership
+    const ins = await fetch(`${supabaseUrl}/rest/v1/organization_members`, {
+      method: 'POST',
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ user_id: user.id, organization_id: orgId })
+    });
+    if (!ins.ok) { const t = await ins.text(); throw new Error(`Insert failed: ${ins.status} - ${t}`); }
+    alert('Membership added. Retry your insert/import now.');
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add Membership';
+  }
+}
+const addMemBtn = document.getElementById('addMembershipBtn');
+if (addMemBtn) addMemBtn.addEventListener('click', addCurrentUserMembership);
+</script>
+</div>
 </body>
 </html>

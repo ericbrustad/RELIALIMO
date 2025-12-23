@@ -1,4 +1,49 @@
-// Sample data
+// If Supabase is configured and user is logged in, we'll load drivers
+// dynamically to ensure this list matches Company Resources.
+
+async function loadDriversFromSupabase() {
+  try {
+    const supabaseUrl = window.ENV && window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV && window.ENV.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) return false;
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) {
+      try { const s = JSON.parse(storedSession); if (s.access_token) authToken = s.access_token; } catch {}
+    }
+    // Discover current org
+    const orgRes = await fetch(`${supabaseUrl}/rest/v1/organization_members?select=organization_id&order=created_at.asc&limit=1`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${authToken}` }
+    });
+    if (!orgRes.ok) return false;
+    const orgRows = await orgRes.json();
+    const orgId = orgRows && orgRows[0] && orgRows[0].organization_id;
+    if (!orgId) return false;
+
+    // Fetch drivers for this org
+    const res = await fetch(`${supabaseUrl}/rest/v1/drivers?select=id,first_name,last_name,status&organization_id=eq.${encodeURIComponent(orgId)}&order=last_name`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${authToken}` }
+    });
+    if (!res.ok) return false;
+    const drivers = await res.json();
+    const sel = document.getElementById('driverSelect');
+    if (!sel) return false;
+    // Clear existing options and populate
+    sel.innerHTML = '<option value="">Select Driver</option>';
+    drivers.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = `${(d.last_name||'').trim()}, ${(d.first_name||'').trim()}`;
+      sel.appendChild(opt);
+    });
+    return drivers.length > 0;
+  } catch (e) {
+    // Silent fallback to sample data
+    return false;
+  }
+}
+
+// Sample data (fallback)
 let linkedCars = [
   {
     id: 1,
@@ -187,6 +232,12 @@ function toggleCarSelection(id) {
 document.addEventListener('DOMContentLoaded', () => {
   renderLinkedCars();
   renderSelectedCars();
+  // Try to load drivers from Supabase; fallback to static options if unavailable
+  loadDriversFromSupabase().then(loaded => {
+    if (!loaded) {
+      // leave the hardcoded options in place
+    }
+  });
   
   // Set today's date as default
   const today = new Date().toISOString().split('T')[0];

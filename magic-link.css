@@ -1,3 +1,10 @@
+.send-magic-link { margin-top: 20px; padding: 16px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+.send-magic-link h4 { margin: 0 0 8px 0; }
+.send-row { display: flex; gap: 8px; align-items: center; }
+.send-row input[type="email"] { flex: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
+.send-row .primary { padding: 8px 12px; background: #8B0000; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.send-row .primary:hover { background: #a01515; }
+.helper-text { margin-top: 8px; font-size: 12px; color: #555; }
 * {
   box-sizing: border-box;
 }

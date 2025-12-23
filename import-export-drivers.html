@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Import/Export Drivers</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="./env.js"></script>
+  <style>
+    .frozen-header { position: fixed; top: 0; left: 0; right: 0; height: 50px; background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .frozen-header .logo { color: #fff; font-size: 18px; font-weight: bold; display: flex; align-items: center; gap: 4px; }
+    .frozen-header .logo img { height: 24px; }
+    .frozen-header .back-btn { background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .frozen-header .back-btn:hover { background: rgba(255,255,255,0.3); }
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; padding-top: 70px; background: #f5f5f5; }
+    h1 { color: #333; margin-bottom: 30px; }
+    .section { background: white; padding: 24px; margin-bottom: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    h2 { color: #1565c0; margin-top: 0; border-bottom: 2px solid #1565c0; padding-bottom: 10px; }
+    .btn { display: inline-block; padding: 12px 24px; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; margin-right: 10px; margin-bottom: 10px; transition: all 0.2s; }
+    .btn-primary { background: #1565c0; color: white; }
+    .btn-primary:hover { background: #0d47a1; }
+    .btn-success { background: #2e7d32; color: white; }
+    .btn-success:hover { background: #1b5e20; }
+    .btn-warning { background: #f57c00; color: white; }
+    .btn-warning:hover { background: #e65100; }
+    .status { padding: 12px 16px; border-radius: 4px; margin-top: 16px; display: none; }
+    .status.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; display: block; }
+    .status.error { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; display: block; }
+    .status.info { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; display: block; }
+    .file-input-wrapper { margin: 20px 0; }
+    .file-input-wrapper input[type="file"] { padding: 10px; border: 2px dashed #ccc; border-radius: 4px; width: 100%; max-width: 420px; }
+    .preview-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+    .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    .preview-table th { background: #f5f5f5; font-weight: 600; }
+    .preview-table tr:nth-child(even) { background: #fafafa; }
+    .template-info { background: #fff3e0; border: 1px solid #ffcc80; padding: 16px; border-radius: 4px; margin-bottom: 20px; }
+    .template-info h4 { margin: 0 0 10px 0; color: #e65100; }
+    .template-info code { background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header class="frozen-header">
+    <div class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="bull">LIMO™</div>
+    <button class="back-btn" onclick="window.location.href='utilities.html'">← Back to Utilities</button>
+  </header>
+
+  <h1>👥 Import/Export Drivers</h1>
+
+  <div id="schemaWarning" class="status error" style="display:none;">
+    Driver schema mismatch detected. Please run Utilities → "Ensure Driver Schema Exists" to apply fixes.
+    <a href="utilities.html" style="color:#1565c0; text-decoration:underline; font-weight:600;">Open Utilities</a>
+    <button id="recheckSchemaBtn" class="btn btn-warning" style="margin-left:8px; padding:6px 10px;">Recheck</button>
+  </div>
+
+  <div class="section">
+    <h2>📤 Export Drivers</h2>
+    <p>Export all drivers to an Excel (.xls) with the exact header layout.</p>
+    <button class="btn btn-primary" id="exportBtn">Export Drivers to XLS</button>
+    <div id="exportStatus" class="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Download Template</h2>
+    <div class="template-info">
+      <h4>Upload Header Columns (exact order):</h4>
+      <p style="line-height:1.8; font-size:12px;">
+        <code>FName</code>, <code>LName</code>, <code>Level</code>, <code>Addr</code>, <code>AptSte</code>, <code>City</code>, <code>State</code>, <code>Zip</code>,
+        <code>PhoneH</code>, <code>PhoneFax</code>, <code>PhoneOth</code>, <code>PhoneOthProvider</code>, <code>Pager</code>, <code>PagerProvider</code>, <code>Email</code>,
+        <code>NotifyEmail</code>, <code>NotifyFax</code>, <code>NotifySMS</code>, <code>SSN</code>, <code>DL</code>, <code>DOB</code>, <code>Type</code>, <code>Status</code>,
+        <code>Web</code>, <code>WebUID</code>, <code>WebPass</code>, <code>VoucherFee</code>, <code>Notes</code>, <code>Date Created</code>, <code>ExtraFldNV1</code>,
+        <code>ExtraFldNV2</code>, <code>ExtraFldNV3</code>, <code>ExtraFldFL1</code>, <code>ExtraFldFL2</code>, <code>ExtraFldFL3</code>, <code>SchedDaysIn</code>,
+        <code>SchedMonTmIn</code>, <code>SchedMonTmOut</code>, <code>SchedTueTmIn</code>, <code>SchedTueTmOut</code>, <code>SchedWedTmIn</code>, <code>SchedWedTmOut</code>,
+        <code>SchedThuTmIn</code>, <code>SchedThuTmOut</code>, <code>SchedFriTmIn</code>, <code>SchedFriTmOut</code>, <code>SchedSatTmIn</code>, <code>SchedSatTmOut</code>,
+        <code>SchedSunTmIn</code>, <code>SchedSunTmOut</code>, <code>DLExpDate</code>, <code>DLState</code>, <code>BadgeNo</code>, <code>BadgeNoExpDate</code>,
+        <code>Country</code>, <code>IncPh1</code>, <code>IncPh2</code>, <code>IncPh3</code>, <code>DispName</code>, <code>HourlyReg</code>, <code>HourlyOvr</code>,
+        <code>HourlyDbl</code>, <code>TSName</code>
+      </p>
+    </div>
+    <button class="btn btn-warning" id="templateBtn">Download Blank Template</button>
+    <div id="templateStatus" class="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>📥 Import Drivers</h2>
+    <p>Import drivers from an Excel (.xls/.xlsx) file. Must match the header order above.</p>
+    <div class="file-input-wrapper">
+      <input type="file" id="importFile" accept=".xls,.xlsx,.csv,.htm,.html" />
+    </div>
+    <button class="btn btn-success" id="importBtn" disabled>Import Drivers</button>
+    <div id="importStatus" class="status"></div>
+    <div id="previewSection" style="display:none;">
+      <h3>Preview (first 10 rows):</h3>
+      <table class="preview-table" id="previewTable"></table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Current Drivers in System</h2>
+    <button class="btn btn-primary" id="refreshBtn">Refresh List</button>
+    <div id="currentDriversSection">
+      <table class="preview-table" id="currentDriversTable"></table>
+    </div>
+  </div>
+
+<script type="module">
+import { setupAPI, getSupabaseClient } from './api-service.js';
+import { signInWithEmail } from './supabase-client.js';
+
+let supabaseClient = null;
+let importData = null;
+
+// Single source of truth for driver headers
+const DRIVER_HEADERS = ['FName','LName','Level','Addr','AptSte','City','State','Zip','PhoneH','PhoneFax','PhoneOth','PhoneOthProvider','Pager','PagerProvider','Email','NotifyEmail','NotifyFax','NotifySMS','SSN','DL','DOB','Type','Status','Web','WebUID','WebPass','VoucherFee','Notes','Date Created','ExtraFldNV1','ExtraFldNV2','ExtraFldNV3','ExtraFldFL1','ExtraFldFL2','ExtraFldFL3','SchedDaysIn','SchedMonTmIn','SchedMonTmOut','SchedTueTmIn','SchedTueTmOut','SchedWedTmIn','SchedWedTmOut','SchedThuTmIn','SchedThuTmOut','SchedFriTmIn','SchedFriTmOut','SchedSatTmIn','SchedSatTmOut','SchedSunTmIn','SchedSunTmOut','DLExpDate','DLState','BadgeNo','BadgeNoExpDate','Country','IncPh1','IncPh2','IncPh3','DispName','HourlyReg','HourlyOvr','HourlyDbl','TSName'];
+
+async function ensureValidSession() {
+  await setupAPI();
+  supabaseClient = getSupabaseClient();
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) {
+    const email = window.ENV?.SUPABASE_EMAIL; const password = window.ENV?.SUPABASE_PASSWORD;
+    if (!email || !password) throw new Error('Missing credentials in env.js');
+    const result = await signInWithEmail(email, password);
+    if (!result.success) throw new Error(result.error || 'Auth failed');
+  }
+}
+
+async function getOrgContext() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) throw new Error('User not authenticated');
+  const { data, error } = await supabaseClient
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .single();
+  if (error) throw error;
+  return data.organization_id;
+}
+
+async function checkDriverSchema() {
+  try {
+    const el = document.getElementById('schemaWarning');
+    const suggested = ['address_line2','fax','other_phone','other_phone_provider','pager_phone','pager_provider','notify_email','notify_fax','notify_sms','web_username','web_password','voucher_fee','driver_notes','extra_nv_1','extra_nv_2','extra_nv_3','extra_fl_1','extra_fl_2','extra_fl_3','license_exp_date','license_state','badge_id','badge_exp_date','country','include_phone_1','include_phone_2','include_phone_3','dispatch_display_name','trip_sheets_display_name'];
+
+    async function columnExists(col) {
+      const { data, error } = await supabaseClient
+        .from('drivers')
+        .select(col)
+        .limit(1);
+      if (error && String(error.message || '').toLowerCase().includes('column')) return false;
+      return true;
+    }
+
+    const missing = [];
+    for (const c of suggested) {
+      const ok = await columnExists(c);
+      if (!ok) missing.push(c);
+    }
+
+    if (missing.length) {
+      el.style.display = 'block';
+      el.className = 'status error';
+      el.firstChild && (el.firstChild.textContent = `Driver schema mismatch detected. Missing columns: ${missing.slice(0,6).join(', ')}${missing.length>6?'…':''}. `);
+    } else {
+      el.style.display = 'none';
+    }
+  } catch (e) {
+    console.warn('Schema check failed:', e);
+  }
+}
+
+function parseFile(file) {
+  const isCsv = /\.csv$/i.test(file.name || '');
+  const isHtml = /\.html?$/i.test(file.name || '');
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const content = e.target.result;
+      const workbook = (isCsv || isHtml)
+        ? XLSX.read(content, { type: 'string' })
+        : XLSX.read(content, { type: 'binary' });
+
+      // Pick the sheet with the most rows
+      let bestSheetName = workbook.SheetNames[0];
+      let bestRows = 0;
+      for (const name of workbook.SheetNames) {
+        const ws = workbook.Sheets[name];
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: '' });
+        if (aoa.length > bestRows) { bestRows = aoa.length; bestSheetName = name; }
+      }
+      const worksheet = workbook.Sheets[bestSheetName];
+
+      // Auto-detect header row by matching expected headers
+      const aoa = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+      const norm = (s) => String(s || '').trim().replace(/\s+/g,'').toLowerCase();
+      const expected = new Set(DRIVER_HEADERS.map(h => norm(h)));
+      let headerIdx = 0;
+      let bestMatch = -1;
+      for (let i = 0; i < Math.min(aoa.length, 20); i++) {
+        const row = aoa[i] || [];
+        let matches = 0;
+        for (const cell of row) { if (expected.has(norm(cell))) matches++; }
+        if (matches > bestMatch) { bestMatch = matches; headerIdx = i; }
+      }
+
+      const headerRow = (aoa[headerIdx] || []).map(h => String(h || '').trim());
+      // Validate exact header order against DRIVER_HEADERS (case/space-insensitive)
+      const expectedOrder = DRIVER_HEADERS.map(norm);
+      const actualOrder = headerRow.map(norm);
+      let exactOk = expectedOrder.length === actualOrder.length;
+      if (exactOk) {
+        for (let i=0;i<expectedOrder.length;i++){ if (expectedOrder[i] !== actualOrder[i]) { exactOk = false; break; } }
+      }
+      if (!exactOk) {
+        const firstMismatchIdx = expectedOrder.findIndex((v,i)=> actualOrder[i] !== v);
+        const expectedAt = firstMismatchIdx >= 0 ? DRIVER_HEADERS[firstMismatchIdx] : '(length mismatch)';
+        const actualAt = firstMismatchIdx >= 0 ? (headerRow[firstMismatchIdx]||'(missing)') : '(length mismatch)';
+        setStatus('importStatus','error', `Header mismatch. Expected exact column order. First mismatch at index ${firstMismatchIdx}: expected "${expectedAt}", found "${actualAt}". Use the Template button to download the required layout.`);
+        document.getElementById('importBtn').disabled = true;
+        // Still show preview for reference
+      }
+
+      // Build a name map to standardize incoming headers to our canonical DRIVER_HEADERS
+      const nameMap = new Map(); // column index -> canonical name
+      headerRow.forEach((h, idx) => {
+        const n = norm(h);
+        const pos = expectedOrder.indexOf(n);
+        if (pos !== -1) nameMap.set(idx, DRIVER_HEADERS[pos]); else nameMap.set(idx, h);
+      });
+      const colIndex = headerRow.map((h, idx) => ({ name: nameMap.get(idx) || h, idx })).filter(c => c.name);
+
+      // Build objects from AOA using detected header row
+      const rows = [];
+      for (let r = headerIdx + 1; r < aoa.length; r++) {
+        const rowArr = aoa[r] || [];
+        // Check if row is effectively empty
+        const nonEmpty = rowArr.some(v => String(v || '').trim() !== '');
+        if (!nonEmpty) continue;
+        const obj = {};
+        for (const c of colIndex) { obj[c.name] = rowArr[c.idx] ?? ''; }
+        rows.push(obj);
+      }
+
+      importData = rows;
+      preview(rows.slice(0, 10));
+      document.getElementById('importBtn').disabled = rows.length === 0;
+      if (rows.length === 0) {
+        setStatus('importStatus', 'error', 'Loaded 0 rows. Ensure the first sheet with data has a header row matching the template, or save as .xlsx and retry.');
+      } else {
+        setStatus('importStatus', 'success', `Loaded ${rows.length} rows from "${bestSheetName}"`);
+      }
+    } catch (err) {
+      console.error('Parse error:', err);
+      setStatus('importStatus', 'error', 'Failed to parse file. Ensure it is a valid .xls/.xlsx/.csv with headers.');
+    }
+  };
+
+  if (isCsv || isHtml) reader.readAsText(file); else reader.readAsBinaryString(file);
+}
+
+function preview(rows) {
+  const table = document.getElementById('previewTable');
+  document.getElementById('previewSection').style.display = 'block';
+  if (!rows || rows.length === 0) { table.innerHTML = '<tr><td>No data</td></tr>'; return; }
+  const headers = Object.keys(rows[0]);
+  let html = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  rows.forEach(r => {
+    html += '<tr>' + headers.map(h => `<td>${(r[h] ?? '')}</td>`).join('') + '</tr>';
+  });
+  table.innerHTML = html;
+}
+
+function mapRowToDriver(row, orgId) {
+  // Normalize helpers
+  const yn = (v) => String(v).trim().toLowerCase().startsWith('y') || String(v).trim() === '1' || String(v).trim().toLowerCase() === 'true';
+  const dt = (v) => { try { const d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString().slice(0,10); } catch { return null; } };
+  const money = (v) => { const n = parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isNaN(n) ? null : n; };
+
+  // Normalize driver type to satisfy CHECK constraint; default to 'DRIVER'
+  const rawType = (row['Type'] || '').toString().trim();
+  const normalizedType = rawType ? 'Driver' : 'Driver';
+  return {
+    organization_id: orgId,
+    first_name: row['FName'] || null,
+    last_name: row['LName'] || null,
+    driver_level: row['Level'] ? String(row['Level']).replace(/[^0-9]/g,'') : null,
+    primary_address: row['Addr'] || null,
+    address_line2: row['AptSte'] || null,
+    city: row['City'] || null,
+    state: row['State'] || null,
+    address_zip: row['Zip'] || null,
+    home_phone: row['PhoneH'] || null,
+    fax: row['PhoneFax'] || null,
+    other_phone: row['PhoneOth'] || null,
+    other_phone_provider: row['PhoneOthProvider'] || null,
+    pager_phone: row['Pager'] || null,
+    pager_provider: row['PagerProvider'] || null,
+    email: row['Email'] || null,
+    notify_email: yn(row['NotifyEmail']),
+    notify_fax: yn(row['NotifyFax']),
+    notify_sms: yn(row['NotifySMS']),
+    ssn: row['SSN'] || null,
+    license_number: row['DL'] || null,
+    dob: dt(row['DOB']),
+    type: normalizedType,
+    status: 'ACTIVE',
+    web_access: row['Web'] || null,
+    web_username: row['WebUID'] || null,
+    web_password: row['WebPass'] || null,
+    voucher_fee: money(row['VoucherFee']),
+    driver_notes: row['Notes'] || null,
+    created_at: dt(row['Date Created']) || undefined,
+    extra_nv_1: row['ExtraFldNV1'] || null,
+    extra_nv_2: row['ExtraFldNV2'] || null,
+    extra_nv_3: row['ExtraFldNV3'] || null,
+    extra_fl_1: row['ExtraFldFL1'] || null,
+    extra_fl_2: row['ExtraFldFL2'] || null,
+    extra_fl_3: row['ExtraFldFL3'] || null,
+    license_exp_date: dt(row['DLExpDate']),
+    license_state: row['DLState'] || null,
+    badge_id: row['BadgeNo'] || null,
+    badge_exp_date: dt(row['BadgeNoExpDate']),
+    country: row['Country'] || null,
+    include_phone_1: row['IncPh1'] || null,
+    include_phone_2: row['IncPh2'] || null,
+    include_phone_3: row['IncPh3'] || null,
+    dispatch_display_name: row['DispName'] || null,
+    trip_sheets_display_name: row['TSName'] || null
+  };
+}
+
+function mapRowToPayRates(row, driverId, orgId) {
+  return {
+    driver_id: driverId,
+    organization_id: orgId,
+    trip_regular_rate: parseFloat(row['HourlyReg'] || '0') || 0,
+    trip_overtime_rate: parseFloat(row['HourlyOvr'] || '0') || 0,
+    trip_double_time_rate: parseFloat(row['HourlyDbl'] || '0') || 0
+  };
+}
+
+function mapRowToSchedules(row, driverId, orgId) {
+  const toTime = (v) => { if (!v) return null; try { const m = String(v).trim(); if (!m) return null; // Expect HH:MM
+    const parts = m.split(':'); if (parts.length < 2) return null; const hh = parts[0].padStart(2,'0'); const mm = parts[1].padStart(2,'0'); return `${hh}:${mm}:00`; } catch{ return null; } };
+  const days = [
+    { name:'Monday', in:'SchedMonTmIn', out:'SchedMonTmOut' },
+    { name:'Tuesday', in:'SchedTueTmIn', out:'SchedTueTmOut' },
+    { name:'Wednesday', in:'SchedWedTmIn', out:'SchedWedTmOut' },
+    { name:'Thursday', in:'SchedThuTmIn', out:'SchedThuTmOut' },
+    { name:'Friday', in:'SchedFriTmIn', out:'SchedFriTmOut' },
+    { name:'Saturday', in:'SchedSatTmIn', out:'SchedSatTmOut' },
+    { name:'Sunday', in:'SchedSunTmIn', out:'SchedSunTmOut' }
+  ];
+  const rows = [];
+  for (const d of days) {
+    const start = toTime(row[d.in]);
+    const end = toTime(row[d.out]);
+    if (start || end) {
+      rows.push({ driver_id: driverId, organization_id: orgId, day_of_week: d.name, start_time: start, end_time: end });
+    }
+  }
+  return rows;
+}
+
+async function exportDrivers() {
+  await ensureValidSession();
+  const orgId = await getOrgContext();
+  const { data: drivers, error } = await supabaseClient
+    .from('drivers')
+    .select('*')
+    .eq('organization_id', orgId)
+    .order('last_name');
+  if (error) return setStatus('exportStatus','error', error.message);
+
+  // Optionally fetch pay rates and schedules
+  let ratesByDriver = {}; let schedByDriver = {};
+  try {
+    const { data: rates } = await supabaseClient.from('driver_pay_rates').select('*').eq('organization_id', orgId);
+    (rates||[]).forEach(r=>{ ratesByDriver[r.driver_id]=r; });
+  } catch {}
+  try {
+    const { data: sched } = await supabaseClient.from('driver_schedules').select('*').eq('organization_id', orgId);
+    (sched||[]).forEach(s=>{ (schedByDriver[s.driver_id]=schedByDriver[s.driver_id]||{})[s.day_of_week]=s; });
+  } catch {}
+
+  const headers = DRIVER_HEADERS;
+
+  const rows = drivers.map(d=>{
+    const r = ratesByDriver[d.id]||{}; const s = schedByDriver[d.id]||{};
+    function take(day, field){ return (s[day]&&s[day][field]) ? String(s[day][field]).slice(0,5) : ''; }
+    return {
+      'FName': d.first_name||'', 'LName': d.last_name||'', 'Level': d.driver_level||'', 'Addr': d.primary_address||'', 'AptSte': d.address_line2||'', 'City': d.city||'', 'State': d.state||'', 'Zip': d.address_zip||'', 'PhoneH': d.home_phone||'', 'PhoneFax': d.fax||'', 'PhoneOth': d.other_phone||'', 'PhoneOthProvider': d.other_phone_provider||'', 'Pager': d.pager_phone||'', 'PagerProvider': d.pager_provider||'', 'Email': d.email||'', 'NotifyEmail': d.notify_email? 'Y':'N', 'NotifyFax': d.notify_fax? 'Y':'N', 'NotifySMS': d.notify_sms? 'Y':'N', 'SSN': d.ssn||'', 'DL': d.license_number||'', 'DOB': d.dob||'', 'Type': d.type||'', 'Status': d.status||'', 'Web': d.web_access||'', 'WebUID': d.web_username||'', 'WebPass': d.web_password||'', 'VoucherFee': d.voucher_fee||'', 'Notes': d.driver_notes||'', 'Date Created': d.created_at||'', 'ExtraFldNV1': d.extra_nv_1||'', 'ExtraFldNV2': d.extra_nv_2||'', 'ExtraFldNV3': d.extra_nv_3||'', 'ExtraFldFL1': d.extra_fl_1||'', 'ExtraFldFL2': d.extra_fl_2||'', 'ExtraFldFL3': d.extra_fl_3||'', 'SchedDaysIn': '', 'SchedMonTmIn': take('Monday','start_time'), 'SchedMonTmOut': take('Monday','end_time'), 'SchedTueTmIn': take('Tuesday','start_time'), 'SchedTueTmOut': take('Tuesday','end_time'), 'SchedWedTmIn': take('Wednesday','start_time'), 'SchedWedTmOut': take('Wednesday','end_time'), 'SchedThuTmIn': take('Thursday','start_time'), 'SchedThuTmOut': take('Thursday','end_time'), 'SchedFriTmIn': take('Friday','start_time'), 'SchedFriTmOut': take('Friday','end_time'), 'SchedSatTmIn': take('Saturday','start_time'), 'SchedSatTmOut': take('Saturday','end_time'), 'SchedSunTmIn': take('Sunday','start_time'), 'SchedSunTmOut': take('Sunday','end_time'), 'DLExpDate': d.license_exp_date||'', 'DLState': d.license_state||'', 'BadgeNo': d.badge_id||'', 'BadgeNoExpDate': d.badge_exp_date||'', 'Country': d.country||'', 'IncPh1': d.include_phone_1||'', 'IncPh2': d.include_phone_2||'', 'IncPh3': d.include_phone_3||'', 'DispName': d.dispatch_display_name||'', 'HourlyReg': r.trip_regular_rate||'', 'HourlyOvr': r.trip_overtime_rate||'', 'HourlyDbl': r.trip_double_time_rate||'', 'TSName': d.trip_sheets_display_name||''
+    };
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Drivers');
+  const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'drivers_export.xlsx'; a.click();
+  URL.revokeObjectURL(url);
+  setStatus('exportStatus','success','Exported drivers successfully');
+}
+
+function downloadTemplate() {
+  const headers = DRIVER_HEADERS;
+  const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'DriversTemplate');
+  const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'drivers_import_template.xlsx'; a.click();
+  URL.revokeObjectURL(url);
+  setStatus('templateStatus','success','Template downloaded');
+}
+
+// Fetch and cache the list of actual columns on public.drivers
+let DRIVER_TABLE_COLUMNS = null;
+async function getDriverColumns() {
+  if (DRIVER_TABLE_COLUMNS) return DRIVER_TABLE_COLUMNS;
+  try {
+    const { data, error } = await supabaseClient
+      .from('information_schema.columns')
+      .select('column_name')
+      .eq('table_schema','public')
+      .eq('table_name','drivers');
+    if (error) throw error;
+    DRIVER_TABLE_COLUMNS = new Set((data||[]).map(r=>r.column_name));
+  } catch (e) {
+    DRIVER_TABLE_COLUMNS = null;
+  }
+  return DRIVER_TABLE_COLUMNS;
+}
+
+function filterToDriverColumns(rowObj, colSet){
+  if (!colSet) return rowObj;
+  const filtered = {};
+  for (const [k,v] of Object.entries(rowObj)) {
+    if (colSet.has(k)) filtered[k] = v;
+  }
+  return filtered;
+}
+
+async function importDrivers() {
+  try {
+    await ensureValidSession();
+    const orgId = await getOrgContext();
+    if (!importData || importData.length === 0) return setStatus('importStatus','error','No data to import');
+
+    let inserted = 0; let updated = 0; let failed = 0; let firstError = null;
+    const colSet = await getDriverColumns();
+
+    for (const row of importData) {
+      const driverRowRaw = mapRowToDriver(row, orgId);
+      const driverRow = filterToDriverColumns(driverRowRaw, colSet);
+
+      // Try to find existing driver by email or license
+      let existing = null;
+      if (driverRow.email) {
+        const { data: match } = await supabaseClient.from('drivers').select('id').eq('organization_id', orgId).eq('email', driverRow.email).limit(1);
+        existing = match && match[0];
+      }
+      if (!existing && driverRow.license_number) {
+        const { data: match2 } = await supabaseClient.from('drivers').select('id').eq('organization_id', orgId).eq('license_number', driverRow.license_number).limit(1);
+        existing = match2 && match2[0];
+      }
+
+      if (existing) {
+        const { error: upErr } = await supabaseClient.from('drivers').update(driverRow).eq('id', existing.id);
+        if (upErr) { failed++; if (!firstError) firstError = upErr.message || JSON.stringify(upErr); continue; } else { updated++; }
+        // Update pay rates
+        try {
+          const rates = mapRowToPayRates(row, existing.id, orgId);
+          const { data: hasRate } = await supabaseClient.from('driver_pay_rates').select('id').eq('driver_id', existing.id).limit(1);
+          if (hasRate) await supabaseClient.from('driver_pay_rates').update(rates).eq('driver_id', existing.id);
+          else await supabaseClient.from('driver_pay_rates').insert([rates]);
+        } catch {}
+        // Update schedules
+        try {
+          const schedRows = mapRowToSchedules(row, existing.id, orgId);
+          // Upsert schedules per day
+          for (const s of schedRows) {
+            const { data: existingSched } = await supabaseClient.from('driver_schedules').select('id').eq('driver_id', s.driver_id).eq('day_of_week', s.day_of_week).limit(1);
+            if (existingSched && existingSched[0]) await supabaseClient.from('driver_schedules').update({ start_time: s.start_time, end_time: s.end_time }).eq('id', existingSched[0].id);
+            else await supabaseClient.from('driver_schedules').insert([s]);
+          }
+        } catch {}
+      } else {
+        const { data: ins, error: insErr } = await supabaseClient.from('drivers').insert([driverRow]).select('id');
+        if (insErr) { failed++; if (!firstError) firstError = insErr.message || JSON.stringify(insErr); continue; }
+        inserted++;
+        const driverId = ins && ins[0] && ins[0].id;
+        if (driverId) {
+          try { await supabaseClient.from('driver_pay_rates').insert([mapRowToPayRates(row, driverId, orgId)]); } catch {}
+          try {
+            const schedRows = mapRowToSchedules(row, driverId, orgId);
+            if (schedRows.length) await supabaseClient.from('driver_schedules').insert(schedRows);
+          } catch {}
+        }
+      }
+
+      setStatus('importStatus','info', `Progress: ${inserted} inserted, ${updated} updated, ${failed} failed`);
+    }
+
+    const suffix = firstError ? ` (first error: ${firstError})` : '';
+    setStatus('importStatus','success', `✅ Completed: ${inserted} inserted, ${updated} updated, ${failed} failed${suffix}`);
+    loadCurrentDrivers();
+  } catch (e) {
+    setStatus('importStatus','error', e.message);
+  }
+}
+
+async function loadCurrentDrivers() {
+  await ensureValidSession();
+  const orgId = await getOrgContext();
+  const table = document.getElementById('currentDriversTable');
+  const { data, error } = await supabaseClient.from('drivers').select('id, first_name, last_name, email, cell_phone, home_phone, city, state, status').eq('organization_id', orgId).order('last_name');
+  if (error) { table.innerHTML = `<tr><td>${error.message}</td></tr>`; return; }
+  if (!data || data.length === 0) { table.innerHTML = '<tr><td>No drivers found</td></tr>'; return; }
+  let html = '<tr><th>ID</th><th>Name</th><th>Email</th><th>Cell</th><th>Home</th><th>City</th><th>State</th><th>Status</th></tr>';
+  for (const d of data) { html += `<tr><td>${d.id}</td><td>${d.first_name||''} ${d.last_name||''}</td><td>${d.email||''}</td><td>${d.cell_phone||''}</td><td>${d.home_phone||''}</td><td>${d.city||''}</td><td>${d.state||''}</td><td>${d.status||''}</td></tr>`; }
+  table.innerHTML = html;
+}
+
+function setStatus(id, kind, msg) {
+  const el = document.getElementById(id); el.className = `status ${kind}`; el.textContent = msg;
+}
+
+// Wire UI
+init();
+function init(){
+  document.getElementById('exportBtn').onclick = exportDrivers;
+  document.getElementById('templateBtn').onclick = downloadTemplate;
+  document.getElementById('importFile').addEventListener('change', (e)=>{ if (e.target.files && e.target.files[0]) parseFile(e.target.files[0]); });
+  document.getElementById('importBtn').onclick = importDrivers;
+  document.getElementById('refreshBtn').onclick = loadCurrentDrivers;
+  // Run schema check after ensuring session
+  ensureValidSession().then(checkDriverSchema).catch(()=>{});
+  const reBtn = document.getElementById('recheckSchemaBtn');
+  if (reBtn) reBtn.onclick = () => checkDriverSchema();
+}
+</script>
+</body>
+</html>

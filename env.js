@@ -11,5 +11,6 @@ window.ENV = {
   TWILIO_AUTH_TOKEN: "b89c8ac3cd3cd1b634c5c48d4ac6646b",
   OPENAI_API_KEY: "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",
   athropic_claude_api: "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",
-  gemini_api: "AIzaSyBe-"
+  gemini_api: "AIzaSyBe-",
+  GOOGLE_MAPS_API_KEY: "YOUR_GOOGLE_MAPS_API_KEY_HERE"
 };

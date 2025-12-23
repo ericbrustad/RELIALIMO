@@ -8,6 +8,113 @@ export function getLastApiError() {
   return lastApiError;
 }
 
+/**
+ * Check if JWT token is expired and attempt to refresh it
+ */
+async function ensureValidToken(client) {
+  try {
+    const session = localStorage.getItem('supabase_session');
+    if (!session) return true; // No session yet, allow to proceed
+    
+    const parsed = JSON.parse(session);
+    if (!parsed.access_token || parsed.access_token.startsWith('offline-')) {
+      // Offline token or demo account, skip refresh
+      return true;
+    }
+    
+    // Decode JWT to check expiration
+    const parts = parsed.access_token.split('.');
+    if (parts.length !== 3) return true; // Invalid JWT format, but allow to proceed
+    
+    try {
+      const decoded = JSON.parse(atob(parts[1]));
+      const expiresAt = decoded.exp * 1000; // Convert to milliseconds
+      const now = Date.now();
+      const timeUntilExpiry = expiresAt - now;
+      
+      // If expires in less than 5 minutes, refresh
+      if (timeUntilExpiry < 5 * 60 * 1000) {
+        console.warn('⚠️ Token expiring soon, attempting refresh...');
+        
+        // Only try to refresh if we have a refresh token
+        if (parsed.refresh_token && !parsed.refresh_token.startsWith('offline-')) {
+          const refreshResult = await refreshAccessToken(client, parsed.refresh_token);
+          if (refreshResult.success) {
+            console.log('✅ Token refreshed successfully');
+            return true;
+          }
+        }
+        
+        // If refresh fails, token might still be valid for a few minutes
+        // Allow to proceed and let the actual API call handle the 401 if needed
+        console.warn('⚠️ Token refresh failed, but will attempt API call');
+        return true;
+      }
+      
+      return true;
+    } catch (decodeError) {
+      console.warn('⚠️ Could not decode JWT:', decodeError);
+      return true; // Allow to proceed even if we can't decode
+    }
+  } catch (error) {
+    console.error('❌ Token validation error:', error);
+    return true; // Allow to proceed even if validation fails
+  }
+}
+
+/**
+ * Refresh access token using refresh token
+ */
+async function refreshAccessToken(client, refreshToken) {
+  try {
+    if (!refreshToken) {
+      console.warn('⚠️ No refresh token available');
+      return { success: false, error: 'No refresh token' };
+    }
+    
+    // Use the correct Supabase URL from config
+    const url = `${supabaseConfig.url}/auth/v1/token?grant_type=refresh_token`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseConfig.anonKey
+      },
+      body: JSON.stringify({
+        refresh_token: refreshToken
+      })
+    });
+    
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('⚠️ Token refresh error response:', response.status, errorBody);
+      throw new Error(`Token refresh failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.access_token) {
+      throw new Error('No access token in refresh response');
+    }
+    
+    // Save new tokens
+    const session = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token || refreshToken,
+      user: JSON.parse(localStorage.getItem('supabase_session') || '{}').user
+    };
+    
+    localStorage.setItem('supabase_session', JSON.stringify(session));
+    localStorage.setItem('supabase_access_token', data.access_token);
+    
+    return { success: true, session };
+  } catch (error) {
+    console.error('❌ Token refresh failed:', error);
+    return { success: false, error };
+  }
+}
+
 async function getOrgContextOrThrow(client) {
   const { data: { user }, error: userError } = await client.auth.getUser();
   if (userError) throw userError;
@@ -31,6 +138,13 @@ async function getOrgContextOrThrow(client) {
 export async function setupAPI() {
   try {
     supabaseClient = await initSupabase();
+    
+    // Ensure token is valid on startup (non-blocking)
+    const isValid = await ensureValidToken(supabaseClient);
+    if (!isValid) {
+      console.warn('⚠️ Token validation indicated potential issues, but proceeding');
+    }
+    
     console.log('✅ Supabase API initialized successfully');
     return supabaseClient;
   } catch (error) {
@@ -138,6 +252,188 @@ export async function deleteDriver(driverId) {
 
 function normalizeSpaces(value) {
   return value.replace(/\s+/g, ' ').trim();
+}
+
+// ============================================================================
+// AFFILIATE CRUD OPERATIONS (for 'affiliates' table from import)
+// ============================================================================
+
+/**
+ * Fetch all affiliates from the affiliates table
+ */
+export async function fetchAffiliates() {
+  const client = getSupabaseClient();
+  console.log('🔍 fetchAffiliates - client:', client ? 'initialized' : 'NULL');
+  if (!client) return null;
+
+  try {
+    lastApiError = null;
+    
+    // Ensure token is valid before making request
+    const isValid = await ensureValidToken(client);
+    if (!isValid) {
+      console.warn('⚠️ Token validation failed');
+      if (confirm('Your session has expired. Would you like to log in again?')) {
+        window.location.href = 'auth.html';
+      }
+      return null;
+    }
+    
+    const { data, error } = await client
+      .from('affiliates')
+      .select('*')
+      .order('company_name', { ascending: true });
+
+    console.log('🔍 fetchAffiliates - data:', data?.length, 'error:', error);
+    
+    // Handle JWT expiration
+    if (error && error.status === 401 && error.message?.includes('JWT')) {
+      console.warn('⚠️ JWT expired - clearing session');
+      localStorage.removeItem('supabase_session');
+      localStorage.removeItem('supabase_access_token');
+      // Optionally redirect to login
+      if (confirm('Your session has expired. Would you like to log in again?')) {
+        window.location.href = 'auth.html';
+      }
+      return null;
+    }
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error fetching affiliates:', error);
+    lastApiError = error;
+    return null;
+  }
+}
+
+/**
+ * Create a new affiliate
+ */
+export async function createAffiliate(affiliateData) {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    lastApiError = null;
+    const { data, error } = await client
+      .from('affiliates')
+      .insert([affiliateData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating affiliate:', error);
+    lastApiError = error;
+    return null;
+  }
+}
+
+/**
+ * Update an existing affiliate
+ */
+export async function updateAffiliate(affiliateId, affiliateData) {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    lastApiError = null;
+    const { data, error } = await client
+      .from('affiliates')
+      .update(affiliateData)
+      .eq('id', affiliateId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating affiliate:', error);
+    lastApiError = error;
+    return null;
+  }
+}
+
+/**
+ * Delete an affiliate
+ */
+export async function deleteAffiliate(affiliateId) {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  try {
+    lastApiError = null;
+    const { data, error } = await client
+      .from('affiliates')
+      .delete()
+      .eq('id', affiliateId);
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error deleting affiliate:', error);
+    lastApiError = error;
+    return null;
+  }
+}
+
+/**
+ * Remove duplicate affiliates from the database
+ * Keeps the first occurrence (by id) and deletes duplicates based on company_name
+ */
+export async function removeDuplicateAffiliates() {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Client not initialized', removed: 0 };
+
+  try {
+    // Fetch all affiliates ordered by id
+    const { data: affiliates, error: fetchError } = await client
+      .from('affiliates')
+      .select('id, company_name, first_name, last_name')
+      .order('id', { ascending: true });
+
+    if (fetchError) throw fetchError;
+    if (!affiliates || affiliates.length === 0) {
+      return { success: true, removed: 0, message: 'No affiliates found' };
+    }
+
+    // Track seen company names (normalized)
+    const seen = new Map();
+    const duplicateIds = [];
+
+    affiliates.forEach(aff => {
+      // Create a key from company_name or first+last name
+      const key = (aff.company_name || `${aff.first_name || ''} ${aff.last_name || ''}`).trim().toLowerCase();
+      
+      if (key && seen.has(key)) {
+        // This is a duplicate
+        duplicateIds.push(aff.id);
+      } else if (key) {
+        // First occurrence
+        seen.set(key, aff.id);
+      }
+    });
+
+    if (duplicateIds.length === 0) {
+      return { success: true, removed: 0, message: 'No duplicates found' };
+    }
+
+    // Delete duplicates
+    const { error: deleteError } = await client
+      .from('affiliates')
+      .delete()
+      .in('id', duplicateIds);
+
+    if (deleteError) throw deleteError;
+
+    console.log(`✅ Removed ${duplicateIds.length} duplicate affiliates`);
+    return { success: true, removed: duplicateIds.length, message: `Removed ${duplicateIds.length} duplicates` };
+  } catch (error) {
+    console.error('Error removing duplicate affiliates:', error);
+    return { success: false, error: error.message, removed: 0 };
+  }
 }
 
 export function normalizeAffiliateName(rawName) {

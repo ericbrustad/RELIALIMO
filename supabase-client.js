@@ -166,6 +166,7 @@ class PostgrestQuery {
     this.body = undefined;
     this.returnRepresentation = false;
     this.expectSingle = false;
+    this._limit = null;
   }
 
   select(columns = '*') {
@@ -211,6 +212,11 @@ class PostgrestQuery {
     return this;
   }
 
+  limit(n) {
+    this._limit = typeof n === 'number' ? Math.max(0, Math.floor(n)) : null;
+    return this;
+  }
+
   async execute() {
     const token = localStorage.getItem('supabase_access_token') || supabaseAnonKey;
 
@@ -222,6 +228,10 @@ class PostgrestQuery {
 
     if (this.orderBy?.column) {
       url.searchParams.set('order', `${this.orderBy.column}.${this.orderBy.dir}`);
+    }
+
+    if (this._limit != null) {
+      url.searchParams.set('limit', String(this._limit));
     }
 
     this.filters.forEach(f => {

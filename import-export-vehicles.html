@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Import/Export Vehicles</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="./env.js"></script>
+  <style>
+    .frozen-header { position: fixed; top: 0; left: 0; right: 0; height: 50px; background: linear-gradient(135deg, #2d5016 0%, #4a7c1f 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .frozen-header .logo { color: #fff; font-size: 18px; font-weight: bold; display: flex; align-items: center; gap: 4px; }
+    .frozen-header .logo img { height: 24px; }
+    .frozen-header .back-btn { background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .frozen-header .back-btn:hover { background: rgba(255,255,255,0.3); }
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; padding-top: 70px; background: #f5f5f5; }
+    h1 { color: #333; margin-bottom: 30px; }
+    .section { background: white; padding: 24px; margin-bottom: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    h2 { color: #2d5016; margin-top: 0; border-bottom: 2px solid #4a7c1f; padding-bottom: 10px; }
+    .btn { display: inline-block; padding: 12px 24px; border: none; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; margin-right: 10px; margin-bottom: 10px; transition: all 0.2s; }
+    .btn-primary { background: #2d5016; color: white; }
+    .btn-primary:hover { background: #1e3610; }
+    .btn-success { background: #2e7d32; color: white; }
+    .btn-success:hover { background: #1b5e20; }
+    .btn-warning { background: #f57c00; color: white; }
+    .btn-warning:hover { background: #e65100; }
+    .status { padding: 12px 16px; border-radius: 4px; margin-top: 16px; display: none; }
+    .status.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; display: block; }
+    .status.error { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; display: block; }
+    .status.info { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; display: block; }
+    .file-input-wrapper { margin: 20px 0; }
+    .file-input-wrapper input[type="file"] { padding: 10px; border: 2px dashed #ccc; border-radius: 4px; width: 100%; max-width: 420px; }
+    .preview-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; overflow-x: auto; display: block; }
+    .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    .preview-table th { background: #f5f5f5; font-weight: 600; }
+    .preview-table tr:nth-child(even) { background: #fafafa; }
+    .template-info { background: #fff3e0; border: 1px solid #ffcc80; padding: 16px; border-radius: 4px; margin-bottom: 20px; }
+    .template-info h4 { margin: 0 0 10px 0; color: #e65100; }
+    .template-info code { background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header class="frozen-header">
+    <div class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="bull">LIMO™</div>
+    <button class="back-btn" onclick="window.location.href='utilities.html'">← Back to Utilities</button>
+  </header>
+
+  <h1>🚗 Import/Export Vehicles</h1>
+
+  <div id="schemaWarning" class="status error" style="display:none;">
+    Vehicle schema mismatch detected. Please run Utilities → "Ensure Vehicle Schema Exists" to apply fixes.
+    <a href="utilities.html" style="color:#1565c0; text-decoration:underline; font-weight:600;">Open Utilities</a>
+    <button id="recheckSchemaBtn" class="btn btn-warning" style="margin-left:8px; padding:6px 10px;">Recheck</button>
+  </div>
+
+  <div class="section">
+    <h2>📤 Export Vehicles</h2>
+    <p>Export all vehicles to an Excel (.xls) with the exact header layout.</p>
+    <button class="btn btn-primary" id="exportBtn">Export Vehicles to XLS</button>
+    <div id="exportStatus" class="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Download Template</h2>
+    <div class="template-info">
+      <h4>Upload Header Columns (exact order):</h4>
+      <p style="line-height:1.8; font-size:12px;">
+        <code>VehType</code>, <code>VehTitle</code>, <code>BaseRate</code>, <code>MinHrs</code>, <code>SysEntry</code>, <code>VehActive</code>, <code>VehPeakDays</code>,
+        <code>VehPeakMonTmIn</code>, <code>VehPeakMonTmOut</code>, <code>VehPeakTueTmIn</code>, <code>VehPeakTueTmOut</code>, <code>VehPeakWedTmIn</code>, <code>VehPeakWedTmOut</code>,
+        <code>VehPeakThuTmIn</code>, <code>VehPeakThuTmOut</code>, <code>VehPeakFriTmIn</code>, <code>VehPeakFriTmOut</code>, <code>VehPeakSatTmIn</code>, <code>VehPeakSatTmOut</code>,
+        <code>VehPeakSunTmIn</code>, <code>VehPeakSunTmOut</code>, <code>BasePeakRate</code>, <code>MinPeakHrs</code>, <code>VehTypeCapPax</code>, <code>VehTypeCapLug</code>,
+        <code>VehTypeShowORS</code>, <code>VehDispName</code>, <code>VehAvlDays</code>, <code>VehAvlSunIn</code>, <code>VehAvlSunOut</code>, <code>VehAvlMonIn</code>, <code>VehAvlMonOut</code>,
+        <code>VehAvlTueIn</code>, <code>VehAvlTueOut</code>, <code>VehAvlWedIn</code>, <code>VehAvlWedOut</code>, <code>VehAvlThuIn</code>, <code>VehAvlThuOut</code>,
+        <code>VehAvlFriIn</code>, <code>VehAvlFriOut</code>, <code>VehAvlSatIn</code>, <code>VehAvlSatOut</code>
+      </p>
+    </div>
+    <button class="btn btn-warning" id="templateBtn">Download Blank Template</button>
+    <div id="templateStatus" class="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>📥 Import Vehicles</h2>
+    <p>Import vehicles from an Excel (.xls/.xlsx) file. Must match the header order above.</p>
+    <div class="file-input-wrapper">
+      <input type="file" id="importFile" accept=".xls,.xlsx,.csv,.htm,.html" />
+    </div>
+    <button class="btn btn-success" id="importBtn" disabled>Import Vehicles</button>
+    <div id="importStatus" class="status"></div>
+    <div id="previewSection" style="display:none;">
+      <h3>Preview (first 10 rows):</h3>
+      <table class="preview-table" id="previewTable"></table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Current Vehicles in System</h2>
+    <button class="btn btn-primary" id="refreshBtn">🔄 Refresh List</button>
+    <p style="font-size:12px; color:#666; margin:10px 0;">
+      💡 No vehicles showing? Try:
+      <br>1. Click "Refresh List" button above
+      <br>2. Check browser console (F12) for any error messages
+      <br>3. Ensure schema is set up via Utilities → "Ensure Vehicle Schema Exists"
+      <br>4. Import vehicles using the "Import Vehicles" section above
+    </p>
+    <div id="currentVehiclesSection">
+      <table class="preview-table" id="currentVehiclesTable"></table>
+    </div>
+  </div>
+
+<script type="module">
+import { setupAPI, getSupabaseClient } from './api-service.js';
+import { signInWithEmail } from './supabase-client.js';
+
+let supabaseClient = null;
+let importData = null;
+
+// Single source of truth for vehicle headers
+const VEHICLE_HEADERS = ['VehType','VehTitle','ItemRank','Make','Model','Year','Color','LicensePlate','VIN','Capacity','Status','Mileage','Description','Notes','ServiceHistory'];
+
+async function ensureValidSession() {
+  await setupAPI();
+  supabaseClient = getSupabaseClient();
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) {
+    console.log('No user session found, attempting to sign in with env credentials');
+    const email = window.ENV?.SUPABASE_EMAIL;
+    const password = window.ENV?.SUPABASE_PASSWORD;
+    if (!email || !password) throw new Error('Missing credentials in env.js');
+    const result = await signInWithEmail(email, password);
+    if (!result.success) throw new Error(result.error || 'Auth failed');
+    console.log('✅ Signed in as:', email);
+  } else {
+    console.log('✅ Session active for:', user.email);
+  }
+}
+
+async function getOrgContext() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) throw new Error('User not authenticated');
+  const { data, error } = await supabaseClient
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .single();
+  if (error) throw error;
+  return data.organization_id;
+}
+
+async function checkVehicleSchema() {
+  try {
+    const el = document.getElementById('schemaWarning');
+    const suggested = ['veh_type','veh_title','base_rate','min_hrs','sys_entry','veh_active','veh_peak_days','veh_peak_mon_tm_in','veh_peak_mon_tm_out','veh_peak_tue_tm_in','veh_peak_tue_tm_out','veh_peak_wed_tm_in','veh_peak_wed_tm_out','veh_peak_thu_tm_in','veh_peak_thu_tm_out','veh_peak_fri_tm_in','veh_peak_fri_tm_out','veh_peak_sat_tm_in','veh_peak_sat_tm_out','veh_peak_sun_tm_in','veh_peak_sun_tm_out','base_peak_rate','min_peak_hrs','veh_type_cap_pax','veh_type_cap_lug','veh_type_show_ors','veh_disp_name','veh_avl_days','veh_avl_sun_in','veh_avl_sun_out','veh_avl_mon_in','veh_avl_mon_out','veh_avl_tue_in','veh_avl_tue_out','veh_avl_wed_in','veh_avl_wed_out','veh_avl_thu_in','veh_avl_thu_out','veh_avl_fri_in','veh_avl_fri_out','veh_avl_sat_in','veh_avl_sat_out'];
+
+    async function columnExists(col) {
+      const { data, error } = await supabaseClient
+        .from('vehicles')
+        .select(col)
+        .limit(1);
+      if (error && String(error.message || '').toLowerCase().includes('column')) return false;
+      return true;
+    }
+
+    const missing = [];
+    for (const col of suggested) {
+      if (!(await columnExists(col))) {
+        missing.push(col);
+      }
+    }
+
+    if (missing.length > 0) {
+      el.style.display = 'block';
+    }
+  } catch (err) {
+    console.warn('Schema check failed:', err);
+  }
+}
+
+async function exportVehicles() {
+  try {
+    await ensureValidSession();
+    const orgId = await getOrgContext();
+    
+    const { data, error } = await supabaseClient
+      .from('vehicles')
+      .select('*')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const rows = (data || []).map(v => ({
+      VehType: v.veh_type || '',
+      VehTitle: v.veh_title || '',
+      BaseRate: v.base_rate || '',
+      MinHrs: v.min_hrs || '',
+      SysEntry: v.sys_entry || '',
+      VehActive: v.veh_active || '',
+      VehPeakDays: v.veh_peak_days || '',
+      VehPeakMonTmIn: v.veh_peak_mon_tm_in || '',
+      VehPeakMonTmOut: v.veh_peak_mon_tm_out || '',
+      VehPeakTueTmIn: v.veh_peak_tue_tm_in || '',
+      VehPeakTueTmOut: v.veh_peak_tue_tm_out || '',
+      VehPeakWedTmIn: v.veh_peak_wed_tm_in || '',
+      VehPeakWedTmOut: v.veh_peak_wed_tm_out || '',
+      VehPeakThuTmIn: v.veh_peak_thu_tm_in || '',
+      VehPeakThuTmOut: v.veh_peak_thu_tm_out || '',
+      VehPeakFriTmIn: v.veh_peak_fri_tm_in || '',
+      VehPeakFriTmOut: v.veh_peak_fri_tm_out || '',
+      VehPeakSatTmIn: v.veh_peak_sat_tm_in || '',
+      VehPeakSatTmOut: v.veh_peak_sat_tm_out || '',
+      VehPeakSunTmIn: v.veh_peak_sun_tm_in || '',
+      VehPeakSunTmOut: v.veh_peak_sun_tm_out || '',
+      BasePeakRate: v.base_peak_rate || '',
+      MinPeakHrs: v.min_peak_hrs || '',
+      VehTypeCapPax: v.veh_type_cap_pax || '',
+      VehTypeCapLug: v.veh_type_cap_lug || '',
+      VehTypeShowORS: v.veh_type_show_ors || '',
+      VehDispName: v.veh_disp_name || '',
+      VehAvlDays: v.veh_avl_days || '',
+      VehAvlSunIn: v.veh_avl_sun_in || '',
+      VehAvlSunOut: v.veh_avl_sun_out || '',
+      VehAvlMonIn: v.veh_avl_mon_in || '',
+      VehAvlMonOut: v.veh_avl_mon_out || '',
+      VehAvlTueIn: v.veh_avl_tue_in || '',
+      VehAvlTueOut: v.veh_avl_tue_out || '',
+      VehAvlWedIn: v.veh_avl_wed_in || '',
+      VehAvlWedOut: v.veh_avl_wed_out || '',
+      VehAvlThuIn: v.veh_avl_thu_in || '',
+      VehAvlThuOut: v.veh_avl_thu_out || '',
+      VehAvlFriIn: v.veh_avl_fri_in || '',
+      VehAvlFriOut: v.veh_avl_fri_out || '',
+      VehAvlSatIn: v.veh_avl_sat_in || '',
+      VehAvlSatOut: v.veh_avl_sat_out || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Vehicles');
+    XLSX.writeFile(wb, `RELIALIMO-Vehicles-${new Date().toISOString().split('T')[0]}.xls`);
+
+    const el = document.getElementById('exportStatus');
+    el.className = 'status success';
+    el.innerHTML = `✅ Exported ${rows.length} vehicles successfully!`;
+  } catch (err) {
+    const el = document.getElementById('exportStatus');
+    el.className = 'status error';
+    el.innerHTML = `❌ Export failed: ${err.message}`;
+    console.error(err);
+  }
+}
+
+async function downloadTemplate() {
+  try {
+    const rows = [{}];
+    const ws = XLSX.utils.json_to_sheet(rows, { header: VEHICLE_HEADERS });
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, 'RELIALIMO-Vehicles-Template.xls');
+
+    const el = document.getElementById('templateStatus');
+    el.className = 'status success';
+    el.innerHTML = '✅ Template downloaded successfully!';
+  } catch (err) {
+    const el = document.getElementById('templateStatus');
+    el.className = 'status error';
+    el.innerHTML = `❌ Template download failed: ${err.message}`;
+  }
+}
+
+async function previewFile(file) {
+  try {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const ws = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws);
+      
+      importData = json;
+      
+      const table = document.getElementById('previewTable');
+      const div = document.getElementById('previewSection');
+      
+      if (json.length === 0) {
+        table.innerHTML = '<tr><td colspan="15">No data found</td></tr>';
+        div.style.display = 'none';
+        document.getElementById('importBtn').disabled = true;
+        return;
+      }
+
+      const headers = Object.keys(json[0]);
+      let html = '<thead><tr>';
+      headers.forEach(h => html += `<th>${h}</th>`);
+      html += '</tr></thead><tbody>';
+
+      json.slice(0, 10).forEach(row => {
+        html += '<tr>';
+        headers.forEach(h => html += `<td>${row[h] || ''}</td>`);
+        html += '</tr>';
+      });
+      html += '</tbody>';
+
+      table.innerHTML = html;
+      div.style.display = 'block';
+      document.getElementById('importBtn').disabled = false;
+    };
+    reader.readAsArrayBuffer(file);
+  } catch (err) {
+    document.getElementById('importStatus').className = 'status error';
+    document.getElementById('importStatus').innerHTML = `❌ Preview failed: ${err.message}`;
+  }
+}
+
+async function importVehicles() {
+  if (!importData || importData.length === 0) {
+    const el = document.getElementById('importStatus');
+    el.className = 'status error';
+    el.innerHTML = '❌ No data to import';
+    return;
+  }
+
+  try {
+    await ensureValidSession();
+    const orgId = await getOrgContext();
+
+    // Helper to convert empty strings to null for numeric fields
+    const toNumeric = (val) => {
+      if (!val || val === '') return null;
+      const num = parseFloat(val);
+      return isNaN(num) ? null : num;
+    };
+
+    // Helper to convert empty strings to null for integer fields
+    const toInteger = (val) => {
+      if (!val || val === '') return null;
+      const num = parseInt(val, 10);
+      return isNaN(num) ? null : num;
+    };
+
+    // Helper to validate and convert time values (HH:MM or HH:MM:SS format)
+    const toTime = (val) => {
+      if (!val || val === '') return null;
+      const str = String(val).trim().toUpperCase();
+      // Check for invalid values
+      if (str === 'NA' || str === 'NA NA' || str === 'N/A' || str === 'NONE' || str === 'NULL') return null;
+      // Check if it matches time format (HH:MM or HH:MM:SS)
+      if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) {
+        return str;
+      }
+      // Invalid format, return null
+      return null;
+    };
+
+    const vehicles = importData.map(row => ({
+      organization_id: orgId,
+      veh_type: row.VehType || row.veh_type || null,
+      veh_title: row.VehTitle || row.veh_title || null,
+      base_rate: toNumeric(row.BaseRate || row.base_rate),
+      min_hrs: toNumeric(row.MinHrs || row.min_hrs),
+      sys_entry: row.SysEntry || row.sys_entry || null,
+      veh_active: row.VehActive || row.veh_active || null,
+      veh_peak_days: row.VehPeakDays || row.veh_peak_days || null,
+      veh_peak_mon_tm_in: toTime(row.VehPeakMonTmIn || row.veh_peak_mon_tm_in),
+      veh_peak_mon_tm_out: toTime(row.VehPeakMonTmOut || row.veh_peak_mon_tm_out),
+      veh_peak_tue_tm_in: toTime(row.VehPeakTueTmIn || row.veh_peak_tue_tm_in),
+      veh_peak_tue_tm_out: toTime(row.VehPeakTueTmOut || row.veh_peak_tue_tm_out),
+      veh_peak_wed_tm_in: toTime(row.VehPeakWedTmIn || row.veh_peak_wed_tm_in),
+      veh_peak_wed_tm_out: toTime(row.VehPeakWedTmOut || row.veh_peak_wed_tm_out),
+      veh_peak_thu_tm_in: toTime(row.VehPeakThuTmIn || row.veh_peak_thu_tm_in),
+      veh_peak_thu_tm_out: toTime(row.VehPeakThuTmOut || row.veh_peak_thu_tm_out),
+      veh_peak_fri_tm_in: toTime(row.VehPeakFriTmIn || row.veh_peak_fri_tm_in),
+      veh_peak_fri_tm_out: toTime(row.VehPeakFriTmOut || row.veh_peak_fri_tm_out),
+      veh_peak_sat_tm_in: toTime(row.VehPeakSatTmIn || row.veh_peak_sat_tm_in),
+      veh_peak_sat_tm_out: toTime(row.VehPeakSatTmOut || row.veh_peak_sat_tm_out),
+      veh_peak_sun_tm_in: toTime(row.VehPeakSunTmIn || row.veh_peak_sun_tm_in),
+      veh_peak_sun_tm_out: toTime(row.VehPeakSunTmOut || row.veh_peak_sun_tm_out),
+      base_peak_rate: toNumeric(row.BasePeakRate || row.base_peak_rate),
+      min_peak_hrs: toNumeric(row.MinPeakHrs || row.min_peak_hrs),
+      veh_type_cap_pax: toInteger(row.VehTypeCapPax || row.veh_type_cap_pax),
+      veh_type_cap_lug: toInteger(row.VehTypeCapLug || row.veh_type_cap_lug),
+      veh_type_show_ors: row.VehTypeShowORS || row.veh_type_show_ors || null,
+      veh_disp_name: row.VehDispName || row.veh_disp_name || null,
+      veh_avl_days: row.VehAvlDays || row.veh_avl_days || null,
+      veh_avl_sun_in: toTime(row.VehAvlSunIn || row.veh_avl_sun_in),
+      veh_avl_sun_out: toTime(row.VehAvlSunOut || row.veh_avl_sun_out),
+      veh_avl_mon_in: toTime(row.VehAvlMonIn || row.veh_avl_mon_in),
+      veh_avl_mon_out: toTime(row.VehAvlMonOut || row.veh_avl_mon_out),
+      veh_avl_tue_in: toTime(row.VehAvlTueIn || row.veh_avl_tue_in),
+      veh_avl_tue_out: toTime(row.VehAvlTueOut || row.veh_avl_tue_out),
+      veh_avl_wed_in: toTime(row.VehAvlWedIn || row.veh_avl_wed_in),
+      veh_avl_wed_out: toTime(row.VehAvlWedOut || row.veh_avl_wed_out),
+      veh_avl_thu_in: toTime(row.VehAvlThuIn || row.veh_avl_thu_in),
+      veh_avl_thu_out: toTime(row.VehAvlThuOut || row.veh_avl_thu_out),
+      veh_avl_fri_in: toTime(row.VehAvlFriIn || row.veh_avl_fri_in),
+      veh_avl_fri_out: toTime(row.VehAvlFriOut || row.veh_avl_fri_out),
+      veh_avl_sat_in: toTime(row.VehAvlSatIn || row.veh_avl_sat_in),
+      veh_avl_sat_out: toTime(row.VehAvlSatOut || row.veh_avl_sat_out)
+    }));
+
+    const { data, error } = await supabaseClient
+      .from('vehicles')
+      .insert(vehicles)
+      .select();
+
+    if (error) throw error;
+
+    const el = document.getElementById('importStatus');
+    el.className = 'status success';
+    el.innerHTML = `✅ Successfully imported ${data.length} vehicles!`;
+
+    setTimeout(() => loadCurrentVehicles(), 1000);
+  } catch (err) {
+    const el = document.getElementById('importStatus');
+    el.className = 'status error';
+    el.innerHTML = `❌ Import failed: ${err.message}`;
+    console.error(err);
+  }
+}
+
+async function loadCurrentVehicles() {
+  try {
+    await ensureValidSession();
+    const table = document.getElementById('currentVehiclesTable');
+    
+    let orgId = null;
+    try {
+      orgId = await getOrgContext();
+    } catch (orgErr) {
+      console.warn('Could not get org context:', orgErr);
+    }
+
+    let query = supabaseClient.from('vehicles').select('*');
+    
+    if (orgId) {
+      query = query.eq('organization_id', orgId);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Query error:', error);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      table.innerHTML = '<tr><td colspan="42" style="text-align:center; padding:20px;">📋 No vehicles found in system</td></tr>';
+      return;
+    }
+
+    const displayFields = ['veh_type','veh_title','base_rate','min_hrs','veh_active','veh_type_cap_pax','veh_type_cap_lug','veh_disp_name'];
+    let html = '<thead><tr>';
+    displayFields.forEach(f => html += `<th>${f}</th>`);
+    html += '</tr></thead><tbody>';
+
+    data.forEach(v => {
+      html += '<tr>';
+      displayFields.forEach(f => html += `<td>${v[f] || ''}</td>`);
+      html += '</tr>';
+    });
+    html += '</tbody>';
+
+    table.innerHTML = html;
+    console.log(`✅ Loaded ${data.length} vehicles`);
+  } catch (err) {
+    const table = document.getElementById('currentVehiclesTable');
+    const errMsg = err.message || 'Unknown error';
+    table.innerHTML = `<tr><td colspan="42" style="text-align:center; padding:20px; color:red;">❌ Error loading vehicles: ${errMsg}</td></tr>`;
+    console.error('loadCurrentVehicles error:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    console.log('🚗 Initializing vehicle import/export page...');
+    await ensureValidSession();
+    console.log('✅ Session validated');
+    await checkVehicleSchema();
+    console.log('✅ Schema checked');
+    await loadCurrentVehicles();
+    console.log('✅ Vehicles loaded');
+  } catch (err) {
+    console.error('Init failed:', err);
+    document.getElementById('schemaWarning').style.display = 'block';
+    document.getElementById('schemaWarning').innerHTML += `<br><br>Debug: ${err.message}`;
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', exportVehicles);
+  document.getElementById('templateBtn').addEventListener('click', downloadTemplate);
+  document.getElementById('importFile').addEventListener('change', (e) => {
+    if (e.target.files[0]) previewFile(e.target.files[0]);
+  });
+  document.getElementById('importBtn').addEventListener('click', importVehicles);
+  document.getElementById('refreshBtn').addEventListener('click', loadCurrentVehicles);
+  document.getElementById('recheckSchemaBtn')?.addEventListener('click', checkVehicleSchema);
+});
+
+</script>
+</body>
+</html>

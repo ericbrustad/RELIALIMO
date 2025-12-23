@@ -3770,9 +3770,22 @@ further assistance.</textarea>
           </div>
         </div>
 
-        <!-- Company Resources Sections (Full Width Layout) -->
+        <!-- Company Resources Container (Full Width) -->
+        <div id="companyResourcesContainer" class="company-resources-container" style="display: none;">
+          <!-- Horizontal Tab Bar -->
+          <div class="resource-tabs" style="display: flex; gap: 0; border-bottom: 2px solid #ddd; padding: 0 15px; background: #f8f9fa;">
+            <button class="resource-tab active" data-resource="drivers" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid #007bff; margin-bottom: -2px; font-weight: 500;">Drivers</button>
+            <button class="resource-tab" data-resource="affiliates" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">Affiliates</button>
+            <button class="resource-tab" data-resource="agents" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">Agents</button>
+            <button class="resource-tab" data-resource="vehicle-types" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">Vehicle Types</button>
+            <button class="resource-tab" data-resource="fleet" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">Fleet</button>
+            <button class="resource-tab" data-resource="airports" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">Airports</button>
+            <button class="resource-tab" data-resource="airlines" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">Airlines</button>
+            <button class="resource-tab" data-resource="fbo" style="padding: 10px 16px; font-size: 13px; border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">Private Airlines (FBO)</button>
+          </div>
+
         <!-- Drivers Section (Company Resources) -->
-        <section id="drivers-section" class="office-section" style="display: none;">
+        <section id="drivers-section" class="office-section resource-section" style="display: block;">
               <!-- Header with Title and Add Button -->
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 15px;">
                 <h2 style="font-size: 16px; font-weight: 600; margin: 0; color: #333;">Drivers</h2>
@@ -4232,7 +4245,7 @@ further assistance.</textarea>
             </section>
 
         <!-- Affiliates Section (Company Resources) -->
-        <section id="affiliates-section" class="office-section" style="display: none;">
+        <section id="affiliates-section" class="office-section resource-section" style="display: none;">
               <!-- Header with Title and Add Button -->
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 15px;">
                 <h2 style="font-size: 16px; font-weight: 600; margin: 0; color: #333;">Affiliates</h2>
@@ -4241,34 +4254,19 @@ further assistance.</textarea>
 
               <div class="affiliates-layout" style="display: flex; gap: 15px; height: calc(100vh - 300px); padding: 0 15px;">
                 
-                <!-- Left Sidebar - Affiliate List -->
-                <div class="affiliates-list-panel" style="flex: 0 0 160px; border: 1px solid #ddd; background: #f9f9f9; padding: 12px; border-radius: 4px; overflow-y: auto; display: flex; flex-direction: column;">
-                  <div class="affiliates-list-header" style="flex-shrink: 0; margin-bottom: 12px;">
-                    <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 8px 0; color: #333;">Affiliates</h3>
-                    <label class="affiliates-show-all" style="font-size: 10px; display: flex; gap: 4px; align-items: center;">
+                <!-- Left Sidebar - Affiliate List (wider) -->
+                <div class="affiliates-list-panel" style="flex: 0 0 250px; border: 1px solid #ddd; background: #fff; padding: 10px; border-radius: 4px; overflow-y: auto;">
+                  <div class="affiliates-list-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
+                    <h3 style="font-size: 13px; font-weight: 600; margin: 0; color: #333;">Affiliate List</h3>
+                    <label style="font-size: 11px; display: flex; gap: 4px; align-items: center; cursor: pointer;">
+                      <input type="checkbox" id="showAllAffiliatesCheckbox" />
                       <span>Show All</span>
-                      <input type="checkbox" />
                     </label>
                   </div>
 
-                  <div class="affiliates-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
-                    <button class="affiliate-item active" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 500;">AD DELUXE PARTNERS</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">ATLANTA Center Limo</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">BlueCar Transportation</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Deluxe Limo Services</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Boston Professional</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">All Class Transportation</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">MS Move Inc</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Star Limousines</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">A True Star Limo</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">Touch of Class</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">World Class Journeys</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">AAD Limousine</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">BAR Jason's Limo</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">All Chicago Limousine</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">AA Limo Global</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">AA Limo Services</button>
-                    <button class="affiliate-item" style="text-align: left; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 11px;">AAA Limo LLC</button>
+                  <div id="affiliatesListContainer" class="affiliates-list" style="overflow-y: auto; max-height: calc(100vh - 400px);">
+                    <!-- Affiliates will be loaded dynamically -->
+                    <div style="padding: 10px; color: #666; font-size: 12px;">Loading affiliates...</div>
                   </div>
 
                   <button class="btn btn-secondary" style="width: 100%; font-size: 10px; padding: 6px; margin-top: 10px; flex-shrink: 0;">EDIT AFFILIATE</button>
@@ -4276,7 +4274,7 @@ further assistance.</textarea>
 
                 <!-- Right: Add/Edit Affiliate Form -->
                 <div class="affiliates-form-panel" style="flex: 1; border: 1px solid #ddd; padding: 15px; background: #fff; border-radius: 4px; overflow-y: auto;">
-                  <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #333;">Add New Affiliate</h3>
+                  <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #333;">Select an Affiliate or Add New</h3>
                   
                   <div class="affiliates-form-layout">
                     <!-- Main Content Column -->
@@ -4285,67 +4283,53 @@ further assistance.</textarea>
                       
                       <div class="form-group">
                         <label>Company Name</label>
-                        <input type="text" class="form-control" />
+                        <input type="text" id="affCompanyName" class="form-control" />
                       </div>
 
                       <div class="form-group">
-                        <label>Primary Address</label>
-                        <input type="text" class="form-control" />
+                        <label>Address 1</label>
+                        <input type="text" id="affAddress" class="form-control" />
+                      </div>
+                      
+                      <div class="form-group">
+                        <label>Address 2</label>
+                        <input type="text" id="affAddress2" class="form-control" />
                       </div>
 
                       <div class="affiliates-form-row-3">
                         <div class="form-group">
-                          <input type="text" class="form-control" />
+                          <label>City</label>
+                          <input type="text" id="affCity" class="form-control" />
                         </div>
                         <div class="form-group">
-                          <label>Add/Zip:</label>
-                          <input type="text" class="form-control" />
+                          <label>State</label>
+                          <input type="text" id="affState" class="form-control" />
                         </div>
                         <div class="form-group">
-                          <label>Zip/Post:</label>
-                          <input type="text" class="form-control" />
+                          <label>Zip</label>
+                          <input type="text" id="affZip" class="form-control" />
                         </div>
                       </div>
 
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
-                          <label>State/Prov:</label>
-                          <select class="form-control">
-                            <option value="">-- SELECT --</option>
-                            <option value="FL">Florida</option>
-                            <option value="GA">Georgia</option>
-                            <option value="CA">California</option>
-                            <option value="MA">Massachusetts</option>
-                            <option value="TX">Texas</option>
-                          </select>
+                          <label>Country</label>
+                          <input type="text" id="affCountry" class="form-control" value="US" />
                         </div>
                         <div class="form-group">
-                          <label>School:</label>
-                          <input type="text" class="form-control" />
+                          <label>School</label>
+                          <input type="text" id="affSchool" class="form-control" />
                         </div>
                       </div>
 
                       <div class="form-group">
-                        <label>County Serviced</label>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                          <select class="form-control" style="flex: 1;">
-                            <option>- - - NOT SELECTED - - -</option>
-                          </select>
-                        </div>
-                        <div style="display: flex; gap: 5px;">
-                          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Select All</button>
-                          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Clear</button>
-                        </div>
-                      </div>
-
-                      <div class="form-group">
-                        <label>Zip ID or Social Security #</label>
-                        <textarea class="form-control" rows="3"></textarea>
+                        <label>Tax ID / SSN</label>
+                        <input type="text" id="affTaxId" class="form-control" />
                       </div>
 
                       <div class="form-group">
                         <label>Markets Serviced</label>
-                        <textarea class="form-control" rows="3"></textarea>
+                        <textarea id="affMarketsServiced" class="form-control" rows="3"></textarea>
                       </div>
 
                       <h4 class="affiliates-section-title" style="margin-top: 25px;">Primary Contact Information</h4>
@@ -4353,60 +4337,59 @@ further assistance.</textarea>
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
                           <label>First Name</label>
-                          <input type="text" class="form-control" />
+                          <input type="text" id="affFirstName" class="form-control" />
                         </div>
                         <div class="form-group">
                           <label>Last Name</label>
-                          <input type="text" class="form-control" />
+                          <input type="text" id="affLastName" class="form-control" />
                         </div>
                       </div>
 
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
                           <label>Phone</label>
-                          <div style="display: flex; gap: 5px;">
-                            <input type="text" class="form-control" placeholder="? → Enter number" style="flex: 1;" />
-                            <select class="form-control" style="width: 80px;">
-                              <option value=""></option>
-                              <option value="ext">Ext</option>
-                            </select>
-                          </div>
+                          <input type="text" id="affPhone" class="form-control" />
                         </div>
                         <div class="form-group">
+                          <label>Ext</label>
+                          <input type="text" id="affPhoneExt" class="form-control" />
+                        </div>
+                      </div>
+                      
+                      <div class="affiliates-form-row-2">
+                        <div class="form-group">
                           <label>Fax</label>
-                          <div style="display: flex; gap: 5px;">
-                            <input type="text" class="form-control" placeholder="? → Enter number" style="flex: 1;" />
-                            <select class="form-control" style="width: 80px;">
-                              <option value=""></option>
-                              <option value="ext">Ext</option>
-                            </select>
-                          </div>
+                          <input type="text" id="affFax" class="form-control" />
+                        </div>
+                        <div class="form-group">
+                          <label>Ext</label>
+                          <input type="text" id="affFaxExt" class="form-control" />
                         </div>
                       </div>
 
                       <div class="form-group">
                         <label>Email Address</label>
-                        <input type="email" class="form-control" />
+                        <input type="email" id="affEmail" class="form-control" />
                       </div>
 
                       <div class="form-group">
                         <label>Website</label>
-                        <input type="text" class="form-control" />
+                        <input type="text" id="affWebsite" class="form-control" />
                       </div>
 
                       <div class="form-group">
                         <label>Send Trip Tickets By</label>
                         <div style="display: flex; gap: 20px; padding: 8px 0;">
                           <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                            <input type="checkbox" />
+                            <input type="checkbox" id="affSendEmail" />
                             <span style="font-size: 13px;">Email</span>
                           </label>
                           <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                            <input type="checkbox" />
+                            <input type="checkbox" id="affSendSms" />
                             <span style="font-size: 13px;">SMS</span>
                           </label>
                           <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                            <input type="checkbox" />
+                            <input type="checkbox" id="affSendFax" />
                             <span style="font-size: 13px;">Fax</span>
                           </label>
                         </div>
@@ -4414,7 +4397,7 @@ further assistance.</textarea>
 
                       <div class="form-group">
                         <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="affDontSendAuto" />
                           <span style="font-size: 13px;">Don't Send Auto Notifications</span>
                         </label>
                       </div>
@@ -4422,7 +4405,7 @@ further assistance.</textarea>
                       <h4 class="affiliates-section-title" style="margin-top: 25px;">Internal Notes</h4>
                       
                       <div class="form-group">
-                        <textarea class="form-control" rows="4"></textarea>
+                        <textarea id="affNotes" class="form-control" rows="4"></textarea>
                       </div>
 
                       <h4 class="affiliates-section-title" style="margin-top: 25px;">Settings</h4>
@@ -4430,25 +4413,25 @@ further assistance.</textarea>
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
                           <label>Status</label>
-                          <select class="form-control">
-                            <option>ACTIVE</option>
-                            <option>INACTIVE</option>
+                          <select id="affStatus" class="form-control">
+                            <option value="ACTIVE" selected>ACTIVE</option>
+                            <option value="INACTIVE">INACTIVE</option>
                           </select>
                         </div>
                         <div class="form-group">
                           <label>Learned Priority</label>
-                          <select class="form-control">
-                            <option>-- SELECT --</option>
-                            <option>High</option>
-                            <option>Medium</option>
-                            <option>Low</option>
+                          <select id="affPriority" class="form-control">
+                            <option value="">-- SELECT --</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
                           </select>
                         </div>
                       </div>
 
                       <div class="form-group">
                         <label>Turnaround Monitor Code</label>
-                        <input type="text" class="form-control" />
+                        <input type="text" id="affTurnaround" class="form-control" />
                       </div>
 
                       <h4 class="affiliates-section-title" style="margin-top: 25px;">Web Access Affiliate</h4>
@@ -4456,26 +4439,27 @@ further assistance.</textarea>
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
                           <label>Username</label>
-                          <input type="text" class="form-control" />
+                          <input type="text" id="affUsername" class="form-control" />
                         </div>
                         <div class="form-group">
                           <label>Password</label>
-                          <input type="password" class="form-control" autocomplete="new-password" />
+                          <input type="password" id="affPassword" class="form-control" autocomplete="new-password" />
                         </div>
                       </div>
 
                       <h4 class="affiliates-section-title" style="margin-top: 25px;">Rental Agreement</h4>
                       
                       <div class="form-group">
-                        <select class="form-control">
+                        <select id="affRentalAgreement" class="form-control">
                           <option value=""></option>
-                          <option>Standard Agreement</option>
-                          <option>Premium Agreement</option>
+                          <option value="Standard Agreement">Standard Agreement</option>
+                          <option value="Premium Agreement">Premium Agreement</option>
                         </select>
                       </div>
 
-                      <div style="margin-top: 30px;">
-                        <button class="btn btn-primary btn-large">ADD NEW AFFILIATE</button>
+                      <div style="margin-top: 30px; display: flex; gap: 10px;">
+                        <button id="saveAffiliateBtn" class="btn btn-primary btn-large">SAVE AFFILIATE</button>
+                        <button id="clearAffiliateBtn" class="btn btn-secondary btn-large">NEW / CLEAR</button>
                       </div>
                     </div>
 
@@ -4486,84 +4470,53 @@ further assistance.</textarea>
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
                           <label>First Name</label>
-                          <input type="text" class="form-control" />
+                          <input type="text" id="affAltFirstName" class="form-control" />
                         </div>
                         <div class="form-group">
                           <label>Last Name</label>
-                          <input type="text" class="form-control" />
+                          <input type="text" id="affAltLastName" class="form-control" />
                         </div>
                       </div>
 
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
                           <label>Phone</label>
-                          <div style="display: flex; gap: 5px;">
-                            <input type="text" class="form-control" placeholder="? → Enter number" style="flex: 1;" />
-                            <select class="form-control" style="width: 60px;">
-                              <option value=""></option>
-                              <option value="ext">Ext</option>
-                            </select>
-                          </div>
+                          <input type="text" id="affAltPhone" class="form-control" />
                         </div>
                         <div class="form-group">
-                          <label>Fax</label>
-                          <div style="display: flex; gap: 5px;">
-                            <input type="text" class="form-control" placeholder="? → Enter number" style="flex: 1;" />
-                            <select class="form-control" style="width: 60px;">
-                              <option value=""></option>
-                              <option value="ext">Ext</option>
-                            </select>
-                          </div>
+                          <label>Ext</label>
+                          <input type="text" id="affAltPhoneExt" class="form-control" />
                         </div>
                       </div>
-
+                      
                       <div class="affiliates-form-row-2">
                         <div class="form-group">
-                          <label>Cellular Phone</label>
-                          <div style="display: flex; gap: 5px;">
-                            <input type="text" class="form-control" placeholder="? → Enter number" style="flex: 1;" />
-                          </div>
+                          <label>Fax</label>
+                          <input type="text" id="affAltFax" class="form-control" />
                         </div>
                         <div class="form-group">
-                          <label>Provider</label>
-                          <select class="form-control">
-                            <option>-- SELECT --</option>
-                            <option>AT&T</option>
-                            <option>Verizon</option>
-                            <option>T-Mobile</option>
-                            <option>Sprint</option>
-                          </select>
+                          <label>Ext</label>
+                          <input type="text" id="affAltFaxExt" class="form-control" />
                         </div>
                       </div>
 
                       <div class="form-group">
                         <label>Email Address</label>
-                        <input type="email" class="form-control" />
+                        <input type="email" id="affAltEmail" class="form-control" />
                       </div>
 
                       <div class="form-group">
                         <label>Send Trip Tickets By</label>
                         <div style="display: flex; gap: 15px; padding: 8px 0;">
                           <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                            <input type="checkbox" />
+                            <input type="checkbox" id="affAltSendEmail" />
                             <span style="font-size: 13px;">Email</span>
                           </label>
                           <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                            <input type="checkbox" />
+                            <input type="checkbox" id="affAltSendSms" />
                             <span style="font-size: 13px;">SMS</span>
                           </label>
-                          <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                            <input type="checkbox" />
-                            <span style="font-size: 13px;">Fax</span>
-                          </label>
                         </div>
-                      </div>
-
-                      <div class="form-group">
-                        <label style="display: flex; align-items: center; gap: 5px; margin: 0;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Don't Send Auto Notifications</span>
-                        </label>
                       </div>
                     </div>
                   </div>
@@ -4572,7 +4525,7 @@ further assistance.</textarea>
         </section>
 
         <!-- Vehicle Types Section -->
-        <section id="vehicle-types-section" class="office-section">
+        <section id="vehicle-types-section" class="office-section resource-section" style="display: none;">
           <div class="resources-layout">
             <!-- Left: Vehicle Type List -->
             <div class="resources-list-panel">
@@ -5948,6 +5901,7 @@ further assistance.</textarea>
             </div>
           </div>
         </section>
+        </div><!-- End companyResourcesContainer -->
 
         <!-- System Rate Manager Section -->
         <section id="system-rate-manager-section" class="office-section" style="display: none;">

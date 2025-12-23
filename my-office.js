@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver } from './api-service.js';
+import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 
 class MyOffice {
@@ -7,8 +7,10 @@ class MyOffice {
     this.currentSection = 'contact-info';
     this.currentPrefTab = 'general';
     this.currentDriver = null;
+    this.currentAffiliate = null;
     this.currentSystemSettingsPage = 'service-types';
     this.drivers = [];
+    this.affiliates = [];
     this.users = [
       {
         id: '1',
@@ -50,6 +52,7 @@ class MyOffice {
     this.setupListManagementSidebar();
     this.setupMagicLinkHelpers();
     this.setupDriversForm();
+    this.setupAffiliatesForm();
     this.setupSystemUsers();
     this.setupCompanyInfoForm();
     this.checkURLParameters();
@@ -176,7 +179,7 @@ class MyOffice {
       });
     });
 
-    // Company Resources navigation
+    // Company Resources navigation (sidebar)
     const companyResourcesGroup = document.getElementById('companyResourcesGroup');
     if (companyResourcesGroup) {
       companyResourcesGroup.addEventListener('click', (e) => {
@@ -184,6 +187,19 @@ class MyOffice {
         if (btn && btn.dataset.resource) {
           const resource = btn.dataset.resource;
           console.log('Navigating to resource:', resource);
+          this.navigateToResource(resource);
+        }
+      });
+    }
+
+    // Company Resources horizontal tab navigation
+    const resourceTabsContainer = document.querySelector('.resource-tabs');
+    if (resourceTabsContainer) {
+      resourceTabsContainer.addEventListener('click', (e) => {
+        const tab = e.target.closest('.resource-tab');
+        if (tab && tab.dataset.resource) {
+          const resource = tab.dataset.resource;
+          console.log('Tab navigating to resource:', resource);
           this.navigateToResource(resource);
         }
       });
@@ -1050,10 +1066,12 @@ class MyOffice {
     const sidebar = document.getElementById('mainSidebar');
     const customFormsSection = document.getElementById('custom-forms-section');
     const listManagementWrapper = document.getElementById('list-management-wrapper');
+    const companyResourcesContainer = document.getElementById('companyResourcesContainer');
 
     if (normalLayout) normalLayout.style.display = 'none';
     if (customFormsSection) customFormsSection.style.display = 'none';
     if (listManagementWrapper) listManagementWrapper.style.display = 'none';
+    if (companyResourcesContainer) companyResourcesContainer.style.display = 'none';
 
     // Now handle each tab independently
     switch(tabName) {
@@ -1071,12 +1089,9 @@ class MyOffice {
         break;
 
       case 'company-resources':
-        // Show sidebar but hide normal layout
-        if (sidebar) sidebar.style.display = 'block';
-        
-        // Show company resources sidebar
-        const crGroup = document.getElementById('companyResourcesGroup');
-        if (crGroup) crGroup.style.display = 'block';
+        // Show resources container with horizontal tabs, hide sidebar
+        if (sidebar) sidebar.style.display = 'none';
+        if (companyResourcesContainer) companyResourcesContainer.style.display = 'block';
         
         // Navigate to first resource (drivers)
         this.navigateToResource('drivers');
@@ -1450,9 +1465,24 @@ class MyOffice {
       }
     });
 
-    // Hide all office sections
-    document.querySelectorAll('.office-section').forEach(section => {
-      section.classList.remove('active');
+    // Update horizontal resource tabs
+    document.querySelectorAll('.resource-tab').forEach(tab => {
+      tab.style.borderBottomColor = 'transparent';
+      tab.style.fontWeight = 'normal';
+      if (tab.dataset.resource === resource) {
+        tab.style.borderBottomColor = '#007bff';
+        tab.style.fontWeight = '500';
+      }
+    });
+
+    // Show the company resources container
+    const resourcesContainer = document.getElementById('companyResourcesContainer');
+    if (resourcesContainer) {
+      resourcesContainer.style.display = 'block';
+    }
+
+    // Hide all resource sections within the container
+    document.querySelectorAll('.resource-section').forEach(section => {
       section.style.display = 'none';
     });
 
@@ -1478,15 +1508,18 @@ class MyOffice {
 
     const sectionElement = document.getElementById(sectionId);
     if (sectionElement) {
-      sectionElement.classList.add('active');
       sectionElement.style.display = 'block';
+      
+      // Load data for the section
+      if (resource === 'affiliates') {
+        this.loadAffiliatesList();
+      }
     } else {
       // Show placeholder for not-yet-implemented resources
       alert(`${resource} section is under construction`);
-      // Keep showing the current section or show drivers by default
+      // Keep showing drivers by default
       const driversSection = document.getElementById('drivers-section');
       if (driversSection) {
-        driversSection.classList.add('active');
         driversSection.style.display = 'block';
       }
     }
@@ -2074,6 +2107,117 @@ class MyOffice {
     }
   }
 
+  setupAffiliatesForm() {
+    // Setup Affiliates section event handlers
+    const affiliatesSection = document.getElementById('affiliates-section');
+    if (!affiliatesSection) return;
+
+    // Show All checkbox - reload list when toggled
+    const showAllCheckbox = document.getElementById('showAllAffiliatesCheckbox');
+    if (showAllCheckbox) {
+      showAllCheckbox.addEventListener('change', () => this.loadAffiliatesList());
+    }
+
+    // Save Affiliate button
+    const saveAffiliateBtn = document.getElementById('saveAffiliateBtn');
+    if (saveAffiliateBtn) {
+      saveAffiliateBtn.addEventListener('click', () => this.saveAffiliate());
+    }
+    
+    // Clear/New Affiliate button
+    const clearAffiliateBtn = document.getElementById('clearAffiliateBtn');
+    if (clearAffiliateBtn) {
+      clearAffiliateBtn.addEventListener('click', () => {
+        this.clearAffiliateForm();
+        // Also clear selection in list
+        const affiliatesListContainer = document.getElementById('affiliatesListContainer');
+        if (affiliatesListContainer) {
+          affiliatesListContainer.querySelectorAll('.affiliate-row').forEach(i => {
+            i.style.background = '';
+          });
+        }
+      });
+    }
+  }
+  
+  async saveAffiliate() {
+    try {
+      const getVal = (id) => document.getElementById(id)?.value || '';
+      const getCheck = (id) => document.getElementById(id)?.checked || false;
+      
+      const affiliateData = {
+        company_name: getVal('affCompanyName'),
+        primary_address: getVal('affAddress'),
+        address_line2: getVal('affAddress2'),
+        city: getVal('affCity'),
+        state: getVal('affState'),
+        zip: getVal('affZip'),
+        country: getVal('affCountry') || 'US',
+        school: getVal('affSchool'),
+        tax_id_ssn: getVal('affTaxId'),
+        markets_serviced: getVal('affMarketsServiced'),
+        first_name: getVal('affFirstName'),
+        last_name: getVal('affLastName'),
+        phone: getVal('affPhone'),
+        phone_ext: getVal('affPhoneExt'),
+        fax: getVal('affFax'),
+        fax_ext: getVal('affFaxExt'),
+        email: getVal('affEmail'),
+        website: getVal('affWebsite'),
+        send_trip_email: getCheck('affSendEmail'),
+        send_trip_sms: getCheck('affSendSms'),
+        send_trip_fax: getCheck('affSendFax'),
+        dont_send_auto_notifications: getCheck('affDontSendAuto'),
+        internal_notes: getVal('affNotes'),
+        status: getVal('affStatus') || 'ACTIVE',
+        learned_priority: getVal('affPriority'),
+        turnaround_monitor_code: getVal('affTurnaround'),
+        web_username: getVal('affUsername'),
+        web_password: getVal('affPassword'),
+        rental_agreement: getVal('affRentalAgreement'),
+        alt_first_name: getVal('affAltFirstName'),
+        alt_last_name: getVal('affAltLastName'),
+        alt_phone: getVal('affAltPhone'),
+        alt_phone_ext: getVal('affAltPhoneExt'),
+        alt_fax: getVal('affAltFax'),
+        alt_fax_ext: getVal('affAltFaxExt'),
+        alt_email: getVal('affAltEmail'),
+        alt_send_trip_email: getCheck('affAltSendEmail'),
+        alt_send_trip_sms: getCheck('affAltSendSms')
+      };
+      
+      if (!affiliateData.company_name) {
+        alert('Company Name is required');
+        return;
+      }
+      
+      let result;
+      if (this.currentAffiliate?.id) {
+        // Update existing
+        result = await updateAffiliate(this.currentAffiliate.id, affiliateData);
+        if (result) {
+          alert('Affiliate updated successfully!');
+        }
+      } else {
+        // Create new
+        result = await createAffiliate(affiliateData);
+        if (result) {
+          alert('Affiliate created successfully!');
+        }
+      }
+      
+      if (result) {
+        // Reload the list
+        await this.loadAffiliatesList();
+      } else {
+        alert('Failed to save affiliate. Check console for details.');
+      }
+    } catch (error) {
+      console.error('Error saving affiliate:', error);
+      alert('Error saving affiliate: ' + error.message);
+    }
+  }
+
   async loadDriversList() {
     try {
       const showAll = document.getElementById('showAllDriversCheckbox')?.checked || false;
@@ -2149,6 +2293,201 @@ class MyOffice {
         driversListContainer.innerHTML = '<div style="padding: 10px; color: #c00; font-size: 11px;">Error loading drivers</div>';
       }
     }
+  }
+
+  async loadAffiliatesList() {
+    console.log('🔄 loadAffiliatesList called');
+    const affiliatesListContainer = document.getElementById('affiliatesListContainer');
+    console.log('📦 affiliatesListContainer:', affiliatesListContainer);
+    
+    try {
+      const showAll = document.getElementById('showAllAffiliatesCheckbox')?.checked || false;
+      console.log('📡 Calling fetchAffiliates...');
+      const data = await fetchAffiliates();
+      console.log('📡 fetchAffiliates returned:', data, 'length:', data?.length);
+      if (data && data.length > 0) {
+        console.log('📡 First affiliate object keys:', Object.keys(data[0]));
+        console.log('📡 First affiliate object:', data[0]);
+      }
+      
+      if (!data) {
+        // API returned null - show error
+        if (affiliatesListContainer) {
+          affiliatesListContainer.innerHTML = '<div style="padding: 10px; color: #c00; font-size: 11px;">Failed to load affiliates</div>';
+        }
+        console.error('❌ fetchAffiliates returned null');
+        return;
+      }
+      
+      // Filter by active status unless "Show All" is checked (case-insensitive)
+      this.affiliates = showAll ? data : data.filter(a => (a.status || 'ACTIVE').toUpperCase() !== 'INACTIVE');
+      
+      // Render to the container
+      if (affiliatesListContainer) {
+        if (this.affiliates.length === 0) {
+          affiliatesListContainer.innerHTML = `
+            <div style="padding: 10px; color: #666; font-size: 12px;">
+              No affiliates found. 
+              <a href="import-export-affiliates.html" target="_blank" style="color: #007bff;">Import affiliates</a>
+            </div>`;
+        } else {
+          affiliatesListContainer.innerHTML = this.affiliates.map((affiliate, index) => {
+            const displayName = affiliate.company_name || `${affiliate.first_name || ''} ${affiliate.last_name || ''}`.trim() || 'Unknown';
+            const city = affiliate.city || '';
+            const state = affiliate.state || '';
+            const location = [city, state].filter(Boolean).join(', ');
+            return `
+              <div class="affiliate-row" data-index="${index}" style="padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.15s;">
+                <div style="font-size: 13px; font-weight: 500; color: #333;">${displayName}</div>
+                ${location ? `<div style="font-size: 11px; color: #666; margin-top: 2px;">${location}</div>` : ''}
+              </div>`;
+          }).join('');
+          
+          // Add click handlers
+          affiliatesListContainer.querySelectorAll('.affiliate-row').forEach(item => {
+            item.addEventListener('click', () => {
+              // Remove selection from all
+              affiliatesListContainer.querySelectorAll('.affiliate-row').forEach(i => {
+                i.style.background = '';
+              });
+              // Highlight selected
+              item.style.background = '#e3f2fd';
+              
+              const index = parseInt(item.dataset.index);
+              if (this.affiliates[index]) {
+                this.loadAffiliateForm(this.affiliates[index]);
+              }
+            });
+          });
+          
+          // Start with blank form - don't auto-select
+          this.clearAffiliateForm();
+        }
+      }
+      
+      console.log(`✅ Affiliates loaded: ${this.affiliates.length} (showAll: ${showAll})`);
+    } catch (error) {
+      console.error('❌ Error loading affiliates:', error);
+      if (affiliatesListContainer) {
+        affiliatesListContainer.innerHTML = '<div style="padding: 10px; color: #c00; font-size: 11px;">Error loading affiliates</div>';
+      }
+    }
+  }
+
+  loadAffiliateForm(affiliate) {
+    this.currentAffiliate = affiliate;
+    const form = document.querySelector('.affiliates-form-panel');
+    if (!form) return;
+
+    // DEBUG: Log affiliate data to see structure
+    console.log('📋 Loading affiliate form with data:', affiliate);
+
+    // Update form title
+    const formTitle = form.querySelector('h3');
+    if (formTitle) {
+      const displayName = affiliate.company_name || `${affiliate.first_name || ''} ${affiliate.last_name || ''}`.trim();
+      formTitle.textContent = displayName || 'Affiliate Details';
+    }
+
+    // Populate form fields by ID
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val || '';
+    };
+    
+    const setCheck = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = !!val;
+    };
+    
+    // Company Info
+    setVal('affCompanyName', affiliate.company_name);
+    // Handle address 1 from multiple possible column names
+    const address1 = affiliate.primary_address || affiliate.address_1 || affiliate['address 1'] || affiliate['Address 1'] || '';
+    console.log('📍 Address 1 resolved to:', address1, 'from fields:', { primary_address: affiliate.primary_address, address_1: affiliate.address_1, 'address 1': affiliate['address 1'], 'Address 1': affiliate['Address 1'] });
+    setVal('affAddress', address1);
+    setVal('affAddress2', affiliate.address_line2 || affiliate.address_2 || affiliate['address 2'] || affiliate['Address 2'] || '');
+    setVal('affCity', affiliate.city);
+    setVal('affState', affiliate.state);
+    setVal('affZip', affiliate.zip);
+    setVal('affCountry', affiliate.country);
+    setVal('affSchool', affiliate.school);
+    setVal('affTaxId', affiliate.tax_id_ssn);
+    setVal('affMarketsServiced', affiliate.markets_serviced);
+    
+    // Primary Contact
+    setVal('affFirstName', affiliate.first_name);
+    setVal('affLastName', affiliate.last_name);
+    setVal('affPhone', affiliate.phone);
+    setVal('affPhoneExt', affiliate.phone_ext);
+    setVal('affFax', affiliate.fax);
+    setVal('affFaxExt', affiliate.fax_ext);
+    setVal('affEmail', affiliate.email);
+    setVal('affWebsite', affiliate.website);
+    
+    // Send options
+    setCheck('affSendEmail', affiliate.send_trip_email);
+    setCheck('affSendSms', affiliate.send_trip_sms);
+    setCheck('affSendFax', affiliate.send_trip_fax);
+    setCheck('affDontSendAuto', affiliate.dont_send_auto_notifications);
+    
+    // Notes and Settings
+    setVal('affNotes', affiliate.internal_notes);
+    setVal('affStatus', affiliate.status || 'ACTIVE');
+    setVal('affPriority', affiliate.learned_priority);
+    setVal('affTurnaround', affiliate.turnaround_monitor_code);
+    
+    // Web Access
+    setVal('affUsername', affiliate.web_username);
+    setVal('affPassword', affiliate.web_password);
+    
+    // Rental Agreement
+    setVal('affRentalAgreement', affiliate.rental_agreement);
+    
+    // Alt contact
+    setVal('affAltFirstName', affiliate.alt_first_name);
+    setVal('affAltLastName', affiliate.alt_last_name);
+    setVal('affAltPhone', affiliate.alt_phone);
+    setVal('affAltPhoneExt', affiliate.alt_phone_ext);
+    setVal('affAltFax', affiliate.alt_fax);
+    setVal('affAltFaxExt', affiliate.alt_fax_ext);
+    setVal('affAltEmail', affiliate.alt_email);
+    setCheck('affAltSendEmail', affiliate.alt_send_trip_email);
+    setCheck('affAltSendSms', affiliate.alt_send_trip_sms);
+
+    console.log('📝 Loaded affiliate form:', affiliate.company_name || affiliate.id);
+  }
+  
+  clearAffiliateForm() {
+    this.currentAffiliate = null;
+    const form = document.querySelector('.affiliates-form-panel');
+    if (!form) return;
+
+    // Reset title
+    const formTitle = form.querySelector('h3');
+    if (formTitle) {
+      formTitle.textContent = 'Select an Affiliate or Add New';
+    }
+
+    // Clear all text inputs and textareas
+    const inputs = form.querySelectorAll('input[type="text"], input[type="email"], input[type="password"], textarea');
+    inputs.forEach(input => input.value = '');
+    
+    // Reset checkboxes
+    const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    
+    // Reset selects to first option
+    const selects = form.querySelectorAll('select');
+    selects.forEach(select => {
+      if (select.id === 'affStatus') {
+        select.value = 'ACTIVE';
+      } else {
+        select.selectedIndex = 0;
+      }
+    });
+    
+    console.log('📝 Affiliate form cleared');
   }
 
   loadDriverForm(driver) {

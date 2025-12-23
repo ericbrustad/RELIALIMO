@@ -143,6 +143,16 @@
               Changes save in your browser for demo purposes. Backend wiring can replace this with an API call when ready.
             </div>
           </div>
+
+          <div class="send-magic-link">
+            <h4>Send Magic Link</h4>
+            <p>Send a passwordless sign-in email to a user.</p>
+            <div class="send-row">
+              <input type="email" id="magic-link-email" placeholder="user@example.com" aria-label="Email address" />
+              <button id="magic-link-send" class="primary">Send magic link</button>
+            </div>
+            <div id="magic-link-result" class="helper-text" aria-live="polite"></div>
+          </div>
         </section>
       </main>
     </div>

@@ -30,6 +30,36 @@ function lockToggle() {
   statusBadge.classList.add('disabled');
 }
 
+async function sendMagicLink(email) {
+  try {
+    const enabled = syncFromStorage();
+    const resultEl = document.getElementById('magic-link-result');
+    if (!enabled) {
+      resultEl.textContent = 'Magic link sending is currently disabled.';
+      return;
+    }
+
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const { getSupabaseCredentials } = await import('./supabase-config.js');
+    const { url, anonKey } = getSupabaseCredentials();
+    const supabase = createClient(url, anonKey);
+
+    const redirectTo = `${window.location.origin}/index.html`;
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo }
+    });
+    if (error) {
+      resultEl.textContent = `Error: ${error.message}`;
+      return;
+    }
+    resultEl.textContent = 'Magic link sent if email is registered.';
+  } catch (e) {
+    const resultEl = document.getElementById('magic-link-result');
+    resultEl.textContent = `Error: ${e?.message || 'Failed to send magic link'}`;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const initialEnabled = syncFromStorage();
   toggle.checked = initialEnabled;
@@ -47,4 +77,19 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('magicLinkEnabled', String(enabled));
     updateStatus(enabled);
   });
+
+  const sendBtn = document.getElementById('magic-link-send');
+  const emailInput = document.getElementById('magic-link-email');
+  if (sendBtn && emailInput) {
+    sendBtn.addEventListener('click', async () => {
+      const email = String(emailInput.value || '').trim();
+      const resultEl = document.getElementById('magic-link-result');
+      if (!email) {
+        resultEl.textContent = 'Please enter an email address.';
+        return;
+      }
+      resultEl.textContent = 'Sending magic link...';
+      await sendMagicLink(email);
+    });
+  }
 });

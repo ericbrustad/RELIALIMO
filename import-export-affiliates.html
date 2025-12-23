@@ -265,6 +265,8 @@
   <div class="section">
     <h2>📋 Current Affiliates in System</h2>
     <button class="btn btn-primary" id="refreshBtn">Refresh List</button>
+    <button class="btn btn-warning" id="migrateBtn" onclick="migrateAddresses()">🔄 Migrate Address Data</button>
+    <button class="btn" id="deleteAllBtn" style="background: #d32f2f; color: white;" onclick="deleteAllAffiliates()">🗑️ Delete All Affiliates</button>
     <div id="currentAffiliatesSection">
       <table class="preview-table" id="currentAffiliatesTable"></table>
     </div>
@@ -626,8 +628,14 @@ const HEADER_MAP = {
   
   // Address fields
   'Address': 'primary_address',
+  'Address 1': 'primary_address',
+  'address 1': 'primary_address',
+  'Address1': 'primary_address',
   'primary_address': 'primary_address',
   'AptSte': 'address_line2',
+  'Address 2': 'address_line2',
+  'address 2': 'address_line2',
+  'Address2': 'address_line2',
   'address_line2': 'address_line2',
   'City': 'city',
   'city': 'city',
@@ -779,6 +787,9 @@ function handleFileSelect(e) {
       const sourceHeaders = Object.keys(rawData[0]);
       const mappedHeaders = sourceHeaders.map(h => HEADER_MAP[h] || h.toLowerCase());
       console.log('📋 Header mapping:', sourceHeaders.map((s, i) => `${s} → ${mappedHeaders[i]}`));
+      console.log('📋 Source headers in file:', sourceHeaders);
+      console.log('📋 First row raw data:', rawData[0]);
+      console.log('📋 First row after normalization:', importData[0]);
 
       // Show preview with normalized data
       const displayHeaders = ['company_name', 'first_name', 'last_name', 'phone', 'email', 'city', 'state', 'status'];
@@ -919,6 +930,203 @@ document.getElementById('templateBtn').addEventListener('click', downloadTemplat
 document.getElementById('importFile').addEventListener('change', handleFileSelect);
 document.getElementById('importBtn').addEventListener('click', importAffiliates);
 document.getElementById('refreshBtn').addEventListener('click', loadCurrentAffiliates);
+
+// Migration function to check for address data in other columns
+async function migrateAddresses() {
+  if (!supabaseClient) {
+    console.error('❌ Supabase not initialized');
+    alert('Supabase not initialized. Please refresh the page.');
+    return;
+  }
+  
+  try {
+    // Ensure we have a valid session
+    await ensureValidSession();
+    
+    console.log('🔍 Starting address migration...');
+    
+    const { data, error } = await supabaseClient
+      .from('affiliates')
+      .select('*');
+      
+    if (error) {
+      console.error('❌ Error fetching affiliates:', error);
+      alert('Error fetching affiliates: ' + error.message);
+      return;
+    }
+    
+    if (!data) {
+      alert('No affiliates found');
+      return;
+    }
+    
+    console.log('🔍 Checking all affiliates for address data...', data.length);
+    let updated = 0;
+    
+    for (const aff of data) {
+      // Check all possible address column names
+      const possibleAddresses = [
+        aff.primary_address,
+        aff.address_1,
+        aff['address 1'],
+        aff['Address 1'],
+        aff.address,
+        aff.Address
+      ];
+      
+      const foundAddress = possibleAddresses.find(a => a && String(a).trim());
+      
+      // If primary_address is empty but we found an address elsewhere, migrate it
+      if (!aff.primary_address && foundAddress) {
+        console.log(`📍 Migrating address for ${aff.company_name}: "${foundAddress}"`);
+        
+        const { error: updateError } = await supabaseClient
+          .from('affiliates')
+          .update({ primary_address: foundAddress })
+          .eq('id', aff.id);
+          
+        if (updateError) {
+          console.error(`❌ Error updating ${aff.id}:`, updateError);
+        } else {
+          updated++;
+        }
+      }
+    }
+    
+    alert(`✅ Migration complete: ${updated} affiliates updated with addresses`);
+    loadCurrentAffiliates();
+  } catch (error) {
+    console.error('❌ Migration error:', error);
+    alert('Migration failed: ' + error.message);
+  }
+}
+
+// Delete all affiliates function
+async function deleteAllAffiliates() {
+  if (!supabaseClient) {
+    console.error('❌ Supabase not initialized');
+    alert('Supabase not initialized. Please refresh the page.');
+    return;
+  }
+  
+  // Show confirmation dialog
+  const confirmDelete = confirm('⚠️ WARNING: This will PERMANENTLY DELETE all affiliates from the database. This cannot be undone. Continue?');
+  
+  if (!confirmDelete) {
+    console.log('Delete cancelled by user');
+    return;
+  }
+  
+  // Second confirmation for safety
+  const confirmAgain = confirm('Are you absolutely sure? This is a permanent action.');
+  
+  if (!confirmAgain) {
+    console.log('Delete cancelled by user on second confirmation');
+    return;
+  }
+  
+  const btn = document.getElementById('deleteAllBtn');
+  btn.disabled = true;
+  btn.textContent = 'Deleting all affiliates...';
+  
+  try {
+    await ensureValidSession();
+    
+    console.log('🗑️ Starting deletion of all affiliates...');
+    
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+    
+    console.log('🗑️ Using URL:', supabaseUrl);
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase not configured');
+    }
+    
+    // Get the auth token from localStorage
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session.access_token) {
+          authToken = session.access_token;
+          console.log('✅ Using access token from session');
+        }
+      } catch (e) {
+        console.log('Could not parse session, using anon key');
+      }
+    }
+    
+    // First, fetch all affiliates to get their IDs
+    console.log('📥 Fetching all affiliates...');
+    const fetchResponse = await fetch(`${supabaseUrl}/rest/v1/affiliates?select=id`, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    console.log('📥 Fetch response status:', fetchResponse.status);
+    
+    if (!fetchResponse.ok) {
+      const errorText = await fetchResponse.text();
+      throw new Error(`Failed to fetch affiliates: ${fetchResponse.status} - ${errorText}`);
+    }
+    
+    const affiliates = await fetchResponse.json();
+    console.log('📊 Affiliates found:', affiliates?.length);
+    
+    if (!affiliates || affiliates.length === 0) {
+      console.log('ℹ️ No affiliates to delete');
+      alert('No affiliates found to delete');
+      btn.disabled = false;
+      btn.textContent = '🗑️ Delete All Affiliates';
+      return;
+    }
+    
+    console.log(`🗑️ Starting to delete ${affiliates.length} affiliates...`);
+    
+    // Delete each affiliate by ID
+    let deleted = 0;
+    let failed = 0;
+    
+    for (let i = 0; i < affiliates.length; i++) {
+      const aff = affiliates[i];
+      console.log(`🗑️ Deleting ${i+1}/${affiliates.length} (ID: ${aff.id})`);
+      
+      const deleteResponse = await fetch(`${supabaseUrl}/rest/v1/affiliates?id=eq.${aff.id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      console.log(`  Response: ${deleteResponse.status}`);
+      
+      if (deleteResponse.ok) {
+        deleted++;
+        btn.textContent = `Deleting... ${deleted}/${affiliates.length}`;
+      } else {
+        failed++;
+        console.error(`❌ Failed to delete affiliate ${aff.id}:`, deleteResponse.status);
+      }
+    }
+    
+    console.log(`✅ Delete complete: ${deleted} deleted, ${failed} failed`);
+    alert(`✅ Deleted ${deleted}/${affiliates.length} affiliates successfully!`);
+    loadCurrentAffiliates();
+    
+  } catch (error) {
+    console.error('❌ Delete error:', error);
+    alert('Delete failed: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑️ Delete All Affiliates';
+    console.log('🔄 Button reset');
+  }
+}
 
 // Initialize on load
 init();
