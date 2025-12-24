@@ -130,6 +130,9 @@ enforceSectionAccess();
 
   <div style="margin-top:24px; padding:16px; border:1px solid #e0e0e0; border-radius:6px;">
     <h3 style="margin-top:0;">Driver Tools</h3>
+    <div style="margin-bottom:16px;">
+      <button id="removeDuplicateDriversBtn" class="btn" style="background:#ffb74d;" onclick="handleRemoveDriverDuplicates()">🧹 Remove Duplicate Drivers</button>
+    </div>
     <div style="margin-bottom:12px;">
       <label for="driverIdInput" style="display:block; font-weight:600; margin-bottom:6px;">Delete Driver by ID</label>
       <input id="driverIdInput" type="text" placeholder="Paste driver UUID" style="width:360px; padding:8px; border:1px solid #ccc; border-radius:4px;" />
@@ -159,7 +162,8 @@ enforceSectionAccess();
 <script type="module">
 console.log('=== UTILITIES MODULE LOADING ===');
 
-import { removeDuplicateAffiliates, setupAPI, getSupabaseClient } from './api-service.js';
+import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient } from './api-service.js';
+import * as driverFieldConfig from './driver-field-config.js';
 // Show login/profile info in top right
 async function showProfileBox() {
   await setupAPI();
@@ -218,6 +222,8 @@ async function ensureSupabaseReady() {
 window.ensureSupabaseReady = ensureSupabaseReady;
 window.getSupabaseClient = getSupabaseClient;
 window.setupAPI = setupAPI;
+window.ensureDriverTablesAndColumns = ensureDriverTablesAndColumns;
+window.driverFieldConfig = driverFieldConfig;
 
 ensureSupabaseReady();
 
@@ -290,6 +296,153 @@ if (removeDupBtn) {
   console.log('Remove duplicate affiliates button handler attached');
 } else {
   console.error('Remove duplicate button not found!');
+}
+
+const removeDriverDupBtn = document.getElementById('removeDuplicateDriversBtn');
+if (removeDriverDupBtn) {
+  removeDriverDupBtn.disabled = false;
+
+  removeDriverDupBtn.addEventListener('click', async function(e) {
+    e.preventDefault();
+
+    try {
+      await setupAPI();
+    } catch (err) {
+      console.error('Setup API error (drivers):', err);
+    }
+
+    if (!confirm('This will remove duplicate drivers (matching email/phone within each organization). Continue?')) {
+      return;
+    }
+
+    removeDriverDupBtn.disabled = true;
+    removeDriverDupBtn.textContent = 'Removing duplicates...';
+
+    try {
+      const result = await removeDuplicateDrivers();
+      if (result && result.success) {
+        alert(result.message || `Removed ${result.removed} duplicate drivers.`);
+      } else {
+        alert(`Failed to remove duplicates: ${result?.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error removing duplicate drivers:', err);
+      alert(`Error: ${err.message}`);
+    } finally {
+      removeDriverDupBtn.disabled = false;
+      removeDriverDupBtn.textContent = '🧹 Remove Duplicate Drivers';
+    }
+  });
+}
+
+async function handleRemoveDriverDuplicates() {
+  if (!confirm('This will remove duplicate drivers (matching email/phone within each organization). Continue?')) {
+    return;
+  }
+
+  const btn = document.getElementById('removeDuplicateDriversBtn');
+  btn.disabled = true;
+  btn.textContent = 'Removing duplicates...';
+
+  try {
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase not configured');
+    }
+
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session.access_token) {
+          authToken = session.access_token;
+        }
+      } catch (e) {
+        console.log('Could not parse session, using anon key');
+      }
+    }
+
+    const response = await fetch(`${supabaseUrl}/rest/v1/drivers?select=id,organization_id,email,phone,first_name,last_name,created_at&order=created_at`, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${authToken}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch drivers: ' + response.status);
+    }
+
+    const drivers = await response.json();
+    if (!drivers.length) {
+      alert('No drivers found.');
+      return;
+    }
+
+    const seen = new Map();
+    const duplicateIds = [];
+
+    const buildKey = (driver) => {
+      const org = driver.organization_id || 'no_org';
+      const email = (driver.email || '').trim().toLowerCase();
+      if (email) return `${org}|email|${email}`;
+      const phone = (driver.phone || '').replace(/[^0-9]/g, '');
+      if (phone.length >= 7) return `${org}|phone|${phone}`;
+      const first = (driver.first_name || '').trim().toLowerCase();
+      const last = (driver.last_name || '').trim().toLowerCase();
+      if (first || last) return `${org}|name|${first} ${last}`.trim();
+      return null;
+    };
+
+    drivers.forEach(driver => {
+      const key = buildKey(driver);
+      if (!key) return;
+      if (seen.has(key)) {
+        duplicateIds.push(driver.id);
+      } else {
+        seen.set(key, driver.id);
+      }
+    });
+
+    if (!duplicateIds.length) {
+      alert('No duplicate drivers found.');
+      return;
+    }
+
+    if (!confirm(`Found ${duplicateIds.length} duplicate driver records. Delete them?`)) {
+      return;
+    }
+
+    let deleted = 0;
+    for (const id of duplicateIds) {
+      const delResponse = await fetch(`${supabaseUrl}/rest/v1/drivers?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${authToken}`
+        }
+      });
+
+      if (!delResponse.ok) {
+        const text = await delResponse.text();
+        console.warn(`Failed to delete driver ${id}:`, text);
+      } else {
+        deleted++;
+        btn.textContent = `Removing duplicates... (${deleted}/${duplicateIds.length})`;
+      }
+    }
+
+    alert(`Removed ${deleted} duplicate drivers.`);
+  } catch (err) {
+    console.error('Error removing duplicate drivers:', err);
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🧹 Remove Duplicate Drivers';
+  }
 }
 </script>
 
@@ -503,54 +656,22 @@ async function ensureDriverTablesAndColumns() {
   btn.textContent = 'Generating driver schema SQL...';
 
   try {
-    // SQL for driver columns on public.drivers
-    const driverColumnsSql = [
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS organization_id uuid;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS driver_level text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS address_line2 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS fax text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS other_phone text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS other_phone_provider text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS pager_phone text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS pager_provider text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS notify_email boolean DEFAULT false;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS notify_fax boolean DEFAULT false;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS notify_sms boolean DEFAULT false;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS ssn text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS license_number text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS license_state text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS license_exp_date date;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS badge_id text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS badge_exp_date date;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS dob date;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS type text DEFAULT 'Driver';",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS status text DEFAULT 'ACTIVE';",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS web_access text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS web_username text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS web_password text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS voucher_fee numeric;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS driver_notes text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_nv_1 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_nv_2 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_nv_3 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_fl_1 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_fl_2 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS extra_fl_3 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS country text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS include_phone_1 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS include_phone_2 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS include_phone_3 text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS dispatch_display_name text;",
-      "ALTER TABLE public.drivers ADD COLUMN IF NOT EXISTS trip_sheets_display_name text;"
-    ].join('\n');
+    // SQL for driver columns on public.drivers derived from the driver field list
+    const driverColumnsSql = driverFieldConfig.buildAlterTableSql('public.drivers', driverFieldConfig.driverTableFieldList);
+
+    // Ensure pay-rate specific columns exist
+    const driverPayRateColumnsSql = driverFieldConfig.buildAlterTableSql('public.driver_pay_rates', driverFieldConfig.driverPayRateFields);
+
+    // Ensure schedule table columns align with the UI
+    const driverScheduleColumnsSql = driverFieldConfig.buildAlterTableSql('public.driver_schedules', driverFieldConfig.driverScheduleFields);
 
     const enforceStatusDefaultSql = `-- Ensure status defaults to ACTIVE and backfill
   ALTER TABLE public.drivers ALTER COLUMN status SET DEFAULT 'ACTIVE';
-  UPDATE public.drivers SET status='ACTIVE' WHERE status IS NULL OR status=''`;
+  UPDATE public.drivers SET status='ACTIVE' WHERE status IS NULL OR status='';`;
 
     const enforceTypeDefaultSql = `-- Ensure type defaults to Driver and backfill
   ALTER TABLE public.drivers ALTER COLUMN type SET DEFAULT 'Driver';
-  UPDATE public.drivers SET type='Driver' WHERE type IS NULL OR trim(type)=''`;
+  UPDATE public.drivers SET type='Driver' WHERE type IS NULL OR trim(type)='';`;
 
     const ensureUuidDefaultSql = `-- Ensure id auto-generates as UUID
 ALTER TABLE public.drivers ALTER COLUMN id SET DEFAULT gen_random_uuid();`;
@@ -615,10 +736,18 @@ CREATE POLICY driver_schedules_rw ON public.driver_schedules FOR ALL USING (
 
     const extensionsSql = `-- Required for gen_random_uuid()\nCREATE EXTENSION IF NOT EXISTS pgcrypto;`;
 
-    const fullSql = `-- Enable required extensions\n${extensionsSql}\n\n-- Ensure driver columns\n${driverColumnsSql}\n\n-- Enforce status default and backfill\n${enforceStatusDefaultSql}\n\n-- Enforce type default and backfill\n${enforceTypeDefaultSql}\n\n-- Ensure UUID default for id\n${ensureUuidDefaultSql}\n\n-- Ensure driver pay rates table\n${payRatesSql}\n\n-- Ensure driver schedules table\n${schedulesSql}\n\n-- Ensure organization_id exists on related tables (idempotent)\n${ensureRelatedOrgColumnsSql}\n\n-- Auto-assign organization_id on insert if NULL (drivers)\n${setOrgTriggerSql}\n\n-- Propagate organization_id to pay_rates/schedules and backfill\n${propagateOrgSql}\n\n-- Row Level Security policies to allow inserts/updates under org membership\n${rlsSql}\n`;
+    const fullSql = `-- Enable required extensions\n${extensionsSql}\n\n-- Ensure driver columns\n${driverColumnsSql}\n\n-- Enforce status default and backfill\n${enforceStatusDefaultSql}\n\n-- Enforce type default and backfill\n${enforceTypeDefaultSql}\n\n-- Ensure UUID default for id\n${ensureUuidDefaultSql}\n\n-- Ensure driver pay rates table\n${payRatesSql}\n\n-- Ensure driver pay rate columns\n${driverPayRateColumnsSql}\n\n-- Ensure driver schedules table\n${schedulesSql}\n\n-- Ensure driver schedule columns\n${driverScheduleColumnsSql}\n\n-- Ensure organization_id exists on related tables (idempotent)\n${ensureRelatedOrgColumnsSql}\n\n-- Auto-assign organization_id on insert if NULL (drivers)\n${setOrgTriggerSql}\n\n-- Propagate organization_id to pay_rates/schedules and backfill\n${propagateOrgSql}\n\n-- Row Level Security policies to allow inserts/updates under org membership\n${rlsSql}\n`;
 
     console.log('Driver Schema SQL to run in Supabase SQL Editor:');
     console.log(fullSql);
+
+    const schemaSummary = driverFieldConfig.getDriverSchemaSummary();
+    console.log('Driver field list (drivers table):');
+    console.table(schemaSummary.drivers);
+    console.log('Driver pay rate fields:');
+    console.table(schemaSummary.driver_pay_rates);
+    console.log('Driver schedule fields:');
+    console.table(schemaSummary.driver_schedules);
 
     try {
       await navigator.clipboard.writeText(fullSql);

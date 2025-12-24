@@ -6,7 +6,137 @@ import { AffiliateService } from './AffiliateService.js';
 import { db } from './assets/db.js';
 import { wireMainNav } from './navigation.js';
 
+const FARMOUT_STATUS_ALIASES = {
+  '': '',
+  farm_out_unassigned: 'unassigned',
+  farmout_unassigned: 'unassigned',
+  created_farm_out_unassigned: 'unassigned',
+  created_farmout_unassigned: 'unassigned',
+  farm_out_assigned: 'assigned',
+  farmout_assigned: 'assigned',
+  created_farm_out_assigned: 'assigned',
+  created_farmout_assigned: 'assigned',
+  farm_out_offered: 'offered',
+  farmout_offered: 'offered',
+  farm_out_declined: 'declined',
+  farmout_declined: 'declined',
+  farm_out_completed: 'completed',
+  farmout_completed: 'completed',
+  done: 'completed',
+  en_route: 'enroute',
+  enroute: 'enroute',
+  passenger_on_board: 'passenger_onboard',
+  passenger_on_boarded: 'passenger_onboard',
+  passenger_on_boarding: 'passenger_onboard',
+  inhouse: 'in_house',
+  'in-house': 'in_house',
+  in_house_dispatch: 'in_house'
+};
+
+const FARMOUT_STATUS_LABELS = {
+  unassigned: 'Farm-out Unassigned',
+  farm_out_unassigned: 'Farm-out Unassigned',
+  farmout_unassigned: 'Farm-out Unassigned',
+  offered: 'Farm-out Offered',
+  assigned: 'Farm-out Assigned',
+  farm_out_assigned: 'Farm-out Assigned',
+  farmout_assigned: 'Farm-out Assigned',
+  declined: 'Farm-out Declined',
+  enroute: 'Farm-out En Route',
+  en_route: 'Farm-out En Route',
+  arrived: 'Farm-out Arrived',
+  passenger_onboard: 'Passenger On Board',
+  passenger_on_board: 'Passenger On Board',
+  completed: 'Farm-out Completed',
+  in_house: 'In-house Dispatch',
+  inhouse: 'In-house Dispatch',
+  offered_to_affiliate: 'Offered to Affiliate',
+  affiliate_assigned: 'Affiliate Assigned',
+  affiliate_driver_assigned: 'Affiliate Driver Assigned',
+  driver_en_route: 'Driver En Route',
+  on_the_way: 'Driver On The Way',
+  driver_waiting_at_pickup: 'Driver Waiting at Pickup',
+  waiting_at_pickup: 'Waiting at Pickup',
+  driver_circling: 'Driver Circling',
+  customer_in_car: 'Customer In Car',
+  driving_passenger: 'Driving Passenger',
+  cancelled: 'Farm-out Cancelled',
+  cancelled_by_affiliate: 'Cancelled by Affiliate',
+  late_cancel: 'Late Cancel',
+  late_cancelled: 'Late Cancelled',
+  no_show: 'No Show',
+  covid19_cancellation: 'COVID-19 Cancellation',
+  done: 'Trip Done'
+};
+
+function normalizeFarmoutKey(value) {
+  return value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/__+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function canonicalizeFarmoutStatus(status) {
+  if (!status) {
+    return '';
+  }
+  const normalized = normalizeFarmoutKey(status);
+  const alias = FARMOUT_STATUS_ALIASES[normalized];
+  return alias || normalized;
+}
+
+function canonicalizeFarmoutMode(mode) {
+  if (!mode) {
+    return 'manual';
+  }
+  const normalized = normalizeFarmoutKey(mode);
+  if (normalized === 'auto' || normalized === 'auto_dispatch' || normalized === 'automatic_dispatch') {
+    return 'automatic';
+  }
+  if (normalized === 'automatic' || normalized === 'manual') {
+    return normalized;
+  }
+  return normalized || 'manual';
+}
+
+function formatFarmoutStatus(status) {
+  const canonical = canonicalizeFarmoutStatus(status);
+  if (!canonical) {
+    return FARMOUT_STATUS_LABELS.unassigned;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(FARMOUT_STATUS_LABELS, canonical)) {
+    return FARMOUT_STATUS_LABELS[canonical];
+  }
+
+  return canonical
+    .split(/[_\-\s]+/)
+    .filter(Boolean)
+    .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+}
+
 const RESERVATION_DRAFT_KEY = 'relia_reservation_draft';
+
+// Global function to create a new reservation
+function createNewReservation() {
+  // Send message to parent to clear conf and reload
+  const targetWindow = window.top || window.parent || window;
+  if (targetWindow === window) {
+    const timestamp = Date.now();
+    window.location.href = `reservation-form.html?_new=${timestamp}`;
+    return;
+  }
+  targetWindow.postMessage({
+    action: 'newReservation'
+  }, '*');
+}
+
+// Expose for inline onclick handlers
+window.createNewReservation = createNewReservation;
 
 class ReservationForm {
   constructor() {
@@ -20,15 +150,192 @@ class ReservationForm {
     this.selectedFlight = null;
     this.selectedAffiliate = null;
 
+    this.isViewMode = this.detectViewMode();
+    this.viewModeApplied = false;
+    this.viewModeReady = false;
+    this.viewConfNumber = null;
+
     this.isEditMode = false;
     this.editConfNumber = null;
     
     this.init();
   }
 
+  detectViewMode() {
+    try {
+      if (window.RELIA_VIEW_MODE === true || window.RELIA_VIEW_MODE === 'true') {
+        return true;
+      }
+
+      const datasetValue = window.frameElement?.dataset?.viewMode;
+      if (datasetValue) {
+        const normalized = datasetValue.toString().toLowerCase();
+        if (['1', 'true', 'view', 'readonly', 'read', 'yes', 'y'].includes(normalized)) {
+          return true;
+        }
+        if (['0', 'false', 'no', 'n'].includes(normalized)) {
+          return false;
+        }
+      }
+
+      const params = new URLSearchParams(window.location.search || '');
+      const modeParam = params.get('mode') || params.get('viewMode');
+      if (modeParam) {
+        const normalized = modeParam.toString().toLowerCase();
+        if (['view', 'readonly', 'read', 'ro', '1', 'true'].includes(normalized)) {
+          return true;
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ [ReservationForm] detectViewMode error:', error);
+    }
+    return false;
+  }
+
+  prepareViewModeShell() {
+    document.body.classList.add('view-mode');
+    document.body.dataset.viewMode = 'true';
+
+    if (!this.viewConfNumber) {
+      const fromDataset = window.frameElement?.dataset?.confNumber;
+      if (fromDataset) {
+        this.viewConfNumber = fromDataset;
+      }
+    }
+
+    const attention = document.querySelector('.attention-warning');
+    if (attention) {
+      attention.classList.add('view-mode-banner');
+      attention.innerHTML = '<strong>VIEW MODE:</strong> Loading reservation details...';
+    }
+
+    const closeBtn = document.getElementById('closeFormBtn');
+    if (closeBtn) {
+      closeBtn.style.display = 'inline-block';
+      closeBtn.disabled = false;
+      closeBtn.classList.add('view-mode-allow');
+    }
+
+    const newReservationBtn = document.querySelector('button[onclick="createNewReservation()"]');
+    if (newReservationBtn) {
+      newReservationBtn.classList.add('view-mode-allow');
+      if (!newReservationBtn.id) {
+        newReservationBtn.id = 'newReservationBtn';
+      }
+    }
+  }
+
+  finalizeViewMode() {
+    if (!this.isViewMode || this.viewModeApplied) {
+      return;
+    }
+
+    this.viewModeApplied = true;
+    document.body.classList.add('view-mode-ready');
+
+    const attention = document.querySelector('.attention-warning');
+    if (attention) {
+      attention.innerHTML = '<strong>VIEW MODE:</strong> This reservation is read-only. Click "Edit Reservation" to make changes.';
+      attention.classList.add('view-mode-banner-active');
+    }
+
+    const headerButtons = document.querySelector('.header-content > div:last-child');
+    if (headerButtons && !document.getElementById('editReservationBtn')) {
+      const editBtn = document.createElement('button');
+      editBtn.id = 'editReservationBtn';
+      editBtn.textContent = '✏️ Edit Reservation';
+      editBtn.style.cssText = 'padding: 8px 16px; background: rgba(255,255,255,0.3); color: white; border: 1px solid rgba(255,255,255,0.5); border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;';
+      editBtn.classList.add('view-mode-allow');
+      editBtn.addEventListener('click', () => this.triggerEditMode());
+      headerButtons.insertBefore(editBtn, headerButtons.firstChild);
+    }
+
+    const closeBtn = document.getElementById('closeFormBtn');
+    if (closeBtn) {
+      closeBtn.style.display = 'inline-block';
+      closeBtn.disabled = false;
+      closeBtn.classList.add('view-mode-allow');
+    }
+
+    const inputs = document.querySelectorAll('input, textarea');
+    inputs.forEach((field) => {
+      if (field.type === 'hidden') {
+        return;
+      }
+      if (field.type === 'checkbox' || field.type === 'radio') {
+        field.disabled = true;
+      } else {
+        field.setAttribute('readonly', 'readonly');
+      }
+      field.classList.add('view-mode-field');
+    });
+
+    document.querySelectorAll('select').forEach((select) => {
+      select.disabled = true;
+      select.classList.add('view-mode-field');
+    });
+
+    document.querySelectorAll('button').forEach((btn) => {
+      if (btn.classList.contains('view-mode-allow')) {
+        return;
+      }
+      const isNewReservation = btn.getAttribute('onclick') === 'createNewReservation()';
+      if (isNewReservation) {
+        btn.classList.add('view-mode-allow');
+        return;
+      }
+      btn.disabled = true;
+      btn.classList.add('view-mode-disabled-button');
+    });
+
+    const selectorsToHide = [
+      '#saveBtn',
+      '#saveReservationBtn',
+      '#deleteBtn',
+      '#deleteReservationBtn',
+      '#createStopBtn',
+      '#clearStopBtn',
+      '.btn-edit',
+      '.btn-remove',
+      '.btn-save',
+      '.btn-add'
+    ];
+    selectorsToHide.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((el) => {
+        el.style.display = 'none';
+      });
+    });
+
+    const addressEntryCard = document.querySelector('.address-entry-card');
+    if (addressEntryCard) {
+      addressEntryCard.style.display = 'none';
+    }
+
+    document.body.dataset.viewModeReady = 'true';
+    this.viewModeReady = true;
+    window.dispatchEvent(new Event('reliaReservationViewReady'));
+  }
+
+  triggerEditMode() {
+    const targetWindow = window.top || window.parent || window;
+    const conf = this.viewConfNumber || this.editConfNumber || this.getConfFromUrl();
+    if (!conf) {
+      console.warn('⚠️ [ReservationForm] No confirmation number available for edit request');
+      return;
+    }
+    targetWindow.postMessage({
+      action: 'editReservation',
+      conf
+    }, '*');
+  }
+
   init() {
     console.log('🚀 ReservationForm initializing...');
     console.log('✅ this keyword available:', !!this);
+    console.log('👀 [ReservationForm] View mode enabled:', this.isViewMode);
+    if (this.isViewMode) {
+      this.prepareViewModeShell();
+    }
     
     try {
       // Check if radio buttons exist
@@ -40,9 +347,14 @@ class ReservationForm {
       
       // Detect edit mode (?conf=...)
       const conf = this.getConfFromUrl();
+      console.log('🔍 [ReservationForm] getConfFromUrl result:', conf);
       if (conf) {
         this.isEditMode = true;
         this.editConfNumber = conf;
+        this.viewConfNumber = conf;
+        console.log('✅ [ReservationForm] Edit mode enabled for conf:', conf);
+      } else {
+        console.log('ℹ️ [ReservationForm] No conf in URL, creating new reservation');
       }
 
       // Initialize confirmation number
@@ -65,6 +377,9 @@ class ReservationForm {
       this.setupTabSwitching();
       console.log('✅ setupTabSwitching complete');
 
+      this.updateEFarmStatus('unassigned');
+      this.setFarmoutModeSelect('manual');
+
       // Make Stored Routing rows movable
       try {
         this.setupStoredRoutingDragAndDrop();
@@ -74,6 +389,7 @@ class ReservationForm {
 
       // Listen for Account saves (popup or iframe) so we can return and fill Billing Account#
       window.addEventListener('message', (event) => {
+        // Handle account saves
         if (event?.data?.action !== 'relia:accountSaved') return;
         const accountId = (event.data.accountId || '').toString().trim();
         if (!accountId) return;
@@ -357,6 +673,19 @@ class ReservationForm {
         console.warn(`⚠️ Element ${id} not found, skipping listener`);
       }
     };
+
+    const eFarmOutSelect = document.getElementById('eFarmOut');
+    if (eFarmOutSelect) {
+      const normalizeModeSelection = (value) => {
+        const canonical = canonicalizeFarmoutMode(value || 'manual');
+        eFarmOutSelect.value = canonical;
+        eFarmOutSelect.dataset.canonical = canonical;
+      };
+      normalizeModeSelection(eFarmOutSelect.value);
+      eFarmOutSelect.addEventListener('change', (event) => {
+        normalizeModeSelection(event.target.value);
+      });
+    }
     
     // Copy passenger info button
     safeAddListener('copyPassengerBtn', 'click', () => {
@@ -759,7 +1088,98 @@ class ReservationForm {
 
   updateEFarmStatus(status) {
     const statusInput = document.getElementById('eFarmStatus');
-    statusInput.value = status;
+    if (!statusInput) {
+      return;
+    }
+    const canonical = canonicalizeFarmoutStatus(status) || 'unassigned';
+    const label = formatFarmoutStatus(canonical);
+    statusInput.value = label;
+    statusInput.dataset.canonical = canonical;
+  }
+
+  setFarmoutModeSelect(mode) {
+    const select = document.getElementById('eFarmOut');
+    if (!select) {
+      return;
+    }
+    const canonical = canonicalizeFarmoutMode(mode || 'manual');
+    select.value = canonical;
+    select.dataset.canonical = canonical;
+  }
+
+  pickFirstCanonicalStatus(values = []) {
+    for (const value of values) {
+      if (!value && value !== 0) {
+        continue;
+      }
+      const canonical = canonicalizeFarmoutStatus(value);
+      if (canonical) {
+        return canonical;
+      }
+    }
+    return null;
+  }
+
+  pickFirstCanonicalMode(values = []) {
+    for (const value of values) {
+      if (!value && value !== 0) {
+        continue;
+      }
+      const canonical = canonicalizeFarmoutMode(value);
+      if (canonical) {
+        return canonical;
+      }
+    }
+    return canonicalizeFarmoutMode('manual');
+  }
+
+  applyFarmoutSnapshotDetails(details) {
+    if (!details || typeof details !== 'object') {
+      this.updateEFarmStatus('unassigned');
+      this.setFarmoutModeSelect('manual');
+      return;
+    }
+
+    const canonicalStatus = this.pickFirstCanonicalStatus([
+      details.farmoutStatusCanonical,
+      details.eFarmStatus,
+      details.efarmStatus
+    ]) || 'unassigned';
+    this.updateEFarmStatus(canonicalStatus);
+
+    const canonicalMode = this.pickFirstCanonicalMode([
+      details.eFarmOut,
+      details.farmoutMode
+    ]) || 'manual';
+    this.setFarmoutModeSelect(canonicalMode);
+  }
+
+  syncFarmoutDisplayFromRecord(record) {
+    if (!record || typeof record !== 'object') {
+      this.updateEFarmStatus('unassigned');
+      this.setFarmoutModeSelect('manual');
+      return;
+    }
+
+    const canonicalStatus = this.pickFirstCanonicalStatus([
+      record.farmoutStatus,
+      record.farmout_status,
+      record.efarm_status,
+      record.form_snapshot?.details?.farmoutStatusCanonical,
+      record.form_snapshot?.details?.eFarmStatus,
+      record.form_snapshot?.details?.efarmStatus
+    ]) || 'unassigned';
+    this.updateEFarmStatus(canonicalStatus);
+
+    const canonicalMode = this.pickFirstCanonicalMode([
+      record.farmoutMode,
+      record.farmout_mode,
+      record.efarm_out_selection,
+      record.eFarmOut,
+      record.form_snapshot?.details?.eFarmOut,
+      record.form_snapshot?.details?.farmoutMode
+    ]) || 'manual';
+    this.setFarmoutModeSelect(canonicalMode);
   }
 
   openAffiliateModal() {
@@ -2424,6 +2844,28 @@ class ReservationForm {
     });
 
     try {
+      const statusSelect = document.getElementById('resStatus');
+      const statusValue = statusSelect?.value || 'unassigned';
+      const statusLabel = (statusSelect && statusSelect.selectedIndex >= 0)
+        ? (statusSelect.options[statusSelect.selectedIndex]?.text?.trim() || statusValue)
+        : 'Unassigned';
+
+      const puDate = getValue('puDate');
+      const puTime = getValue('puTime');
+      const doTime = getValue('doTime');
+      const spotTime = getValue('spotTime');
+      const garOutTime = getValue('garOutTime');
+      const garInTime = getValue('garInTime');
+      const driverArriveTime = getValue('driverArriveTime');
+
+      const farmOptionValue = document.querySelector('input[name="farmOption"]:checked')?.value || 'in-house';
+      const eFarmStatusInput = document.getElementById('eFarmStatus') || document.getElementById('efarmStatus');
+      const eFarmStatusValue = (eFarmStatusInput?.value || 'Farm-out Unassigned').trim();
+      const eFarmStatusCanonical = eFarmStatusInput?.dataset?.canonical || canonicalizeFarmoutStatus(eFarmStatusValue) || 'unassigned';
+      const eFarmOutSelect = document.getElementById('eFarmOut');
+      const eFarmOutValue = eFarmOutSelect?.value || getValue('eFarmOut') || 'manual';
+      const eFarmOutCanonical = eFarmOutSelect?.dataset?.canonical || canonicalizeFarmoutMode(eFarmOutValue) || 'manual';
+
       // Collect all form data
       const reservationData = {
         billingAccount: {
@@ -2456,7 +2898,21 @@ class ReservationForm {
           partnerNotes: getValue('partnerNotes')
         },
         details: {
-          efarmStatus: getValue('efarmStatus') || getValue('eFarmStatus'),
+          status: statusValue,
+          statusLabel,
+          puDate,
+          puTime,
+          doTime,
+          spotTime,
+          garOutTime,
+          garInTime,
+          driverArriveTime,
+          farmOption: farmOptionValue,
+          efarmStatus: eFarmStatusValue,
+          eFarmStatus: eFarmStatusValue,
+          eFarmOut: eFarmOutCanonical,
+          farmoutStatusCanonical: eFarmStatusCanonical,
+          farmoutMode: eFarmOutCanonical,
           affiliate: getValue('affiliate'),
           referenceNum: getValue('referenceNum') || getValue('referenceNumber'),
           driver: getValue('driverAssignment') || getValue('driverSelect')
@@ -2467,9 +2923,6 @@ class ReservationForm {
 
       // Get current confirmation number
       const currentConfNumber = document.getElementById("confNumber")?.value || db.getNextConfirmationNumber();
-
-      const puDate = document.getElementById('puDate')?.value || '';
-      const puTime = document.getElementById('puTime')?.value || '';
       const pickupAt = puDate ? (puTime ? `${puDate}T${puTime}` : puDate) : null;
 
       // Only increment the next confirmation number if this is a new reservation
@@ -2500,7 +2953,10 @@ class ReservationForm {
       // Save to LocalStorage via db module
       const saved = db.saveReservation({
         id: currentConfNumber,
-        status: "confirmed",
+        status: statusValue,
+        status_detail_code: statusValue,
+        status_detail_label: statusLabel,
+        status_detail: statusValue,
         account_id: accountId, // Link reservation to account
         passenger_name: `${reservationData.passenger.firstName} ${reservationData.passenger.lastName}`,
         company_name: reservationData.billingAccount.company,
@@ -2510,6 +2966,12 @@ class ReservationForm {
         service_type: document.getElementById("serviceType")?.value || "",
         vehicle_type: document.getElementById("vehicleTypeRes")?.value || "",
         pickup_at: pickupAt,
+        pickup_time: puTime,
+        dropoff_time: doTime,
+        spot_time: spotTime,
+        gar_out_time: garOutTime,
+        gar_in_time: garInTime,
+        driver_arrive_time: driverArriveTime,
         time_zone: "America/Chicago",
         currency_abbr: "USD",
         passengers_count: parseInt(document.getElementById("numPax")?.value || "1") || 1,
@@ -2519,8 +2981,15 @@ class ReservationForm {
         trip_notes: reservationData.routing.tripNotes || "",
         bill_pax_notes: reservationData.routing.billPaxNotes || "",
         dispatch_notes: reservationData.routing.dispatchNotes || "",
-        farm_option: document.querySelector('input[name="farmOption"]:checked')?.value || "in_house",
-        efarm_status: document.getElementById("efarmStatus")?.value || document.getElementById("eFarmStatus")?.value || "NOT FARMED OUT",
+        farm_option: farmOptionValue,
+        efarm_status: eFarmStatusValue,
+        efarmStatus: eFarmStatusValue,
+        farmout_status: eFarmStatusCanonical,
+        farmoutStatus: eFarmStatusCanonical,
+        efarm_out_selection: eFarmOutCanonical,
+        eFarmOut: eFarmOutCanonical,
+        farmout_mode: eFarmOutCanonical,
+        farmoutMode: eFarmOutCanonical,
         affiliate_reference: reservationData.details.affiliate || "",
       });
 
@@ -2804,26 +3273,63 @@ class ReservationForm {
 
   getConfFromUrl() {
     try {
-      const conf = new URLSearchParams(window.location.search).get('conf');
+      // First, try to get conf from parent iframe's data attribute
+      if (window.frameElement) {
+        const confFromParent = window.frameElement.dataset?.confNumber;
+        if (confFromParent) {
+          console.log('📦 [ReservationForm] Found conf in iframe.dataset.confNumber:', confFromParent);
+          return confFromParent.trim();
+        }
+      }
+      
+      // Then check sessionStorage
+      const sessionConf = sessionStorage.getItem('relia_open_reservation_conf');
+      if (sessionConf) {
+        console.log('📦 [ReservationForm] Found conf in sessionStorage:', sessionConf);
+        sessionStorage.removeItem('relia_open_reservation_conf');
+        return sessionConf.trim();
+      }
+      
+      // Finally, try URL parameter
+      const fullUrl = window.location.href;
+      const search = window.location.search;
+      console.log('🔍 [getConfFromUrl] Full URL:', fullUrl);
+      console.log('🔍 [getConfFromUrl] Search string:', search);
+      
+      const conf = new URLSearchParams(search).get('conf');
+      console.log('🔍 [getConfFromUrl] Extracted conf from URL:', conf);
+      
       return conf ? conf.trim() : null;
-    } catch {
+    } catch (e) {
+      console.error('❌ [getConfFromUrl] Error:', e);
       return null;
     }
   }
 
   loadExistingReservation(confNumber) {
     try {
+      console.log('📥 [ReservationForm] loadExistingReservation called for conf:', confNumber);
+      console.log('📚 [ReservationForm] All reservations in db:', db.getAllReservations());
       const record = db.getReservationById(confNumber);
+      console.log('🔎 [ReservationForm] Database lookup result:', record);
       if (!record) {
-        console.warn('⚠️ No reservation found for conf:', confNumber);
+        console.warn('⚠️ [ReservationForm] No reservation found in database for conf:', confNumber);
+        console.warn('📊 [ReservationForm] Available confirmations:', db.getAllReservations().map(r => ({id: r.id, conf: r.confirmation_number})));
+        if (this.isViewMode) {
+          this.viewModeReady = true;
+          window.dispatchEvent(new Event('reliaReservationViewReady'));
+        }
         return;
       }
 
+      console.log('✅ [ReservationForm] Found reservation, loading data...');
       // Prefer the full snapshot if present
       if (record.form_snapshot) {
+        console.log('📸 [ReservationForm] Using form_snapshot');
         this.applyReservationSnapshot(record.form_snapshot);
       } else {
         // Fallback fill for older saved records
+        console.log('🔄 [ReservationForm] Using fallback field mapping');
         this.safeSetValue('billingCompany', record.company_name || '');
         if (record.passenger_name) {
           const parts = record.passenger_name.split(' ');
@@ -2833,16 +3339,55 @@ class ReservationForm {
         this.safeSetValue('serviceType', record.service_type || '');
         this.safeSetValue('vehicleTypeRes', record.vehicle_type || '');
         this.safeSetValue('puDate', record.pickup_at || '');
+        this.safeSetValue('puTime', record.pickup_time || '');
+        this.safeSetValue('doTime', record.dropoff_time || '');
+        this.safeSetValue('spotTime', record.spot_time || '');
+        this.safeSetValue('garOutTime', record.gar_out_time || '');
+        this.safeSetValue('garInTime', record.gar_in_time || '');
+        this.safeSetValue('driverArriveTime', record.driver_arrive_time || '');
+        this.safeSetValue('resStatus', record.status || '');
+        this.safeSetValue('eFarmStatus', record.efarm_status || '');
+        this.safeSetValue('eFarmOut', record.efarm_out_selection || '');
+        if (record.farm_option) {
+          const normalizedFarmOption = record.farm_option.replace(/_/g, '-');
+          document.querySelectorAll('input[name="farmOption"]').forEach(radio => {
+            radio.checked = radio.value === normalizedFarmOption;
+          });
+        }
         if (Array.isArray(record.stops)) {
           this.loadStops(record.stops);
         }
       }
+      console.log('✅ [ReservationForm] Reservation loaded successfully');
+      if (this.isViewMode) {
+        this.viewConfNumber = this.viewConfNumber || confNumber;
+        this.finalizeViewMode();
+      }
+
+      this.syncFarmoutDisplayFromRecord(record);
     } catch (error) {
-      console.error('❌ Error loading existing reservation:', error);
+      console.error('❌ [ReservationForm] Error loading existing reservation:', error);
+      if (this.isViewMode) {
+        this.viewModeReady = true;
+        window.dispatchEvent(new Event('reliaReservationViewReady'));
+      }
     }
   }
 
   collectReservationSnapshot() {
+    const statusSelect = document.getElementById('resStatus');
+    const statusValue = statusSelect?.value || '';
+    const statusLabel = (statusSelect && statusSelect.selectedIndex >= 0)
+      ? (statusSelect.options[statusSelect.selectedIndex]?.text?.trim() || '')
+      : '';
+    const farmOptionValue = document.querySelector('input[name="farmOption"]:checked')?.value || '';
+    const eFarmStatusInput = document.getElementById('eFarmStatus') || document.getElementById('efarmStatus');
+    const eFarmStatusValue = eFarmStatusInput?.value || '';
+    const eFarmStatusCanonical = eFarmStatusInput?.dataset?.canonical || canonicalizeFarmoutStatus(eFarmStatusValue) || '';
+    const eFarmOutSelect = document.getElementById('eFarmOut');
+    const eFarmOutValue = eFarmOutSelect?.value || '';
+    const eFarmOutCanonical = eFarmOutSelect?.dataset?.canonical || canonicalizeFarmoutMode(eFarmOutValue) || 'manual';
+
     const snapshot = {
       billing: {
         account: document.getElementById('billingAccountSearch')?.value || '',
@@ -2877,9 +3422,23 @@ class ReservationForm {
         serviceType: document.getElementById('serviceType')?.value || '',
         vehicleType: document.getElementById('vehicleTypeRes')?.value || '',
         puDate: document.getElementById('puDate')?.value || '',
+        puTime: document.getElementById('puTime')?.value || '',
+        doTime: document.getElementById('doTime')?.value || '',
+        spotTime: document.getElementById('spotTime')?.value || '',
+        garOutTime: document.getElementById('garOutTime')?.value || '',
+        garInTime: document.getElementById('garInTime')?.value || '',
+        driverArriveTime: document.getElementById('driverArriveTime')?.value || '',
         numPax: document.getElementById('numPax')?.value || '',
         luggage: document.getElementById('luggage')?.value || '',
-        accessible: document.getElementById('accessible')?.checked || false
+        accessible: document.getElementById('accessible')?.checked || false,
+        resStatus: statusValue,
+        resStatusLabel: statusLabel,
+        farmOption: farmOptionValue,
+        eFarmStatus: eFarmStatusValue,
+        efarmStatus: eFarmStatusValue,
+        farmoutStatusCanonical: eFarmStatusCanonical,
+        eFarmOut: eFarmOutCanonical,
+        farmoutMode: eFarmOutCanonical
       },
       costs: this.getCostData()
     };
@@ -2917,10 +3476,28 @@ class ReservationForm {
     this.safeSetValue('serviceType', snapshot.details?.serviceType || '');
     this.safeSetValue('vehicleTypeRes', snapshot.details?.vehicleType || '');
     this.safeSetValue('puDate', snapshot.details?.puDate || '');
+    this.safeSetValue('puTime', snapshot.details?.puTime || '');
+    this.safeSetValue('doTime', snapshot.details?.doTime || '');
+    this.safeSetValue('spotTime', snapshot.details?.spotTime || '');
+    this.safeSetValue('garOutTime', snapshot.details?.garOutTime || '');
+    this.safeSetValue('garInTime', snapshot.details?.garInTime || '');
+    this.safeSetValue('driverArriveTime', snapshot.details?.driverArriveTime || '');
     this.safeSetValue('numPax', snapshot.details?.numPax || '');
     this.safeSetValue('luggage', snapshot.details?.luggage || '');
+    this.safeSetValue('resStatus', snapshot.details?.resStatus || '');
+    this.safeSetValue('eFarmStatus', snapshot.details?.eFarmStatus || snapshot.details?.efarmStatus || '');
+    this.safeSetValue('eFarmOut', snapshot.details?.eFarmOut || '');
     const accessible = document.getElementById('accessible');
     if (accessible) accessible.checked = !!snapshot.details?.accessible;
+
+    this.applyFarmoutSnapshotDetails(snapshot.details || {});
+
+    if (snapshot.details?.farmOption) {
+      const normalizedFarmOption = snapshot.details.farmOption.replace(/_/g, '-');
+      document.querySelectorAll('input[name="farmOption"]').forEach(radio => {
+        radio.checked = radio.value === normalizedFarmOption;
+      });
+    }
 
     if (Array.isArray(snapshot.routing?.stops)) {
       this.loadStops(snapshot.routing.stops);
@@ -3138,11 +3715,8 @@ console.log('🔍 ReservationForm class defined:', typeof ReservationForm);
 
 function initializeReservationForm() {
   try {
-    console.log('🔧 Creating ReservationForm instance...');
     window.reservationFormInstance = new ReservationForm();
-    console.log('✅ ReservationForm instance created:', window.reservationFormInstance);
-    console.log('✅ Instance available as window.reservationFormInstance');
-    console.log('🎯 copyPassengerToBillingAndOpenAccounts method exists:', typeof window.reservationFormInstance.copyPassengerToBillingAndOpenAccounts);
+    console.log('✅ ReservationForm initialized');
   } catch (error) {
     console.error('❌ Failed to create ReservationForm instance:', error);
   }
@@ -3219,3 +3793,47 @@ window.copyPassengerToBillingAndOpenAccounts = function() {
     }, 800);
   }
 };
+
+// Global function to handle going back to reservations list
+window.goBackToReservations = function() {
+  console.log('🔙 Closing form and returning to reservations list');
+  const targetWindow = window.top || window.parent || window;
+  if (targetWindow === window) {
+    window.location.href = 'reservations-list.html';
+    return;
+  }
+  targetWindow.postMessage({
+    action: 'switchToReservations'
+  }, '*');
+};
+
+// Setup close button visibility based on edit mode
+document.addEventListener('DOMContentLoaded', () => {
+  const closeFormBtn = document.getElementById('closeFormBtn');
+  if (closeFormBtn) {
+    // Check if we're in edit mode (has ?conf parameter)
+    const params = new URLSearchParams(window.location.search);
+    const conf = params.get('conf');
+    const datasetConf = window.frameElement?.dataset?.confNumber;
+    const isViewMode = window.RELIA_VIEW_MODE === true || window.RELIA_VIEW_MODE === 'true' || window.frameElement?.dataset?.viewMode === 'true';
+    if (conf || isViewMode || datasetConf) {
+      // In edit mode - show close button
+      closeFormBtn.style.display = 'inline-block';
+      console.log('✓ Close button visible (edit mode)');
+      
+      // Add escape key handler to close form
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          console.log('⎋ Escape key pressed - closing form');
+          window.goBackToReservations();
+        }
+      };
+      document.addEventListener('keydown', handleEscape);
+    } else {
+      // In create mode - hide close button
+      closeFormBtn.style.display = 'none';
+      console.log('✓ Close button hidden (create mode)');
+    }
+  }
+});
+

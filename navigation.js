@@ -1,4 +1,5 @@
 const SECTION_ROUTES = {
+  'new-reservation': 'reservation-form.html',
   office: 'my-office.html',
   accounts: 'accounts.html',
   quotes: 'quotes.html',
@@ -20,6 +21,14 @@ export function getRouteForSection(section) {
 }
 
 export function navigateToSection(section) {
+  if (window.self !== window.top) {
+    window.parent.postMessage({
+      action: 'switchSection',
+      section
+    }, '*');
+    return true;
+  }
+
   const route = getRouteForSection(section);
   if (!route) {
     alert(`${section} section not available`);
@@ -42,7 +51,8 @@ export function wireMainNav(root = document) {
     btn.dataset.navWired = '1';
 
     btn.addEventListener('click', (e) => {
-      const button = e.target.closest('.nav-btn');
+      const target = e.target;
+      const button = target instanceof Element ? target.closest('.nav-btn') : null;
       const section = button?.dataset?.section;
       if (!section) return;
       navigateToSection(section);

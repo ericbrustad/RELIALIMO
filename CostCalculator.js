@@ -1,6 +1,31 @@
 export class CostCalculator {
   constructor() {
     // Calculator for reservation costs
+    this.loadSettingsFromManager();
+  }
+
+  /**
+   * Load financial settings from CompanySettingsManager
+   */
+  loadSettingsFromManager() {
+    try {
+      if (window.FINANCIAL_CONFIG) {
+        this.currency = window.FINANCIAL_CONFIG.currency;
+        this.currencySymbol = window.FINANCIAL_CONFIG.currencySymbol;
+        this.taxRate = window.FINANCIAL_CONFIG.taxRate;
+        this.minimumAmount = window.FINANCIAL_CONFIG.minimumAmount;
+        this.paymentMethods = window.FINANCIAL_CONFIG.paymentMethods;
+        console.log('[CostCalculator] Loaded settings from SettingsApplicationManager');
+      }
+    } catch (error) {
+      console.warn('[CostCalculator] Could not load settings from manager:', error);
+      // Use defaults
+      this.currency = 'USD';
+      this.currencySymbol = '$';
+      this.taxRate = 0;
+      this.minimumAmount = 0;
+      this.paymentMethods = { creditCard: true, cash: true, check: false, online: true };
+    }
   }
 
   calculate(costs) {
@@ -48,9 +73,11 @@ export class CostCalculator {
   }
 
   formatCurrency(amount) {
+    const symbol = this.currencySymbol || '$';
+    const currency = this.currency || 'USD';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency: currency
     }).format(amount);
   }
 

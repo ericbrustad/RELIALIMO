@@ -10,17 +10,21 @@
       // Store company zip code for map initialization
       window.COMPANY_ZIP_CODE = '55431'; // Minnesota
       
-      // Hide only logo when loaded in iframe, keep buttons visible
+      const activateFarmOutTab = () => {
+        document.getElementById('farmOutBtn')?.click();
+      };
+
       if (window.self !== window.top) {
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', () => {
           const logo = document.querySelector('.header-content .logo');
           if (logo) {
             logo.style.display = 'none';
           }
+          activateFarmOutTab();
         });
         
         // Listen for view switch messages from parent
-        window.addEventListener('message', function(event) {
+        window.addEventListener('message', (event) => {
           if (event.data.action === 'switchView') {
             // Trigger the appropriate button click
             if (event.data.view === 'userView') {
@@ -28,10 +32,33 @@
             } else if (event.data.view === 'driverView') {
               document.getElementById('driverViewBtn')?.click();
             } else if (event.data.view === 'farm-out_reservations_View') {
-              document.getElementById('farmOutBtn')?.click();
+              activateFarmOutTab();
             }
+          } else if (event.data.action === 'openReservation') {
+            // Handle opening a specific reservation
+            const confNumber = event.data.conf;
+            console.log('📥 Received openReservation message for conf:', confNumber);
+            
+            // Switch to User View first
+            const userViewBtn = document.getElementById('userViewBtn');
+            if (userViewBtn) {
+              userViewBtn.click();
+              console.log('✅ Switched to User View');
+            }
+            
+            // Give the form time to load, then trigger the reservation loading
+            setTimeout(() => {
+              if (window.reservationFormInstance?.loadExistingReservation) {
+                window.reservationFormInstance.loadExistingReservation(confNumber);
+                console.log('✅ Loaded reservation:', confNumber);
+              } else {
+                console.warn('⚠️ ReservationForm instance not available yet');
+              }
+            }, 300);
           }
         });
+      } else {
+        document.addEventListener('DOMContentLoaded', activateFarmOutTab);
       }
     </script>
   </head>
@@ -222,7 +249,7 @@
         <section id="reservationsView" class="view">
           <div class="reservations-panel">
             <h2 class="panel-title">All Reservations</h2>
-            <div class="filter-bar">
+            <div class="filter-bar" data-context="reservations">
               <button class="filter-btn active" data-filter="all">All</button>
               <button class="filter-btn" data-filter="pending">Pending</button>
               <button class="filter-btn" data-filter="accepted">Accepted</button>
@@ -234,15 +261,134 @@
 
         <!-- Farm-out Reservations List View -->
         <section id="farm-out_reservations_View" class="view">
-          <div class="reservations-panel">
-            <h2 class="panel-title">Farm-out Reservations</h2>
-            <div class="filter-bar">
-              <button class="filter-btn active" data-filter="all">All</button>
-              <button class="filter-btn" data-filter="pending">Pending</button>
-              <button class="filter-btn" data-filter="accepted">Accepted</button>
-              <button class="filter-btn" data-filter="completed">Completed</button>
+          <div class="reservations-panel farmout">
+            <div class="panel-header">
+              <h2 class="panel-title">Farm-out Reservations</h2>
+              <nav class="farmout-tabs" aria-label="Farm-out tools">
+                <a href="driver-availability.html" target="_blank" rel="noopener" class="farmout-tab">Availability Console</a>
+                <a href="driver-active-list.html" target="_blank" rel="noopener" class="farmout-tab">Active Drivers</a>
+                <a href="driver-trip-monitor.html" target="_blank" rel="noopener" class="farmout-tab">Trip Monitor</a>
+              </nav>
+              <div class="farmout-toolbar">
+                <div class="toolbar-group">
+                  <label for="farmoutStatusFilter">Status</label>
+                  <select id="farmoutStatusFilter">
+                    <option value="all">All</option>
+                    <option value="unassigned">Unassigned</option>
+                    <option value="offered">Offered</option>
+                    <option value="offered_to_affiliate">Offered to Affiliate</option>
+                    <option value="assigned">Assigned</option>
+                    <option value="affiliate_assigned">Affiliate Assigned</option>
+                    <option value="affiliate_driver_assigned">Affiliate Driver Assigned</option>
+                    <option value="declined">Declined</option>
+                    <option value="enroute">En Route</option>
+                    <option value="driver_en_route">Driver En Route</option>
+                    <option value="on_the_way">Driver On The Way</option>
+                    <option value="arrived">Arrived</option>
+                    <option value="driver_waiting_at_pickup">Driver Waiting at Pickup</option>
+                    <option value="waiting_at_pickup">Waiting at Pickup</option>
+                    <option value="passenger_onboard">Passenger Onboard</option>
+                    <option value="driver_circling">Driver Circling</option>
+                    <option value="customer_in_car">Customer In Car</option>
+                    <option value="driving_passenger">Driving Passenger</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="cancelled_by_affiliate">Cancelled by Affiliate</option>
+                    <option value="late_cancel">Late Cancel</option>
+                    <option value="late_cancelled">Late Cancelled</option>
+                    <option value="no_show">No Show</option>
+                    <option value="covid19_cancellation">COVID-19 Cancellation</option>
+                    <option value="in_house">In House</option>
+                  </select>
+                </div>
+                <div class="toolbar-group">
+                  <label for="farmoutModeFilter">Mode</label>
+                  <select id="farmoutModeFilter">
+                    <option value="all">All</option>
+                    <option value="manual">Manual</option>
+                    <option value="automatic">Automatic</option>
+                  </select>
+                </div>
+                <div class="toolbar-actions">
+                  <button id="farmoutRefreshMap" class="btn btn-secondary">Refresh Map</button>
+                  <button id="farmoutAvailabilityBtn" class="btn btn-secondary">Driver Availability</button>
+                  <button id="farmoutTripStatusBtn" class="btn btn-secondary">Driver Trip Status</button>
+                </div>
+              </div>
             </div>
-            <div id="allReservations" class="reservations-table"></div>
+            <div class="farmout-layout">
+              <div class="farmout-table-wrapper">
+                <div class="filter-bar" data-context="farmout">
+                  <button class="filter-btn active" data-filter="all">All</button>
+                  <button class="filter-btn" data-filter="pending">Pending</button>
+                  <button class="filter-btn" data-filter="accepted">Accepted</button>
+                  <button class="filter-btn" data-filter="completed">Completed</button>
+                </div>
+                <div id="allReservations" class="reservations-table selectable"></div>
+              </div>
+              <aside id="farmoutDetailPanel" class="farmout-detail hidden">
+                <div class="farmout-detail-header">
+                  <div class="detail-title" id="farmoutDetailTitle">Select a reservation to manage farm-out workflow</div>
+                  <span id="farmoutDetailStatus" class="status-badge pending">Pending</span>
+                </div>
+                <div class="farmout-detail-body">
+                  <div class="detail-row">
+                    <label>Farm-out Mode</label>
+                    <div class="mode-toggle" id="farmoutModeToggle">
+                      <button data-mode="manual" class="btn btn-secondary active">Manual</button>
+                      <button data-mode="automatic" class="btn btn-secondary">Automatic</button>
+                    </div>
+                  </div>
+                  <div class="detail-row">
+                    <label for="farmoutDriverSelect">Driver Assignment</label>
+                    <div class="driver-assignment">
+                      <select id="farmoutDriverSelect">
+                        <option value="">Select available driver</option>
+                      </select>
+                      <div class="assignment-actions">
+                        <button id="farmoutAssignBtn" class="btn btn-success">Assign Driver</button>
+                        <button id="farmoutClearBtn" class="btn btn-secondary">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="detail-row">
+                    <label>Driver Snapshot</label>
+                    <div id="farmoutDriverSnapshot" class="snapshot-card empty">
+                      <p>No driver assigned.</p>
+                    </div>
+                  </div>
+                  <div class="detail-row">
+                    <label>Quick Actions</label>
+                    <div class="farmout-actions">
+                      <button id="farmoutSendOffer" class="btn btn-secondary">Send SMS Offer</button>
+                      <button id="farmoutCopyLink" class="btn btn-secondary">Copy Trip Link</button>
+                    </div>
+                  </div>
+                  <div class="detail-row">
+                    <label>Automation Status</label>
+                    <div id="farmoutAutomationStatus" class="automation-status">Auto-dispatch inactive for this trip</div>
+                  </div>
+                  <div class="detail-row automation-controls">
+                    <label>Auto-dispatch Settings</label>
+                    <div class="automation-settings">
+                      <div class="automation-field">
+                        <span class="field-label">Driver retry cadence (minutes)</span>
+                        <input id="farmoutAutoInterval" type="number" min="1" max="60" step="1" value="5" />
+                      </div>
+                      <div class="automation-field">
+                        <span class="field-label">Admin/Dispatch escalation recipients</span>
+                        <textarea id="farmoutAdminRecipients" rows="4" placeholder="admin@example.com | +15551234567"></textarea>
+                        <p class="field-hint">Enter one per line. Use a pipe `|` to add a phone number. Known directory IDs or emails auto-resolve.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="detail-row">
+                    <label>Farm-out Activity</label>
+                    <div id="farmoutActivityLog" class="activity-log"></div>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
         </section>
       </main>

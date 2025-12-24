@@ -9,8 +9,14 @@ class MyOffice {
     this.currentDriver = null;
     this.currentAffiliate = null;
     this.currentSystemSettingsPage = 'service-types';
+    this.currentResource = 'drivers';
     this.drivers = [];
     this.affiliates = [];
+    this.vehicleTypeSeeds = this.buildVehicleTypeSeeds();
+    this.vehicleTypeDrafts = {};
+    this.activeVehicleTypeId = null;
+    this.vehicleTypeSelectionInitialized = false;
+    this.apiReady = false;
     this.users = [
       {
         id: '1',
@@ -55,6 +61,7 @@ class MyOffice {
     this.setupAffiliatesForm();
     this.setupSystemUsers();
     this.setupCompanyInfoForm();
+    this.setupVehicleTypeSelection();
     this.checkURLParameters();
     // Initialize API
     this.initializeAPI();
@@ -63,7 +70,9 @@ class MyOffice {
   async initializeAPI() {
     try {
       await setupAPI();
+      this.apiReady = true;
       console.log('API initialized successfully');
+      await this.loadDriversList();
     } catch (error) {
       console.error('Failed to initialize API:', error);
     }
@@ -102,26 +111,30 @@ class MyOffice {
     // Main navigation
     document.querySelectorAll('.main-nav .nav-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const section = e.target.dataset.section;
-        
-        if (section === 'office') {
-          // Already on this page
+        const section = e.currentTarget?.dataset?.section;
+        if (!section) {
           return;
-        } else {
-          // Send message to parent window to switch sections
-          window.parent.postMessage({
-            action: 'switchSection',
-            section: section
-          }, '*');
         }
+
+        if (section === 'office') {
+          return;
+        }
+
+        window.parent.postMessage({
+          action: 'switchSection',
+          section
+        }, '*');
       });
     });
 
     // View buttons (window-actions)
     document.querySelectorAll('.view-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const action = e.target.dataset.action;
-        
+        const action = e.currentTarget?.dataset?.action;
+        if (!action) {
+          return;
+        }
+
         if (action === 'user-view') {
           window.location.href = 'index.html?view=user';
         } else if (action === 'driver-view') {
@@ -140,7 +153,8 @@ class MyOffice {
     const systemSettingsSubnav = document.getElementById('systemSettingsSubnav');
     if (systemSettingsSubnav) {
       systemSettingsSubnav.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sidebar-subbtn');
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-subbtn') : null;
         if (!btn || !btn.dataset.systemSetting) return;
         this.navigateToSection('system-settings');
         this.navigateToSystemSettingsPage(btn.dataset.systemSetting);
@@ -151,7 +165,8 @@ class MyOffice {
     const companySettingsGroup = document.getElementById('companySettingsGroup');
     if (companySettingsGroup) {
       companySettingsGroup.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sidebar-btn');
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
         if (btn && btn.dataset.section) {
           const section = btn.dataset.section;
           console.log('Navigating to company settings section:', section);
@@ -160,13 +175,37 @@ class MyOffice {
       });
     }
 
-    // Top tabs navigation
-    document.querySelectorAll('.window-tab').forEach(tab => {
-      tab.addEventListener('click', (e) => {
-        const tabName = e.target.dataset.tab;
-        this.switchTab(tabName);
+    // Top tabs navigation (event delegation keeps dataset intact even when clicking nested spans/icons)
+    const windowTabsBar = document.querySelector('.window-tabs');
+    if (windowTabsBar) {
+      windowTabsBar.addEventListener('click', (e) => {
+        const target = e.target;
+        const button = target instanceof Element ? target.closest('.window-tab') : null;
+        if (!button || button.disabled) {
+          return;
+        }
+        const tabName = button.dataset.tab;
+        if (tabName) {
+          this.switchTab(tabName);
+        }
       });
-    });
+
+      windowTabsBar.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') {
+          return;
+        }
+        const target = e.target;
+        const button = target instanceof Element ? target.closest('.window-tab') : null;
+        if (!button || button.disabled) {
+          return;
+        }
+        e.preventDefault();
+        const tabName = button.dataset.tab;
+        if (tabName) {
+          this.switchTab(tabName);
+        }
+      });
+    }
 
     // Main navigation
         wireMainNav();
@@ -174,8 +213,10 @@ class MyOffice {
     // Company Preferences sub-navigation
     document.querySelectorAll('.prefs-subnav-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const prefTab = e.target.dataset.pref;
-        this.switchPrefTab(prefTab);
+        const prefTab = e.currentTarget?.dataset?.pref;
+        if (prefTab) {
+          this.switchPrefTab(prefTab);
+        }
       });
     });
 
@@ -183,7 +224,8 @@ class MyOffice {
     const companyResourcesGroup = document.getElementById('companyResourcesGroup');
     if (companyResourcesGroup) {
       companyResourcesGroup.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sidebar-btn');
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
         if (btn && btn.dataset.resource) {
           const resource = btn.dataset.resource;
           console.log('Navigating to resource:', resource);
@@ -196,7 +238,8 @@ class MyOffice {
     const resourceTabsContainer = document.querySelector('.resource-tabs');
     if (resourceTabsContainer) {
       resourceTabsContainer.addEventListener('click', (e) => {
-        const tab = e.target.closest('.resource-tab');
+        const target = e.target;
+        const tab = target instanceof Element ? target.closest('.resource-tab') : null;
         if (tab && tab.dataset.resource) {
           const resource = tab.dataset.resource;
           console.log('Tab navigating to resource:', resource);
@@ -209,7 +252,8 @@ class MyOffice {
     const rateManagementGroup = document.getElementById('rateManagementGroup');
     if (rateManagementGroup) {
       rateManagementGroup.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sidebar-btn');
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
         if (btn && btn.dataset.rateSection) {
           const section = btn.dataset.rateSection;
           console.log('Navigating to rate section:', section);
@@ -221,24 +265,30 @@ class MyOffice {
     // Rate type tabs
     document.querySelectorAll('.rate-type-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const rateType = e.target.dataset.rateType;
-        this.switchRateTypeForm(rateType);
+        const rateType = e.currentTarget?.dataset?.rateType;
+        if (rateType) {
+          this.switchRateTypeForm(rateType);
+        }
       });
     });
 
     // Promo tabs
     document.querySelectorAll('.promo-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const promoTab = e.target.dataset.promoTab;
-        this.switchPromoTab(promoTab);
+        const promoTab = e.currentTarget?.dataset?.promoTab;
+        if (promoTab) {
+          this.switchPromoTab(promoTab);
+        }
       });
     });
 
     // Custom Form tabs
     document.querySelectorAll('.custom-form-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const formTab = e.target.dataset.tab;
-        this.switchCustomFormTab(formTab);
+        const formTab = e.currentTarget?.dataset?.tab;
+        if (formTab) {
+          this.switchCustomFormTab(formTab);
+        }
       });
     });
 
@@ -246,7 +296,8 @@ class MyOffice {
     const customFormsGroup = document.getElementById('customFormsGroup');
     if (customFormsGroup) {
       customFormsGroup.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sidebar-btn');
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
         if (btn && btn.dataset.customFormCategory) {
           const category = btn.dataset.customFormCategory;
           console.log('Switching to custom form category:', category);
@@ -259,7 +310,8 @@ class MyOffice {
     const listManagementGroup = document.getElementById('listManagementGroup');
     if (listManagementGroup) {
       listManagementGroup.addEventListener('click', (e) => {
-        const btn = e.target.closest('.sidebar-btn');
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
         if (btn && btn.dataset.listSection) {
           const section = btn.dataset.listSection;
           console.log('Navigating to list section:', section);
@@ -272,7 +324,12 @@ class MyOffice {
     // System Users - Permission tree toggle
     document.querySelectorAll('.permission-parent').forEach(parent => {
       parent.addEventListener('click', (e) => {
-        if (e.target.classList.contains('toggle-icon') || e.target.tagName === 'SPAN') {
+        const target = e.target;
+        if (!(target instanceof Element)) {
+          return;
+        }
+
+        if (target.classList.contains('toggle-icon') || target.tagName === 'SPAN') {
           const group = parent.closest('.permission-group');
           const children = group.querySelector('.permission-children');
           const icon = parent.querySelector('.toggle-icon');
@@ -291,10 +348,11 @@ class MyOffice {
     // Parent checkbox logic
     document.querySelectorAll('.permission-parent input[type="checkbox"]').forEach(parentCheckbox => {
       parentCheckbox.addEventListener('change', (e) => {
-        const group = e.target.closest('.permission-group');
+        const checkbox = e.currentTarget;
+        const group = checkbox.closest('.permission-group');
         const childCheckboxes = group.querySelectorAll('.permission-children input[type="checkbox"]');
         childCheckboxes.forEach(child => {
-          child.checked = e.target.checked;
+          child.checked = checkbox.checked;
         });
       });
     });
@@ -310,8 +368,10 @@ class MyOffice {
     // Policies - Policy tab switching
     document.querySelectorAll('.policy-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const policyType = e.target.dataset.policyType;
-        this.switchPolicyTab(policyType);
+        const policyType = e.currentTarget?.dataset?.policyType;
+        if (policyType) {
+          this.switchPolicyTab(policyType);
+        }
       });
     });
 
@@ -330,7 +390,8 @@ class MyOffice {
     const fontSizeSelect = document.getElementById('fontSizeSelect');
     if (fontSizeSelect) {
       fontSizeSelect.addEventListener('change', (e) => {
-        document.execCommand('fontSize', false, e.target.value);
+        const select = e.currentTarget;
+        document.execCommand('fontSize', false, select.value);
       });
     }
 
@@ -338,7 +399,8 @@ class MyOffice {
     const fontNameSelect = document.getElementById('fontNameSelect');
     if (fontNameSelect) {
       fontNameSelect.addEventListener('change', (e) => {
-        document.execCommand('fontName', false, e.target.value);
+        const select = e.currentTarget;
+        document.execCommand('fontName', false, select.value);
       });
     }
 
@@ -367,24 +429,30 @@ class MyOffice {
     // Messaging & Template Settings - Main Tabs
     document.querySelectorAll('.messaging-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const tabName = e.target.dataset.msgTab;
-        this.switchMessagingTab(tabName);
+        const tabName = e.currentTarget?.dataset?.msgTab;
+        if (tabName) {
+          this.switchMessagingTab(tabName);
+        }
       });
     });
 
     // Messaging & Template Settings - Subsections
     document.querySelectorAll('.messaging-nav-subitem').forEach(subitem => {
       subitem.addEventListener('click', (e) => {
-        const subsection = e.target.dataset.subsection;
-        this.switchMessagingSubsection(subsection);
+        const subsection = e.currentTarget?.dataset?.subsection;
+        if (subsection) {
+          this.switchMessagingSubsection(subsection);
+        }
       });
     });
 
     // Online Reservations - Tabs
     document.querySelectorAll('.online-res-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const tabName = e.target.dataset.onlineresTab;
-        this.switchOnlineResTab(tabName);
+        const tabName = e.currentTarget?.dataset?.onlineresTab;
+        if (tabName) {
+          this.switchOnlineResTab(tabName);
+        }
       });
     });
 
@@ -392,7 +460,8 @@ class MyOffice {
     const configTypeSelect = document.getElementById('configurationTypeSelect');
     if (configTypeSelect) {
       configTypeSelect.addEventListener('change', (e) => {
-        this.switchConfigurationType(e.target.value);
+        const select = e.currentTarget;
+        this.switchConfigurationType(select.value);
       });
     }
 
@@ -504,16 +573,20 @@ class MyOffice {
     // Vehicle Type Tabs
     document.querySelectorAll('.vehicle-type-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const tabName = e.target.dataset.vtypeTab;
-        this.switchVehicleTypeTab(tabName);
+        const tabName = e.currentTarget?.dataset?.vtypeTab;
+        if (tabName) {
+          this.switchVehicleTypeTab(tabName);
+        }
       });
     });
 
     // Rates Subtabs
     document.querySelectorAll('.rates-subtab').forEach(tab => {
       tab.addEventListener('click', (e) => {
-        const rateType = e.target.dataset.rateType;
-        this.switchRateType(rateType);
+        const rateType = e.currentTarget?.dataset?.rateType;
+        if (rateType) {
+          this.switchRateType(rateType);
+        }
       });
     });
 
@@ -555,19 +628,20 @@ class MyOffice {
     // When file is selected, show filename and preview
     if (logoFileInput) {
       logoFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
+        const input = e.currentTarget;
+        const file = input.files && input.files[0];
         if (file) {
           // Validate file type
           if (!file.type.match(/^image\/(jpeg|png)$/)) {
             alert('Please select a JPG or PNG image file.');
-            logoFileInput.value = '';
+            input.value = '';
             return;
           }
 
           // Validate file size (max 5MB)
           if (file.size > 5 * 1024 * 1024) {
             alert('Image file size must be less than 5MB.');
-            logoFileInput.value = '';
+            input.value = '';
             return;
           }
 
@@ -798,18 +872,19 @@ class MyOffice {
     // Try to save to Supabase
     try {
       const apiModule = await import('./api-service.js');
-      const { supabase } = await apiModule.setupAPI();
+      const supabase = await apiModule.setupAPI();
 
       if (supabase) {
-        // Check if organization exists
-        const { data: existing } = await supabase
+        const { data: existingRows, error: fetchError } = await supabase
           .from('organizations')
           .select('id')
-          .limit(1)
-          .single();
+          .limit(1);
+
+        if (fetchError) throw fetchError;
+
+        const existing = Array.isArray(existingRows) ? existingRows[0] : null;
 
         if (existing?.id) {
-          // Update existing
           const { error } = await supabase
             .from('organizations')
             .update(info)
@@ -818,7 +893,6 @@ class MyOffice {
           if (error) throw error;
           console.log('✅ Company info updated in Supabase');
         } else {
-          // Insert new
           const { error } = await supabase
             .from('organizations')
             .insert([{ ...info, created_at: new Date().toISOString() }]);
@@ -1042,102 +1116,74 @@ class MyOffice {
 
 
   switchTab(tabName) {
-    // Update tab active state
-    document.querySelectorAll('.window-tab').forEach(tab => {
-      tab.classList.remove('active');
-      if (tab.dataset.tab === tabName) {
-        tab.classList.add('active');
-      }
+    if (!tabName) {
+      return;
+    }
+
+    document.querySelectorAll('.window-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
 
-    // Hide ALL sidebar groups first
-    document.querySelectorAll('.sidebar-group').forEach(group => {
-      group.style.display = 'none';
-    });
-
-    // Hide ALL office sections first
-    document.querySelectorAll('.office-section').forEach(section => {
-      section.classList.remove('active');
-      section.style.display = 'none';
-    });
-
-    // Hide all other special containers
     const normalLayout = document.getElementById('normalLayout');
-    const sidebar = document.getElementById('mainSidebar');
+    const resourcesContainer = document.getElementById('companyResourcesContainer');
     const customFormsSection = document.getElementById('custom-forms-section');
-    const listManagementWrapper = document.getElementById('list-management-wrapper');
-    const companyResourcesContainer = document.getElementById('companyResourcesContainer');
+    const sidebarGroups = {
+      'company-settings': document.getElementById('companySettingsGroup'),
+      'company-resources': document.getElementById('companyResourcesGroup'),
+      'rate-management': document.getElementById('rateManagementGroup'),
+      'list-management': document.getElementById('listManagementGroup'),
+      'custom-forms': document.getElementById('customFormsGroup'),
+    };
 
     if (normalLayout) normalLayout.style.display = 'none';
+    if (resourcesContainer) resourcesContainer.style.display = 'none';
     if (customFormsSection) customFormsSection.style.display = 'none';
-    if (listManagementWrapper) listManagementWrapper.style.display = 'none';
-    if (companyResourcesContainer) companyResourcesContainer.style.display = 'none';
 
-    // Now handle each tab independently
-    switch(tabName) {
+    Object.values(sidebarGroups).forEach(group => {
+      if (group) group.style.display = 'none';
+    });
+
+    switch (tabName) {
       case 'company-settings':
-        // Show normal layout and sidebar
         if (normalLayout) normalLayout.style.display = 'block';
-        if (sidebar) sidebar.style.display = 'block';
-        
-        // Show company settings sidebar
-        const csGroup = document.getElementById('companySettingsGroup');
-        if (csGroup) csGroup.style.display = 'block';
-        
-        // Navigate to first section
-        this.navigateToSection('contact-info');
+        if (sidebarGroups['company-settings']) sidebarGroups['company-settings'].style.display = 'block';
+        this.navigateToSection(this.currentSection || 'contact-info');
         break;
-
       case 'company-resources':
-        // Show resources container with horizontal tabs, hide sidebar
-        if (sidebar) sidebar.style.display = 'none';
-        if (companyResourcesContainer) companyResourcesContainer.style.display = 'block';
-        
-        // Navigate to first resource (drivers)
-        this.navigateToResource('drivers');
+        if (resourcesContainer) resourcesContainer.style.display = 'block';
+        if (sidebarGroups['company-resources']) sidebarGroups['company-resources'].style.display = 'block';
+        this.navigateToResource(this.currentResource || 'drivers');
         break;
-
       case 'rate-management':
-        // Show sidebar but hide normal layout
-        if (sidebar) sidebar.style.display = 'block';
-        
-        // Show rate management sidebar
-        const rmGroup = document.getElementById('rateManagementGroup');
-        if (rmGroup) rmGroup.style.display = 'block';
-        
-        // Navigate to first rate section
+        if (normalLayout) normalLayout.style.display = 'block';
+        if (sidebarGroups['rate-management']) sidebarGroups['rate-management'].style.display = 'block';
         this.navigateToRateSection('system-rate-manager');
         break;
-
       case 'list-management':
-        // Hide sidebar, show list management wrapper
-        if (sidebar) sidebar.style.display = 'none';
-        if (listManagementWrapper) listManagementWrapper.style.display = 'grid';
-        
-        // Navigate to first list section
+        if (normalLayout) normalLayout.style.display = 'block';
+        if (sidebarGroups['list-management']) sidebarGroups['list-management'].style.display = 'block';
         this.navigateToListSection('payment-methods');
         break;
-
       case 'custom-forms':
-        // Hide sidebar, show custom forms section
-        if (sidebar) sidebar.style.display = 'none';
         if (customFormsSection) customFormsSection.style.display = 'block';
-        
-        // Show custom forms sidebar
-        const cfGroup = document.getElementById('customFormsGroup');
-        if (cfGroup) cfGroup.style.display = 'block';
+        if (sidebarGroups['custom-forms']) sidebarGroups['custom-forms'].style.display = 'block';
+        break;
+      default:
+        if (normalLayout) normalLayout.style.display = 'block';
+        if (sidebarGroups['company-settings']) sidebarGroups['company-settings'].style.display = 'block';
+        this.navigateToSection('contact-info');
         break;
     }
-    
-    // Reinitialize drag-drop for newly visible editors
+
     if (window.reinitializeDragDrop) {
       window.reinitializeDragDrop();
     }
-    
-    // Reinitialize editor view switchers
+
     if (window.reinitializeEditorViewSwitchers) {
       window.reinitializeEditorViewSwitchers();
     }
+
+    this.currentTab = tabName;
   }
 
   switchPrefTab(prefTab) {
@@ -1456,6 +1502,8 @@ class MyOffice {
   }
 
   navigateToResource(resource) {
+    this.currentResource = resource || 'drivers';
+
     // Update resource navigation button active state
     const resourceButtons = document.querySelectorAll('#companyResourcesGroup .sidebar-btn');
     resourceButtons.forEach(btn => {
@@ -1552,12 +1600,405 @@ class MyOffice {
     });
   }
 
+  buildVehicleTypeSeeds() {
+    const seeds = [
+      {
+        id: '1',
+        name: "BLACK SUV (BLACKSUV) (20' PAX VAN)",
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '10',
+        color_hex: '#000000',
+        service_type: 'hourly',
+        accessible: false,
+        description: 'High-capacity black SUV configured for larger groups and event shuttles.'
+      },
+      {
+        id: '2',
+        name: 'BLACK SUV (BLACKSUV)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '6',
+        luggage_capacity: '6',
+        color_hex: '#1f2933',
+        service_type: 'airport',
+        accessible: false,
+        description: 'Executive black SUV ideal for airport transfers and corporate travel.'
+      },
+      {
+        id: '3',
+        name: '6 Passenger SUV (6_SUV)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '6',
+        luggage_capacity: '6',
+        color_hex: '#2c3e50',
+        service_type: 'airport',
+        accessible: false,
+        description: 'Six passenger SUV with premium seating and luggage space for business travelers.'
+      },
+      {
+        id: '4',
+        name: '7 Passenger Suv (7 PASSENGER SUV)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '7',
+        luggage_capacity: '8',
+        color_hex: '#3d4852',
+        service_type: 'hourly',
+        accessible: false,
+        description: 'Seven passenger configuration perfect for family travel and roadshows.'
+      },
+      {
+        id: '5',
+        name: '30 Passenger Coach (30_PAX_COACH)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '10',
+        color_hex: '#4a5568',
+        service_type: 'hourly',
+        accessible: true,
+        description: 'Mid-size coach with onboard amenities for group charters and corporate outings.'
+      },
+      {
+        id: '6',
+        name: 'Fifteen Passenger Sprinter Van (15PAXSPRCH)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '8',
+        color_hex: '#2d3748',
+        service_type: 'airport',
+        accessible: true,
+        description: 'Sprinter van with perimeter seating and premium lighting for shuttle service.'
+      },
+      {
+        id: '7',
+        name: 'Ford Transit (13 PAX BUS)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '12',
+        luggage_capacity: '8',
+        color_hex: '#1a202c',
+        service_type: 'hourly',
+        accessible: true,
+        description: 'Modern Ford Transit with configurable seating and luggage racks.'
+      },
+      {
+        id: '8',
+        name: 'Mercedes Sprinter- Perimeter Seating (SPRINTER_LIMO)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '6',
+        color_hex: '#111827',
+        service_type: 'hourly',
+        accessible: false,
+        description: 'Luxury Mercedes Sprinter with limo-style perimeter seating and media center.'
+      },
+      {
+        id: '9',
+        name: '14 passenger Mercedes Sprinter par seating (SPRINTER)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '6',
+        color_hex: '#0f172a',
+        service_type: 'airport',
+        accessible: false,
+        description: 'Passenger configured Sprinter ideal for hospitality and airport shuttle work.'
+      },
+      {
+        id: '10',
+        name: '14 Pax (BLACK_CAR)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '6',
+        color_hex: '#1f2937',
+        service_type: 'point',
+        accessible: false,
+        description: 'Stretch black car suited for VIP group transfers and special occasions.'
+      },
+      {
+        id: '11',
+        name: '23MidSize Coach (23MIDSIZE2COACH)',
+        status: 'inactive',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '10',
+        color_hex: '#2f3e4e',
+        service_type: 'hourly',
+        accessible: true,
+        description: 'Mid-size coach reserved for seasonal charters and group events.'
+      },
+      {
+        id: '12',
+        name: '24MidSize Coach (25 MID SIZED COACH)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '10',
+        color_hex: '#374151',
+        service_type: 'hourly',
+        accessible: true,
+        description: 'Comfort coach with reclining seats and onboard WiFi for tours.'
+      },
+      {
+        id: '13',
+        name: '40 PASSENGER COACH (40PAX COACH)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '14',
+        luggage_capacity: '10',
+        color_hex: '#4b5563',
+        service_type: 'hourly',
+        accessible: true,
+        description: 'Full-size coach supporting company outings and event transportation.'
+      },
+      {
+        id: '14',
+        name: 'Executive Sedan',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '4',
+        luggage_capacity: '4',
+        color_hex: '#000000',
+        service_type: 'airport',
+        accessible: false,
+        description: 'Premium sedan for executive transfers and chauffeured service.'
+      },
+      {
+        id: '15',
+        name: 'Navigator (SUV_STRETCH)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '8',
+        luggage_capacity: '6',
+        color_hex: '#101418',
+        service_type: 'point',
+        accessible: false,
+        description: 'Stretch Navigator featuring leather seating and media controls.'
+      },
+      {
+        id: '16',
+        name: 'Sedan Stretch (S_STRETCH)',
+        status: 'active',
+        pricing_basis: 'hours',
+        passenger_capacity: '8',
+        luggage_capacity: '6',
+        color_hex: '#1a202c',
+        service_type: 'point',
+        accessible: false,
+        description: 'Classic stretch sedan for weddings, prom, and red carpet events.'
+      }
+    ];
+
+    return seeds.reduce((acc, seed) => {
+      acc[seed.id] = seed;
+      return acc;
+    }, {});
+  }
+
+  setupVehicleTypeSelection() {
+    if (this.vehicleTypeSelectionInitialized) {
+      return;
+    }
+
+    const list = document.querySelector('.resources-scrollable-list');
+    if (!list) {
+      return;
+    }
+
+    this.vehicleTypeSelectionInitialized = true;
+
+    list.addEventListener('click', (event) => {
+      const element = event.target instanceof Element ? event.target.closest('.vehicle-type-item') : null;
+      if (!element || !element.dataset.vehicleId) {
+        return;
+      }
+
+      const vehicleId = element.dataset.vehicleId;
+
+      if (this.activeVehicleTypeId && this.activeVehicleTypeId !== vehicleId) {
+        this.captureVehicleTypeForm(this.activeVehicleTypeId);
+      }
+
+      list.querySelectorAll('.vehicle-type-item').forEach(item => item.classList.remove('active'));
+      element.classList.add('active');
+
+      this.populateVehicleTypeForm(vehicleId);
+    });
+
+    const initialItem = list.querySelector('.vehicle-type-item.active') || list.querySelector('.vehicle-type-item');
+    if (initialItem && initialItem.dataset.vehicleId) {
+      initialItem.classList.add('active');
+      this.populateVehicleTypeForm(initialItem.dataset.vehicleId);
+    }
+  }
+
+  populateVehicleTypeForm(vehicleId) {
+    const container = document.getElementById('editVehicleTypeContent');
+    if (!container) {
+      return;
+    }
+
+    const data = this.getVehicleTypeData(vehicleId);
+    this.activeVehicleTypeId = vehicleId;
+
+    const titleInput = container.querySelector('[data-vehicle-field="name"]');
+    if (titleInput) {
+      titleInput.value = data.name || '';
+    }
+
+    const setSelectValue = (select, value, fallback) => {
+      if (!select) {
+        return;
+      }
+      const desired = value ?? fallback ?? '';
+      select.value = desired;
+      if (select.value !== desired) {
+        const safe = fallback ?? select.options[0]?.value ?? '';
+        select.value = safe;
+      }
+    };
+
+    setSelectValue(container.querySelector('[data-vehicle-field="status"]'), data.status, 'active');
+    setSelectValue(container.querySelector('[data-vehicle-field="pricing_basis"]'), data.pricing_basis, 'hours');
+    setSelectValue(container.querySelector('[data-vehicle-field="passenger_capacity"]'), data.passenger_capacity, '6');
+    setSelectValue(container.querySelector('[data-vehicle-field="luggage_capacity"]'), data.luggage_capacity, '6');
+    setSelectValue(container.querySelector('[data-vehicle-field="service_type"]'), data.service_type, '');
+
+    const colorInput = container.querySelector('[data-vehicle-field="color_hex"]');
+    if (colorInput) {
+      colorInput.value = data.color_hex || '';
+    }
+
+    const accessibleCheckbox = container.querySelector('[data-vehicle-field="accessible"]');
+    if (accessibleCheckbox instanceof HTMLInputElement) {
+      accessibleCheckbox.checked = Boolean(data.accessible);
+    }
+
+    const descriptionElement = container.querySelector('[data-vehicle-field="description"]');
+    if (descriptionElement) {
+      descriptionElement.innerHTML = data.description || '';
+    }
+
+    const headerPanel = container.closest('.resources-form-panel');
+    const headerTitle = headerPanel?.querySelector('.resources-form-header h3');
+    if (headerTitle) {
+      headerTitle.textContent = data.name ? `Edit Vehicle Type: ${data.name}` : 'Edit Vehicle Type';
+    }
+
+    const primaryAction = container.querySelector('.form-actions .btn-primary');
+    if (primaryAction) {
+      primaryAction.textContent = 'Save Vehicle Type';
+    }
+  }
+
+  getVehicleTypeData(vehicleId) {
+    if (!vehicleId) {
+      return this.seedVehicleTypeFromList(vehicleId);
+    }
+
+    if (this.vehicleTypeDrafts[vehicleId]) {
+      return { ...this.vehicleTypeDrafts[vehicleId] };
+    }
+
+    const seed = this.vehicleTypeSeeds[vehicleId];
+    if (seed) {
+      return { ...seed };
+    }
+
+    return this.seedVehicleTypeFromList(vehicleId);
+  }
+
+  seedVehicleTypeFromList(vehicleId) {
+    const item = vehicleId ? document.querySelector(`.vehicle-type-item[data-vehicle-id="${vehicleId}"]`) : null;
+    const name = item ? item.textContent.trim() : '';
+    return {
+      id: vehicleId,
+      name,
+      status: 'active',
+      pricing_basis: 'hours',
+      passenger_capacity: '6',
+      luggage_capacity: '6',
+      color_hex: '#000000',
+      service_type: '',
+      accessible: false,
+      description: name ? `${name} description pending.` : ''
+    };
+  }
+
+  captureVehicleTypeForm(vehicleId) {
+    if (!vehicleId) {
+      return;
+    }
+
+    const container = document.getElementById('editVehicleTypeContent');
+    if (!container) {
+      return;
+    }
+
+    const draft = { id: vehicleId, ...this.getVehicleTypeData(vehicleId) };
+
+    const titleInput = container.querySelector('[data-vehicle-field="name"]');
+    if (titleInput) {
+      draft.name = titleInput.value.trim();
+    }
+
+    const statusSelect = container.querySelector('[data-vehicle-field="status"]');
+    if (statusSelect) {
+      draft.status = statusSelect.value || 'active';
+    }
+
+    const pricingBasis = container.querySelector('[data-vehicle-field="pricing_basis"]');
+    if (pricingBasis) {
+      draft.pricing_basis = pricingBasis.value || 'hours';
+    }
+
+    const passengerCapacity = container.querySelector('[data-vehicle-field="passenger_capacity"]');
+    if (passengerCapacity) {
+      draft.passenger_capacity = passengerCapacity.value || '6';
+    }
+
+    const luggageCapacity = container.querySelector('[data-vehicle-field="luggage_capacity"]');
+    if (luggageCapacity) {
+      draft.luggage_capacity = luggageCapacity.value || '6';
+    }
+
+    const colorInput = container.querySelector('[data-vehicle-field="color_hex"]');
+    if (colorInput) {
+      draft.color_hex = colorInput.value.trim();
+    }
+
+    const serviceType = container.querySelector('[data-vehicle-field="service_type"]');
+    if (serviceType) {
+      draft.service_type = serviceType.value || '';
+    }
+
+    const accessibleCheckbox = container.querySelector('[data-vehicle-field="accessible"]');
+    if (accessibleCheckbox instanceof HTMLInputElement) {
+      draft.accessible = accessibleCheckbox.checked;
+    }
+
+    const descriptionElement = container.querySelector('[data-vehicle-field="description"]');
+    if (descriptionElement) {
+      draft.description = descriptionElement.innerHTML.trim();
+    }
+
+    this.vehicleTypeDrafts[vehicleId] = draft;
+  }
+
   setupFleetItemSelection() {
     // Use event delegation for Fleet items (they may be dynamically added)
     const fleetList = document.getElementById('fleetList');
     if (fleetList) {
       fleetList.addEventListener('click', (e) => {
-        const item = e.target.closest('.resource-item');
+        const target = e.target;
+        const item = target instanceof Element ? target.closest('.resource-item') : null;
         if (item) {
           // Remove active class from all items
           fleetList.querySelectorAll('.resource-item').forEach(i => {
@@ -1575,7 +2016,8 @@ class MyOffice {
     const airportsList = document.getElementById('airportsList');
     if (airportsList) {
       airportsList.addEventListener('click', (e) => {
-        const item = e.target.closest('.resource-item');
+        const target = e.target;
+        const item = target instanceof Element ? target.closest('.resource-item') : null;
         if (item) {
           // Remove active class from all items
           airportsList.querySelectorAll('.resource-item').forEach(i => {
@@ -1593,7 +2035,8 @@ class MyOffice {
     const airlinesList = document.getElementById('airlinesList');
     if (airlinesList) {
       airlinesList.addEventListener('click', (e) => {
-        const item = e.target.closest('.resource-item');
+        const target = e.target;
+        const item = target instanceof Element ? target.closest('.resource-item') : null;
         if (item) {
           // Remove active class from all items
           airlinesList.querySelectorAll('.resource-item').forEach(i => {
@@ -1611,7 +2054,8 @@ class MyOffice {
     const fboList = document.getElementById('fboList');
     if (fboList) {
       fboList.addEventListener('click', (e) => {
-        const item = e.target.closest('.resource-item');
+        const target = e.target;
+        const item = target instanceof Element ? target.closest('.resource-item') : null;
         if (item) {
           // Remove active class from all items
           fboList.querySelectorAll('.resource-item').forEach(i => {
@@ -1920,9 +2364,10 @@ class MyOffice {
         categoryButtons.forEach(b => b.classList.remove('active'));
         
         // Add active to clicked button
-        e.target.classList.add('active');
+        const button = e.currentTarget;
+        button.classList.add('active');
         
-        const category = e.target.dataset.category;
+        const category = button.dataset.category;
         console.log('Switched to category:', category);
         
         // Here you would filter the forms list based on category
@@ -1934,7 +2379,8 @@ class MyOffice {
     const customFormsList = document.getElementById('customFormsList');
     if (customFormsList) {
       customFormsList.addEventListener('click', (e) => {
-        const item = e.target.closest('.custom-form-list-item');
+        const target = e.target;
+        const item = target instanceof Element ? target.closest('.custom-form-list-item') : null;
         if (item) {
           // Remove active class from all items
           customFormsList.querySelectorAll('.custom-form-list-item').forEach(i => {
@@ -2023,9 +2469,10 @@ class MyOffice {
         sidebarButtons.forEach(b => b.classList.remove('active'));
         
         // Add active to clicked button
-        e.target.classList.add('active');
+        const button = e.currentTarget;
+        button.classList.add('active');
         
-        const section = e.target.dataset.listSection;
+        const section = button.dataset.listSection;
         console.log('Navigating to list section:', section);
         this.navigateToListSection(section);
       });
@@ -2037,13 +2484,14 @@ class MyOffice {
     const driversSection = document.getElementById('drivers-section');
     if (!driversSection) return;
 
-    // Load drivers list
-    this.loadDriversList();
+    if (this.apiReady) {
+      this.loadDriversList(this.currentDriver?.id || null);
+    }
 
     // Show All checkbox - reload list when toggled
     const showAllCheckbox = document.getElementById('showAllDriversCheckbox');
     if (showAllCheckbox) {
-      showAllCheckbox.addEventListener('change', () => this.loadDriversList());
+      showAllCheckbox.addEventListener('change', () => this.loadDriversList(this.currentDriver?.id || null));
     }
 
     // Delete Driver button
@@ -2075,6 +2523,8 @@ class MyOffice {
             i.style.background = '#fff';
           });
         }
+
+        this.renderDriverContactSummary(null);
       });
     }
 
@@ -2082,7 +2532,8 @@ class MyOffice {
     const driversList = document.querySelector('.drivers-list-select');
     if (driversList) {
       driversList.addEventListener('change', (e) => {
-        const selectedIndex = e.target.selectedIndex;
+        const select = e.currentTarget;
+        const selectedIndex = select.selectedIndex;
         if (selectedIndex >= 0 && this.drivers[selectedIndex]) {
           this.loadDriverForm(this.drivers[selectedIndex]);
         }
@@ -2218,30 +2669,50 @@ class MyOffice {
     }
   }
 
-  async loadDriversList() {
+  async loadDriversList(selectedDriverId = null) {
+    if (!this.apiReady) {
+      const container = document.getElementById('driversListContainer');
+      if (container) {
+        container.innerHTML = '<div style="padding: 10px; color: #666; font-size: 11px;">Connecting to driver directory…</div>';
+      }
+      return;
+    }
+
     try {
       const showAll = document.getElementById('showAllDriversCheckbox')?.checked || false;
       const data = await fetchDrivers();
-      
+
       if (data) {
+        const normalizedDrivers = (Array.isArray(data) ? data : []).map(driver => ({
+          ...driver,
+          cell_phone: driver?.cell_phone || driver?.mobile_phone || driver?.phone || driver?.phone_number || driver?.primary_phone || '',
+          home_phone: driver?.home_phone || driver?.phone_home || driver?.secondary_phone || '',
+          other_phone: driver?.other_phone || driver?.pager || driver?.pager_phone || driver?.other_contact || '',
+          fax: driver?.fax || driver?.fax_number || driver?.fax_phone || ''
+        }));
         // Filter by active status unless "Show All" is checked
-        this.drivers = showAll ? data : data.filter(d => d.is_active !== false);
+        this.drivers = showAll ? normalizedDrivers : normalizedDrivers.filter(d => d.is_active !== false);
         
         // Render to the new container layout (clickable list items)
         const driversListContainer = document.getElementById('driversListContainer');
         if (driversListContainer) {
           if (this.drivers.length === 0) {
             driversListContainer.innerHTML = '<div style="padding: 10px; color: #666; font-size: 11px;">No drivers found</div>';
+            this.renderDriverContactSummary(null);
           } else {
+            const driverIdToFocus = selectedDriverId || this.currentDriver?.id || (this.drivers[0]?.id ?? null);
+
             driversListContainer.innerHTML = this.drivers.map((driver, index) => {
               const isActive = driver.is_active !== false;
               const statusClass = isActive ? 'driver-active' : 'driver-inactive';
               const statusIcon = isActive ? '🟢' : '🔴';
+              const isSelected = driver.id === driverIdToFocus || (!driverIdToFocus && index === 0);
+              const background = isSelected ? '#e3f2fd' : '#fff';
               return `
                 <div class="driver-list-item ${statusClass}" 
                      data-driver-id="${driver.id}" 
                      data-index="${index}"
-                     style="padding: 8px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 6px; background: ${index === 0 ? '#e3f2fd' : '#fff'}; border: 1px solid #ddd;">
+                     style="padding: 8px 10px; cursor: pointer; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 6px; background: ${background}; border: 1px solid #ddd;">
                   <span>${statusIcon}</span>
                   <span>${driver.last_name}, ${driver.first_name}</span>
                 </div>
@@ -2265,9 +2736,15 @@ class MyOffice {
               });
             });
             
-            // Auto-select first driver
-            if (this.drivers.length > 0) {
-              this.loadDriverForm(this.drivers[0]);
+            const driverToLoad = this.drivers.find((d) => d.id === driverIdToFocus) || this.drivers[0];
+            if (driverToLoad) {
+              const itemToSelect = driversListContainer.querySelector(`.driver-list-item[data-driver-id="${driverToLoad.id}"]`);
+              if (itemToSelect) {
+                itemToSelect.style.background = '#e3f2fd';
+              }
+              this.loadDriverForm(driverToLoad);
+            } else {
+              this.renderDriverContactSummary(null);
             }
           }
         }
@@ -2292,6 +2769,7 @@ class MyOffice {
       if (driversListContainer) {
         driversListContainer.innerHTML = '<div style="padding: 10px; color: #c00; font-size: 11px;">Error loading drivers</div>';
       }
+      this.renderDriverContactSummary(null);
     }
   }
 
@@ -2501,20 +2979,90 @@ class MyOffice {
       formTitle.textContent = `Edit Driver: ${driver.first_name} ${driver.last_name}`;
     }
 
+    this.renderDriverContactSummary(driver);
+
     // Populate form fields with driver data
-    const inputs = form.querySelectorAll('input[type="text"], select, textarea');
-    inputs.forEach((input) => {
-      const label = input.previousElementSibling?.textContent?.toLowerCase() || '';
-      
-      if (label.includes('first name')) input.value = driver.first_name || '';
-      else if (label.includes('last name')) input.value = driver.last_name || '';
-      else if (label.includes('address')) input.value = driver.primary_address || '';
-      else if (label.includes('city')) input.value = driver.city || '';
-      else if (label.includes('state')) input.value = driver.state || '';
-      else if (label.includes('zip') || label.includes('postal')) input.value = driver.postal_code || '';
-      else if (label.includes('email')) input.value = driver.email || '';
-      else if (label.includes('phone')) input.value = driver.cell_phone || '';
-      else if (label.includes('license')) input.value = driver.license_number || '';
+    const fields = form.querySelectorAll('input, select, textarea');
+
+    // Reset field values so a previous driver's data does not linger when a field is blank for this driver
+    fields.forEach((field) => {
+      if (field.type === 'checkbox') {
+        field.checked = false;
+      } else if (field.tagName === 'SELECT') {
+        field.selectedIndex = 0;
+      } else {
+        field.value = '';
+      }
+    });
+    const normalizeLabel = (text) => (text || '')
+      .replace(/\*/g, '')
+      .replace(/[:#']/g, '')
+      .replace(/\//g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    const setFieldValue = (field, value) => {
+      const finalValue = value ?? '';
+      if (field.tagName === 'SELECT') {
+        field.value = finalValue;
+      } else {
+        field.value = finalValue;
+      }
+    };
+
+    fields.forEach((field) => {
+      const labelEl = field.previousElementSibling;
+      if (!labelEl || labelEl.tagName.toLowerCase() !== 'label') {
+        return;
+      }
+
+      const label = normalizeLabel(labelEl.textContent);
+      if (!label) {
+        return;
+      }
+
+      if (label.startsWith('first name')) {
+        setFieldValue(field, driver.first_name || '');
+      } else if (label.startsWith('last name')) {
+        setFieldValue(field, driver.last_name || '');
+      } else if (label.includes('email')) {
+        setFieldValue(field, driver.email || driver.contact_email || '');
+      } else if (label.includes('cellular phone') || label.includes('cell phone') || label.includes('mobile')) {
+        setFieldValue(field, driver.cell_phone || driver.phone || driver.mobile_phone || driver.phone_number || '');
+      } else if (label.includes('home phone')) {
+        setFieldValue(field, driver.home_phone || driver.phone_home || driver.secondary_phone || '');
+      } else if (label.includes('pager') && label.includes('other')) {
+        setFieldValue(field, driver.other_phone || driver.pager || driver.pager_phone || '');
+      } else if (label.includes('fax')) {
+        setFieldValue(field, driver.fax || driver.fax_number || '');
+      } else if (label.includes('phone')) {
+        setFieldValue(field, driver.cell_phone || driver.phone || '');
+      } else if (label === 'primary address') {
+        setFieldValue(field, driver.primary_address || driver.address || '');
+      } else if (label === 'city') {
+        setFieldValue(field, driver.city || '');
+      } else if (label.startsWith('state')) {
+        setFieldValue(field, driver.state || driver.state_province || '');
+      } else if (label.includes('zip') || label.includes('postal')) {
+        setFieldValue(field, driver.postal_code || driver.zip || driver.zip_post || '');
+      } else if (label.includes('driver s license')) {
+        setFieldValue(field, driver.license_number || '');
+      } else if (label === 'badge other id') {
+        setFieldValue(field, driver.badge_id || driver.other_id || '');
+      } else if (label === 'social security') {
+        setFieldValue(field, driver.social_security || driver.ssn || '');
+      } else if (label === 'dob') {
+        setFieldValue(field, driver.dob || driver.date_of_birth || '');
+      } else if (label === 'driver payroll id') {
+        setFieldValue(field, driver.payroll_id || '');
+      } else if (label === 'hire date') {
+        setFieldValue(field, driver.hire_date || '');
+      } else if (label === 'termination date') {
+        setFieldValue(field, driver.termination_date || '');
+      } else if (label === 'driver notes') {
+        setFieldValue(field, driver.driver_notes || '');
+      }
     });
 
     console.log('✅ Driver form loaded:', driver);
@@ -2523,49 +3071,240 @@ class MyOffice {
   async saveDriver() {
     try {
       const form = document.querySelector('.drivers-form-panel');
-      if (!form) return;
+      if (!form) {
+        console.warn('⚠️ Driver form panel not found');
+        return;
+      }
 
-      // Get first and last name inputs
-      const inputs = form.querySelectorAll('input[type="text"]');
-      const firstNameInput = inputs[0];
-      const lastNameInput = inputs[1];
+      const normalizeLabel = (text) => (text || '')
+        .replace(/\*/g, '')
+        .replace(/[:#']/g, '')
+        .replace(/\//g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
 
-      // Collect form data
-      const driverData = {
-        first_name: firstNameInput?.value || '',
-        last_name: lastNameInput?.value || '',
-        primary_address: inputs[2]?.value || '',
-        city: inputs[3]?.value || '',
-        state: form.querySelector('select')?.value || '',
-        email: form.querySelector('input[placeholder*="email" i]')?.value || '',
-        cell_phone: form.querySelector('input[placeholder*="cell" i]')?.value || '',
-        home_phone: form.querySelector('input[placeholder*="home" i]')?.value || '',
+      const labelControlMap = new Map();
+      const allLabels = Array.from(form.querySelectorAll('label'));
+
+      const resolveControl = (labelEl) => {
+        if (!labelEl) return null;
+        const nested = labelEl.querySelector('input, select, textarea');
+        if (nested) return nested;
+
+        let sibling = labelEl.nextElementSibling;
+        while (sibling) {
+          if (sibling.matches?.('input, select, textarea')) {
+            return sibling;
+          }
+          const descendant = sibling.querySelector?.('input, select, textarea');
+          if (descendant) {
+            return descendant;
+          }
+          sibling = sibling.nextElementSibling;
+        }
+        return null;
       };
 
-      if (!driverData.first_name || !driverData.last_name) {
+      allLabels.forEach((labelEl) => {
+        const key = normalizeLabel(labelEl.textContent);
+        if (!key) return;
+
+        const control = resolveControl(labelEl);
+        if (!control) return;
+
+        if (!labelControlMap.has(key)) {
+          labelControlMap.set(key, []);
+        }
+        labelControlMap.get(key).push(control);
+      });
+
+      const coalesceString = (value) => {
+        if (value === null || value === undefined) return null;
+        if (typeof value !== 'string') return value;
+        const trimmed = value.trim();
+        return trimmed.length ? trimmed : null;
+      };
+
+      const readControl = (labelKey, index = 0) => {
+        const list = labelControlMap.get(labelKey);
+        return list && list[index] ? list[index] : null;
+      };
+
+      const readString = (labelKey, index = 0) => {
+        const control = readControl(labelKey, index);
+        if (!control) return null;
+        return coalesceString(control.value);
+      };
+
+      const readRawString = (labelKey, index = 0) => {
+        const control = readControl(labelKey, index);
+        if (!control) return '';
+        const value = control.value;
+        return typeof value === 'string' ? value.trim() : value;
+      };
+
+      const readBoolean = (labelKey, index = 0) => {
+        const control = readControl(labelKey, index);
+        if (!control) return false;
+        return Boolean(control.checked);
+      };
+
+      const readNumber = (labelKey, index = 0) => {
+        const raw = readRawString(labelKey, index);
+        if (!raw) return null;
+        const cleaned = raw.replace(/[^0-9.\-]/g, '');
+        if (!cleaned) return null;
+        const parsed = Number.parseFloat(cleaned);
+        return Number.isNaN(parsed) ? null : parsed;
+      };
+
+      const requiredFirstName = readRawString('first name');
+      const requiredLastName = readRawString('last name');
+
+      if (!requiredFirstName || !requiredLastName) {
         alert('Please enter First Name and Last Name');
         return;
       }
 
+      const providerControls = labelControlMap.get('provider') || [];
+      const expDateControls = labelControlMap.get('exp date') || [];
+      const regularControls = labelControlMap.get('regular') || [];
+      const overtimeControls = labelControlMap.get('overtime') || [];
+      const doubleTimeControls = labelControlMap.get('double time') || [];
+
+      const driverData = {
+        first_name: requiredFirstName,
+        last_name: requiredLastName,
+        primary_address: readString('primary address'),
+        address_line2: readString('add zip'),
+        city: readString('city'),
+        state: readString('state prov') || readString('state'),
+        postal_code: readString('zip post') || readString('postal code'),
+        license_number: readString('drivers license'),
+        license_state: readString('dl state'),
+        license_exp_date: expDateControls[0] ? coalesceString(expDateControls[0].value) : null,
+        badge_id: readString('badge other id'),
+        badge_exp_date: expDateControls[1] ? coalesceString(expDateControls[1].value) : null,
+        ssn: readString('social security') || readString('ssn'),
+        dob: readString('dob'),
+        tlc_license_number: readString('tlc drivers license'),
+        tlc_license_exp_date: expDateControls[2] ? coalesceString(expDateControls[2].value) : null,
+        payroll_id: readString('driver payroll id'),
+        hire_date: readString('hire date'),
+        termination_date: readString('termination date'),
+        cell_phone: readString('cellular phone') || readString('cell phone') || readString('mobile phone'),
+        cell_phone_provider: providerControls[0] ? coalesceString(providerControls[0].value) : null,
+        home_phone: readString('home phone'),
+        fax: readString('fax'),
+        other_phone: readString('pager other'),
+        other_phone_provider: providerControls[1] ? coalesceString(providerControls[1].value) : null,
+        email: readString('email address'),
+        suppress_auto_notifications: readBoolean("don't send auto notifications") || readBoolean('dont send auto notifications'),
+        show_call_email_dispatch: readBoolean('show both call and email on dispatch'),
+        quick_edit_dispatch: readBoolean('quick edit driver info on dispatch'),
+        include_phone_home: readBoolean('home'),
+        include_phone_cell: readBoolean('cell'),
+        include_phone_other: readBoolean('other'),
+        dispatch_display_name: readString('name to display in dispatch'),
+        trip_sheets_display_name: readString('name to display on trip sheets'),
+        driver_level: readString('driver level'),
+        is_vip: readBoolean('vip'),
+        assigned_vehicle_id: readString('assign driver to car'),
+        driver_alias: readString('assign driver to alias'),
+        driver_group: readString('assign driver to group'),
+        driver_notes: readString('driver notes'),
+        web_username: readString('username'),
+        web_password: readString('password'),
+        type: readString('type'),
+        status: (readString('status') || 'ACTIVE').toUpperCase(),
+        web_access: readString('web access'),
+        trip_regular_rate: regularControls[0] ? readNumber('regular', 0) : null,
+        trip_overtime_rate: overtimeControls[0] ? readNumber('overtime', 0) : null,
+        trip_double_time_rate: doubleTimeControls[0] ? readNumber('double time', 0) : null,
+        travel_regular_rate: regularControls[1] ? readNumber('regular', 1) : null,
+        travel_overtime_rate: overtimeControls[1] ? readNumber('overtime', 1) : null,
+        travel_double_time_rate: doubleTimeControls[1] ? readNumber('double time', 1) : null,
+        passenger_regular_rate: regularControls[2] ? readNumber('regular', 2) : null,
+        passenger_overtime_rate: overtimeControls[2] ? readNumber('overtime', 2) : null,
+        passenger_double_time_rate: doubleTimeControls[2] ? readNumber('double time', 2) : null,
+      };
+
+      const contactEmail = driverData.email || null;
+      driverData.cell_phone = driverData.cell_phone || null;
+      driverData.home_phone = driverData.home_phone || null;
+      driverData.other_phone = driverData.other_phone || null;
+      driverData.contact_email = contactEmail;
+
+      const assignedVehicleRaw = readRawString('assign driver to car');
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      driverData.assigned_vehicle_id = uuidPattern.test(assignedVehicleRaw) ? assignedVehicleRaw : null;
+
+      if (driverData.web_access) {
+        driverData.web_access = driverData.web_access.toUpperCase();
+      }
+
+      driverData.updated_at = new Date().toISOString();
+
       let result;
-      if (this.currentDriver?.id) {
-        // Update existing driver
+      const isUpdating = Boolean(this.currentDriver?.id);
+      if (isUpdating) {
         result = await updateDriver(this.currentDriver.id, driverData);
+        if (!result) throw new Error('Failed to update driver');
         console.log('✅ Driver updated:', result);
         alert('Driver updated successfully!');
       } else {
-        // Create new driver
         result = await createDriver(driverData);
+        if (!result) throw new Error('Failed to create driver');
         console.log('✅ Driver created:', result);
         alert('Driver created successfully!');
       }
 
-      // Reload drivers list
-      await this.loadDriversList();
+      this.currentDriver = result;
+
+      const driverIdToSelect = result.id;
+      await this.loadDriversList(driverIdToSelect);
+      if (driverIdToSelect) {
+        const updatedDriver = this.drivers.find((d) => d.id === driverIdToSelect) || result;
+        this.renderDriverContactSummary(updatedDriver || null);
+      }
     } catch (error) {
       console.error('❌ Error saving driver:', error);
       alert('Error saving driver: ' + error.message);
     }
+  }
+
+  renderDriverContactSummary(driver) {
+    const body = document.getElementById('driverContactSummaryBody');
+    if (!body) return;
+
+    const formatValue = (value) => {
+      if (!value) return '<span style="color:#b0bec5;">—</span>';
+      return `${value}`;
+    };
+
+    const normalized = driver || {};
+    const cellPhone = normalized.cell_phone || normalized.phone || normalized.mobile_phone || normalized.phone_number || normalized.primary_phone || '';
+    const cellProvider = normalized.cell_phone_provider || normalized.phone_provider || '';
+    const homePhone = normalized.home_phone || normalized.phone_home || normalized.secondary_phone || '';
+    const otherPhone = normalized.other_phone || normalized.pager || normalized.pager_phone || '';
+    const email = normalized.email || normalized.contact_email || normalized.primary_email || '';
+
+    const rows = [
+      { label: 'Cellular Phone *', column: 'cell_phone', value: cellPhone },
+      { label: 'Cell Provider', column: 'cell_phone_provider', value: cellProvider },
+      { label: 'Home Phone', column: 'home_phone', value: homePhone },
+      { label: 'Pager / Other', column: 'other_phone', value: otherPhone },
+      { label: 'Email Address', column: 'email', value: email }
+    ];
+
+    body.innerHTML = rows.map(row => `
+      <tr>
+        <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">${row.label}</td>
+        <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">${row.column}</td>
+        <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">${formatValue(row.value)}</td>
+      </tr>
+    `).join('');
   }
 
   async deleteDriver() {

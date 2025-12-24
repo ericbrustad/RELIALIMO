@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Drivers</title>
+  <link rel="stylesheet" href="driver-active-list.css">
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>Active Drivers</h1>
+      <p class="page-subtitle">Snapshot of drivers marked as available or offline.</p>
+    </header>
+    <main class="grid">
+      <section class="column" aria-labelledby="availableHeading">
+        <div class="column-header">
+          <h2 id="availableHeading">Available</h2>
+          <span id="availableCount" class="badge">0</span>
+        </div>
+        <div id="availableList" class="driver-list"></div>
+      </section>
+      <section class="column" aria-labelledby="offlineHeading">
+        <div class="column-header">
+          <h2 id="offlineHeading">Offline</h2>
+          <span id="offlineCount" class="badge">0</span>
+        </div>
+        <div id="offlineList" class="driver-list"></div>
+      </section>
+    </main>
+    <footer class="page-footer">
+      <button id="refreshBtn" class="btn" type="button">Refresh</button>
+      <span id="lastSync" class="timestamp">Last sync: —</span>
+    </footer>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script type="module" src="driver-active-list.js"></script>
+</body>
+</html>

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirmed Reservation - RELIA🐂LIMO™</title>
+    <link rel="icon" href="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" />
+    <link rel="stylesheet" href="reservation-form.css" />
+    <style>
+      .view-mode-banner {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 10px 20px;
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 20px;
+      }
+      
+      .view-mode-banner::before {
+        content: "👁️ ";
+      }
+
+      /* Disable form inputs in view mode */
+      .view-mode input:not([type="button"]),
+      .view-mode textarea,
+      .view-mode select {
+        background-color: #f3f4f6 !important;
+        cursor: not-allowed !important;
+        opacity: 0.8;
+      }
+
+      /* Hide save/delete buttons in view mode */
+      .view-mode #saveBtn,
+      .view-mode #deleteBtn {
+        display: none !important;
+      }
+
+      /* Show edit button instead */
+      .view-mode #editBtn {
+        display: inline-block !important;
+      }
+    </style>
+    <script>
+      // Hide main navigation if in iframe
+      if (window.self !== window.top) {
+        document.addEventListener('DOMContentLoaded', function() {
+          const headerContent = document.querySelector('.header-content');
+          if (headerContent) {
+            headerContent.style.display = 'none';
+          }
+        });
+      }
+    </script>
+    <script type="module">
+      const frameElementRef = window.frameElement || null;
+      const datasetConf = frameElementRef?.dataset?.confNumber || '';
+      const urlConf = new URLSearchParams(window.location.search || '').get('conf');
+      const activeConf = datasetConf || urlConf || '';
+
+      if (frameElementRef) {
+        frameElementRef.dataset.viewMode = 'true';
+        if (activeConf) {
+          frameElementRef.dataset.confNumber = activeConf;
+        }
+      }
+
+      window.RELIA_VIEW_MODE = 'true';
+      window.RELIA_VIEW_CONF = activeConf;
+
+      const loadScript = (src, type = 'text/javascript') => new Promise((resolve, reject) => {
+        const scriptEl = document.createElement('script');
+        scriptEl.src = src;
+        scriptEl.type = type;
+        scriptEl.onload = resolve;
+        scriptEl.onerror = reject;
+        document.body.appendChild(scriptEl);
+      });
+
+      const waitForViewReady = () => new Promise((resolve) => {
+        let timeoutId;
+
+        const finish = () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          window.removeEventListener('reliaReservationViewReady', handler);
+          resolve();
+        };
+
+        const checkReady = () => {
+          const instance = window.reservationFormInstance;
+          if (!instance) {
+            return false;
+          }
+          if (!instance.isViewMode || instance.viewModeReady) {
+            finish();
+            return true;
+          }
+          return false;
+        };
+
+        const handler = () => {
+          if (checkReady()) {
+            return;
+          }
+        };
+
+        if (checkReady()) {
+          return;
+        }
+
+        timeoutId = window.setTimeout(() => {
+          window.removeEventListener('reliaReservationViewReady', handler);
+          resolve();
+        }, 3000);
+
+        window.addEventListener('reliaReservationViewReady', handler);
+      });
+
+      const bootstrapView = async () => {
+        document.body.style.visibility = 'hidden';
+        document.body.innerHTML = '';
+        try {
+          const response = await fetch('reservation-form.html');
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const html = await response.text();
+          const parser = new DOMParser();
+          const parsed = parser.parseFromString(html, 'text/html');
+          document.body.innerHTML = parsed.body.innerHTML;
+          document.body.classList.add('view-mode-host');
+
+          // Remove script tags that were copied over so we can control loading order
+          document.body.querySelectorAll('script').forEach((script) => script.remove());
+
+          await loadScript('env.js');
+          await import('./reservation-form.js');
+          await loadScript('https://storage.googleapis.com/rosebud_staticfiles/ChatManager.js');
+          await loadScript('https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js');
+          await loadScript('https://storage.googleapis.com/rosebud_staticfiles/ProgressLogger.js');
+          await loadScript('https://storage.googleapis.com/rosebud_staticfiles/OGP.js');
+          await waitForViewReady();
+          document.body.style.visibility = 'visible';
+        } catch (error) {
+          console.error('❌ Failed to bootstrap confirmed reservation view:', error);
+          document.body.style.visibility = 'visible';
+          document.body.innerHTML = `<div style="padding: 20px; color: red;">Error loading reservation form: ${error.message}</div>`;
+        }
+      };
+
+      bootstrapView();
+    </script>
+  </head>
+  <body style="visibility: hidden;">
+    <div id="app">
+      <!-- Navigation Header -->
+      <header class="header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div class="header-content" style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="header-left">
+            <h1 class="logo" style="margin: 0; color: white; font-size: 24px; display: flex; align-items: center; gap: 5px;">
+              RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" style="width: 30px; height: 30px;">LIMO™
+            </h1>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button id="editBtn" onclick="enterEditMode()" style="padding: 8px 16px; background: rgba(255,255,255,0.3); color: white; border: 1px solid rgba(255,255,255,0.5); border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">✏️ Edit Reservation</button>
+            <button onclick="goBackToReservations()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">❌ Close</button>
+            <button onclick="window.location.href='reservations-list.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
+            <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- View Mode Banner -->
+      <div class="view-mode-banner">
+        This is a confirmed reservation. Click "Edit Reservation" to make changes.
+      </div>
+
+      <!-- Action Buttons Bar -->
+      <div class="action-buttons-bar" style="background: #f9fafb; padding: 15px 20px; border-bottom: 1px solid #e5e7eb;">
+        <div class="conf-number-section">
+          <label>Conf#</label>
+          <input type="text" id="confNumber" class="conf-input" value="" readonly style="background: #f3f4f6;" />
+        </div>
+      </div>
+
+      <!-- Main Form Section -->
+      <div id="formContainer" class="view-mode" style="padding: 20px;">
+        <!-- Passenger Details Section -->
+        <section class="form-section">
+          <div class="section-header">
+            <span class="section-title">👤 PASSENGER DETAILS</span>
+          </div>
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label>Passenger Name</label>
+              <input type="text" id="passengerName" readonly />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="passengerEmail" readonly />
+            </div>
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="tel" id="passengerPhone" readonly />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Date of Travel</label>
+              <input type="date" id="dateOfTravel" readonly />
+            </div>
+            <div class="form-group">
+              <label>Time of Travel</label>
+              <input type="time" id="timeOfTravel" readonly />
+            </div>
+          </div>
+        </section>
+
+        <!-- Stops Section -->
+        <section class="form-section">
+          <div class="section-header">
+            <span class="section-title">📍 STOPS</span>
+          </div>
+          <div id="stopsContainer">
+            <!-- Stops will be dynamically populated -->
+          </div>
+        </section>
+
+        <!-- Cost Summary Section -->
+        <section class="form-section">
+          <div class="section-header">
+            <span class="section-title">💰 COST SUMMARY</span>
+          </div>
+          <div class="cost-grid">
+            <div class="cost-item">
+              <label>Subtotal</label>
+              <span id="subtotal">$0.00</span>
+            </div>
+            <div class="cost-item">
+              <label id="taxLabel">Tax</label>
+              <span id="taxAmount">$0.00</span>
+            </div>
+            <div class="cost-item">
+              <label>Total</label>
+              <span id="totalAmount" style="font-weight: bold; font-size: 18px; color: #667eea;">$0.00</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Notes Section -->
+        <section class="form-section">
+          <div class="section-header">
+            <span class="section-title">📝 NOTES</span>
+          </div>
+          <textarea id="notes" readonly style="min-height: 100px;"></textarea>
+        </section>
+      </div>
+    </div>
+
+    <script type="module">
+      import { db } from './assets/db.js';
+
+      let currentConf = null;
+
+      const numberOrZero = (value) => {
+        const num = parseFloat(value);
+        return Number.isFinite(num) ? num : 0;
+      };
+
+      const formatCurrency = (amount) => `$${numberOrZero(amount).toFixed(2)}`;
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+      function resolveConfNumber() {
+        if (window.frameElement) {
+          const confFromParent = window.frameElement.dataset?.confNumber;
+          if (confFromParent) return confFromParent.trim();
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const confFromUrl = params.get('conf');
+        if (confFromUrl) return confFromUrl.trim();
+
+        return null;
+      }
+
+      function calculateFinancialSummary(costs, recordedTotal) {
+        const subtotal = (
+          numberOrZero(costs?.flat?.qty) * numberOrZero(costs?.flat?.rate) +
+          numberOrZero(costs?.hour?.qty) * numberOrZero(costs?.hour?.rate) +
+          numberOrZero(costs?.unit?.qty) * numberOrZero(costs?.unit?.rate) +
+          numberOrZero(costs?.ot?.qty) * numberOrZero(costs?.ot?.rate) +
+          numberOrZero(costs?.stops?.qty) * numberOrZero(costs?.stops?.rate) +
+          numberOrZero(costs?.pass?.qty) * numberOrZero(costs?.pass?.rate) +
+          numberOrZero(costs?.mile?.qty) * numberOrZero(costs?.mile?.rate) +
+          numberOrZero(costs?.admin?.qty) * numberOrZero(costs?.admin?.rate)
+        );
+
+        const percentageComponent = (value) => subtotal * (numberOrZero(value) / 100);
+        const gratuity = percentageComponent(costs?.gratuity);
+        const fuel = percentageComponent(costs?.fuel);
+        const discount = percentageComponent(costs?.discount);
+        const surface = percentageComponent(costs?.surface);
+        const baseRate = percentageComponent(costs?.baseRate);
+
+        const computedTotal = subtotal + gratuity + fuel - discount + surface + baseRate;
+
+        const taxRateSource = [
+          window.parent?.FINANCIAL_CONFIG?.taxRate,
+          window.FINANCIAL_CONFIG?.taxRate
+        ].find((value) => typeof value === 'number' && Number.isFinite(value));
+
+        const taxRate = taxRateSource ?? 0;
+        const tax = subtotal * (taxRate / 100);
+
+        const recorded = numberOrZero(recordedTotal);
+        const useRecorded = Number.isFinite(recorded) && recorded > 0;
+
+        return {
+          subtotal: subtotal > 0 ? subtotal : recorded,
+          taxRate,
+          tax: taxRate ? tax : 0,
+          total: useRecorded ? recorded : Math.max(0, computedTotal)
+        };
+      }
+
+      function init() {
+        currentConf = resolveConfNumber();
+
+        if (!currentConf) {
+          document.body.innerHTML = '<p style="padding: 20px; color: red;">Error: No reservation found.</p>';
+          return;
+        }
+
+        loadReservationDetails(currentConf);
+      }
+
+      function loadReservationDetails(conf) {
+        const reservation = db.getReservationById(conf);
+
+        if (!reservation) {
+          document.body.innerHTML = '<p style="padding: 20px; color: red;">Error: Reservation not found.</p>';
+          return;
+        }
+
+        const snapshot = reservation.form_snapshot || {};
+        const passengerSnapshot = snapshot.passenger || {};
+        const routingSnapshot = snapshot.routing || {};
+        const detailsSnapshot = snapshot.details || {};
+        const costsSnapshot = snapshot.costs || {};
+
+        const confirmationValue = reservation.confirmation_number || reservation.id || conf;
+        currentConf = confirmationValue;
+        document.getElementById('confNumber').value = confirmationValue;
+
+        const passengerName = [passengerSnapshot.firstName, passengerSnapshot.lastName]
+          .filter(Boolean)
+          .join(' ') || reservation.passenger_name || '';
+        document.getElementById('passengerName').value = passengerName;
+        document.getElementById('passengerEmail').value = passengerSnapshot.email || reservation.passenger_email || '';
+        document.getElementById('passengerPhone').value = passengerSnapshot.phone || reservation.passenger_phone || '';
+
+        let pickupDate = detailsSnapshot.puDate || '';
+        let pickupTime = detailsSnapshot.puTime || '';
+
+        if (reservation.pickup_at) {
+          const [datePart, timePart] = reservation.pickup_at.split('T');
+          if (!pickupDate && datePart) {
+            pickupDate = datePart;
+          }
+          if (!pickupTime && timePart) {
+            pickupTime = timePart.slice(0, 5);
+          }
+        }
+
+        document.getElementById('dateOfTravel').value = pickupDate || '';
+        document.getElementById('timeOfTravel').value = pickupTime || '';
+
+        const stops = Array.isArray(routingSnapshot.stops) && routingSnapshot.stops.length
+          ? routingSnapshot.stops
+          : Array.isArray(reservation.stops) ? reservation.stops : [];
+        displayStops(stops);
+
+        const financialSummary = calculateFinancialSummary(costsSnapshot, reservation.grand_total);
+        document.getElementById('subtotal').textContent = formatCurrency(financialSummary.subtotal);
+        document.getElementById('taxAmount').textContent = formatCurrency(financialSummary.tax);
+        document.getElementById('totalAmount').textContent = formatCurrency(financialSummary.total);
+
+        const taxLabel = document.getElementById('taxLabel');
+        if (taxLabel) {
+          taxLabel.textContent = financialSummary.taxRate
+            ? `Tax (${financialSummary.taxRate.toFixed(2)}%)`
+            : 'Tax';
+        }
+
+        const notesValue = routingSnapshot.tripNotes || reservation.trip_notes || '';
+        document.getElementById('notes').value = notesValue;
+      }
+
+      function displayStops(stops) {
+        const container = document.getElementById('stopsContainer');
+        container.innerHTML = '';
+
+        if (!Array.isArray(stops) || stops.length === 0) {
+          container.innerHTML = '<p style="color: #999;">No stops recorded</p>';
+          return;
+        }
+
+        stops.forEach((stop, index) => {
+          const type = (stop.type || stop.stopType || 'Stop').toString();
+          const location = stop.location || stop.locationName || stop.description || '';
+          const address = stop.address || stop.fullAddress || stop.address1 || '';
+          const time = stop.time || stop.timeIn || '';
+          const notes = stop.notes || '';
+
+          const safeType = escapeHtml(type.toUpperCase());
+          const safeLocation = escapeHtml(location);
+          const safeAddress = escapeHtml(address);
+          const safeTime = escapeHtml(time);
+          const safeNotes = escapeHtml(notes);
+
+          const card = document.createElement('div');
+          card.style.cssText = 'margin-bottom: 15px; padding: 12px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #667eea;';
+
+          card.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 6px;">Stop ${index + 1} (${safeType})</div>
+            <div style="color: #374151; margin-bottom: 4px;"><strong>Location:</strong> ${safeLocation}</div>
+            ${address ? `<div style="color: #4b5563; margin-bottom: 4px;"><strong>Address:</strong> ${safeAddress}</div>` : ''}
+            ${time ? `<div style="color: #4b5563; margin-bottom: 4px;"><strong>Time:</strong> ${safeTime}</div>` : ''}
+            ${notes ? `<div style="color: #6b7280; font-size: 13px;"><strong>Notes:</strong> ${safeNotes}</div>` : ''}
+          `;
+
+          container.appendChild(card);
+        });
+      }
+
+      // Switch to edit mode
+      window.enterEditMode = function() {
+        window.parent.postMessage({
+          action: 'editReservation',
+          conf: currentConf
+        }, '*');
+      };
+
+      // Go back to reservations list
+      window.goBackToReservations = function() {
+        if (window.frameElement) {
+          window.parent.postMessage({
+            action: 'switchToReservations'
+          }, '*');
+        }
+      };
+
+      // Initialize on page load
+      document.addEventListener('DOMContentLoaded', init);
+    </script>
+  </body>
+</html>
+

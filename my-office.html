@@ -318,6 +318,38 @@
                 <h2>Company Preferences</h2>
               </div>
 
+              <!-- Settings Management Section (NEW) -->
+              <div id="settings-management-section" class="settings-management-container">
+                <div class="settings-header">
+                  <h3>Company Settings Management</h3>
+                  <p>Manage all company settings, preferences, and operational parameters.</p>
+                </div>
+
+                <!-- Settings Action Buttons -->
+                <div class="settings-action-buttons">
+                  <button id="settings-save-btn" class="btn btn-primary" disabled style="opacity: 0.5;">
+                    <i class="icon-save"></i> Save Changes
+                  </button>
+                  <button id="settings-reset-btn" class="btn btn-secondary">
+                    <i class="icon-refresh"></i> Reset Unsaved
+                  </button>
+                  <button id="settings-reset-defaults-btn" class="btn btn-secondary" onclick="window.companySettingsUI?.resetToDefaults()">
+                    <i class="icon-reload"></i> Reset to Defaults
+                  </button>
+                  <button id="settings-export-btn" class="btn btn-secondary">
+                    <i class="icon-download"></i> Export Settings
+                  </button>
+                  <button id="settings-import-btn" class="btn btn-secondary">
+                    <i class="icon-upload"></i> Import Settings
+                  </button>
+                </div>
+
+                <!-- Settings Table Container -->
+                <div id="settings-table-container" class="settings-table-container">
+                  <!-- Settings will be rendered here by CompanySettingsUI -->
+                </div>
+              </div>
+
               <!-- Sub-navigation for Company Preferences -->
               <div class="prefs-subnav">
                 <button class="prefs-subnav-btn active" data-pref="general">General</button>
@@ -333,7 +365,7 @@
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>My Time Zone:</label>
-                      <select class="form-control">
+                      <select class="form-control" id="myTimeZone">
                         <option value="EST">Eastern (US/Canada) (EST)</option>
                         <option value="CST" selected>Central (US/Canada) (CST)</option>
                         <option value="MST">Mountain (US/Canada) (MST)</option>
@@ -344,11 +376,23 @@
                     </div>
                     <div class="form-group">
                       <label>My Start Page:</label>
-                      <select class="form-control">
-                        <option value="reservations" selected>Reservations</option>
-                        <option value="dashboard">Dashboard</option>
-                        <option value="calendar">Calendar</option>
-                        <option value="dispatch">Dispatch</option>
+                      <select class="form-control" id="myStartPage">
+                        <option value="new-reservation">➕ New Reservation</option>
+                        <option value="farmout-dashboard">🏠 Farmout Dashboard</option>
+                        <option value="office">🏢 Office</option>
+                        <option value="accounts">👤 Accounts</option>
+                        <option value="calendar">📅 Calendar</option>
+                        <option value="quotes">📋 Quotes</option>
+                        <option value="reservations" selected>🚗 Reservations</option>
+                        <option value="dispatch">🚙 Dispatch</option>
+                        <option value="network">🌐 Network</option>
+                        <option value="settle">💰 Settle</option>
+                        <option value="receivables">📊 Receivables</option>
+                        <option value="payables">💳 Payables</option>
+                        <option value="memos">📝 Memos</option>
+                        <option value="files">📁 Files</option>
+                        <option value="tools">🔧 Tools</option>
+                        <option value="reports">📈 Reports</option>
                       </select>
                     </div>
                   </div>
@@ -503,7 +547,7 @@
                   </div>
 
                   <div class="form-actions">
-                    <button class="btn btn-primary btn-large">Update My Company Preferences</button>
+                    <button class="btn btn-primary btn-large" id="updateGeneralPrefsBtn">Update My Company Preferences</button>
                   </div>
                 </div>
               </div>
@@ -759,7 +803,7 @@
                   </div>
 
                   <div class="form-actions">
-                    <button class="btn btn-primary btn-large">Update My Company Preferences</button>
+                    <button class="btn btn-primary btn-large" id="updateFormsReportsPrefsBtn">Update My Company Preferences</button>
                   </div>
                 </div>
               </div>
@@ -871,7 +915,7 @@
                   </div>
 
                   <div class="form-actions">
-                    <button class="btn btn-primary btn-large">Update My Company Preferences</button>
+                    <button class="btn btn-primary btn-large" id="updateAccountsCalendarPrefsBtn">Update My Company Preferences</button>
                   </div>
                 </div>
               </div>
@@ -1270,7 +1314,7 @@
                   </div>
 
                   <div class="form-actions">
-                    <button class="btn btn-primary btn-large">Update My Company Preferences</button>
+                    <button class="btn btn-primary btn-large" id="updateReservationsPrefsBtn">Update My Company Preferences</button>
                   </div>
                 </div>
               </div>
@@ -1354,7 +1398,7 @@
                   </div>
 
                   <div class="form-actions">
-                    <button class="btn btn-primary btn-large">Update My Company Preferences</button>
+                    <button class="btn btn-primary btn-large" id="updateSettleReceivablesPrefsBtn">Update My Company Preferences</button>
                   </div>
                 </div>
               </div>
@@ -3816,6 +3860,45 @@ further assistance.</textarea>
                 <!-- Center: Add/Edit Driver Form -->
                 <div class="drivers-form-panel" style="flex: 1; border: 1px solid #ddd; padding: 15px; background: #fff; border-radius: 4px; overflow-y: auto;">
                   <h3 id="driverFormTitle" style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #333;">Add New Driver</h3>
+                  <div id="driverContactSummary" style="margin-bottom: 18px;">
+                    <div style="font-size: 12px; color: #607d8b; margin-bottom: 6px;">Driver contact fields mapped to Supabase columns:</div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                      <thead>
+                        <tr style="background: #f5f5f5;">
+                          <th style="text-align: left; padding: 6px 8px; border: 1px solid #e0e0e0;">Form Field</th>
+                          <th style="text-align: left; padding: 6px 8px; border: 1px solid #e0e0e0;">Supabase Column</th>
+                          <th style="text-align: left; padding: 6px 8px; border: 1px solid #e0e0e0;">Current Value</th>
+                        </tr>
+                      </thead>
+                      <tbody id="driverContactSummaryBody">
+                        <tr>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Cellular Phone *</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">cell_phone</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Cell Provider</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">cell_phone_provider</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Home Phone</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">home_phone</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Pager / Other</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">other_phone</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Email Address</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">email</td>
+                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                   
                   <div class="drivers-form-columns">
                     <!-- Left Column - Personal Information -->
@@ -4534,7 +4617,7 @@ further assistance.</textarea>
                 <button class="btn btn-secondary btn-small">Show All</button>
               </div>
               
-              <div class="resources-scrollable-list">
+              <div class="resources-scrollable-list" id="vehicleTypeList">
                 <div class="vehicle-type-item" data-vehicle-id="1">BLACK SUV (BLACKSUV) (20' PAX VAN)</div>
                 <div class="vehicle-type-item" data-vehicle-id="2">BLACK SUV (BLACKSUV)</div>
                 <div class="vehicle-type-item" data-vehicle-id="3">6 Passenger SUV (6_SUV)</div>
@@ -4582,11 +4665,11 @@ further assistance.</textarea>
                 <div class="form-row">
                   <div class="form-group" style="flex: 2;">
                     <label>Vehicle Type Title</label>
-                    <input type="text" class="form-control" placeholder="Enter vehicle type name" />
+                    <input type="text" class="form-control" placeholder="Enter vehicle type name" data-vehicle-field="name" />
                   </div>
                   <div class="form-group" style="flex: 1;">
                     <label>Status</label>
-                    <select class="form-control">
+                    <select class="form-control" data-vehicle-field="status">
                       <option value="active" selected>ACTIVE</option>
                       <option value="inactive">INACTIVE</option>
                     </select>
@@ -4600,7 +4683,7 @@ further assistance.</textarea>
                 <div class="form-row-3">
                   <div class="form-group">
                     <label>Reservation Price On</label>
-                    <select class="form-control">
+                    <select class="form-control" data-vehicle-field="pricing_basis">
                       <option value="hours" selected>Hours</option>
                       <option value="miles">Miles</option>
                       <option value="days">Days</option>
@@ -4608,7 +4691,7 @@ further assistance.</textarea>
                   </div>
                   <div class="form-group">
                     <label>Passenger Capacity</label>
-                    <select class="form-control">
+                    <select class="form-control" data-vehicle-field="passenger_capacity">
                       <option value="0">0</option>
                       <option value="6" selected>6</option>
                       <option value="7">7</option>
@@ -4620,7 +4703,7 @@ further assistance.</textarea>
                   </div>
                   <div class="form-group">
                     <label>Luggage Capacity</label>
-                    <select class="form-control">
+                    <select class="form-control" data-vehicle-field="luggage_capacity">
                       <option value="0">0</option>
                       <option value="6" selected>6</option>
                       <option value="8">8</option>
@@ -4633,7 +4716,7 @@ further assistance.</textarea>
                   <div class="form-group">
                     <label>Color Code</label>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                      <input type="text" class="form-control" style="flex: 1;" />
+                      <input type="text" class="form-control" style="flex: 1;" data-vehicle-field="color_hex" />
                       <button class="btn btn-secondary" style="min-width: 40px; height: 40px; padding: 0; background: #3498db;">🎨</button>
                     </div>
                   </div>
@@ -4642,7 +4725,7 @@ further assistance.</textarea>
                 <div class="form-row">
                   <div class="form-group">
                     <label>Associated with Service Types</label>
-                    <select class="form-control">
+                    <select class="form-control" data-vehicle-field="service_type">
                       <option value="" selected>- - - - NOT ASSIGNED - - - -</option>
                       <option value="airport">Airport Transfer</option>
                       <option value="hourly">Hourly Charter</option>
@@ -4654,7 +4737,7 @@ further assistance.</textarea>
                 <div class="form-row">
                   <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 10px;">
-                      <input type="checkbox" style="width: auto; margin: 0;" />
+                      <input type="checkbox" style="width: auto; margin: 0;" data-vehicle-field="accessible" />
                       <span>Accessible Vehicle</span>
                     </label>
                   </div>
@@ -4678,12 +4761,12 @@ further assistance.</textarea>
                     <button class="toolbar-btn" title="Spellcheck">✓</button>
                     <button class="toolbar-btn" title="Source">📄</button>
                   </div>
-                  <div class="vehicle-editor-content" contenteditable="true" id="vehicleDescriptionEditor">
+                  <div class="vehicle-editor-content" contenteditable="true" id="vehicleDescriptionEditor" data-vehicle-field="description">
                   </div>
                 </div>
 
                 <div class="form-actions" style="margin-top: 20px;">
-                  <button class="btn btn-primary btn-large">ADD NEW VEHICLE TYPE</button>
+                  <button class="btn btn-primary btn-large" id="vehicleTypeSaveBtn">Add / Save Vehicle Type</button>
                 </div>
                 </div>
               </div>
@@ -7592,6 +7675,9 @@ further assistance.</textarea>
 
 </script>
     <script src="env.js"></script>
+    <script src="CompanySettingsManager.js"></script>
+    <script src="CompanySettingsUI.js"></script>
+    <script src="PreferencesFormHandler.js"></script>
     <script src="triptag-selector.js"></script>
     <script src="ratetag-selector.js"></script>
     <script src="drag-drop-handler.js"></script>

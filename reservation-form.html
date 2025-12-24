@@ -29,6 +29,8 @@
             </h1>
           </div>
           <div style="display: flex; gap: 10px;">
+            <button onclick="createNewReservation()" style="padding: 8px 16px; background: rgba(255,255,255,0.3); color: white; border: 1px solid rgba(255,255,255,0.5); border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">➕ New Reservation</button>
+            <button onclick="goBackToReservations()" id="closeFormBtn" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px; display: none;">❌ Close</button>
             <button onclick="window.location.href='reservations-list.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
             <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
             <button onclick="window.location.href='accounts.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
@@ -755,12 +757,57 @@
                 <div class="form-group">
                   <label>Status:</label>
                   <select id="resStatus" class="form-control">
-                    <option value="unassigned">Unassigned</option>
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="unassigned" selected>Unassigned</option>
+                    <optgroup label="Booked / eFarm In">
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="dispatched">Dispatched</option>
+                      <option value="get_status_now">Get Status Now!</option>
+                      <option value="flight_time_change">Flight Time Change</option>
+                      <option value="offered_efarm_in">Offered and eFarm In</option>
+                    </optgroup>
+                    <optgroup label="Created">
+                      <option value="unassigned">Unassigned</option>
+                      <option value="farm_out_unassigned">Farm-out Unassigned</option>
+                    </optgroup>
+                    <optgroup label="Offered to Driver">
+                      <option value="offered">Offered</option>
+                      <option value="offered_to_affiliate">Offered to Affiliate</option>
+                    </optgroup>
+                    <optgroup label="Driver Is Assigned">
+                      <option value="assigned">Assigned</option>
+                      <option value="affiliate_assigned">Affiliate Is Assigned</option>
+                      <option value="farm_out_assigned">Farm-out Assigned</option>
+                      <option value="affiliate_driver_assigned">Affiliate Driver Is Assigned</option>
+                    </optgroup>
+                    <optgroup label="Driver Is En Route to Pickup">
+                      <option value="driver_en_route">Driver En Route</option>
+                      <option value="on_the_way">On The Way</option>
+                    </optgroup>
+                    <optgroup label="Driver Is Circling">
+                      <option value="driver_circling">Circling</option>
+                    </optgroup>
+                    <optgroup label="Driver Is Waiting at Pickup">
+                      <option value="driver_waiting_at_pickup">Arrived</option>
+                      <option value="waiting_at_pickup">Waiting at Pickup</option>
+                    </optgroup>
+                    <optgroup label="Driving Passenger">
+                      <option value="customer_in_car">Customer In Car</option>
+                      <option value="driving_passenger">Driving Passenger</option>
+                    </optgroup>
+                    <optgroup label="Completing">
+                      <option value="completed">Completed</option>
+                      <option value="done">Done</option>
+                    </optgroup>
+                    <optgroup label="Cancelled">
+                      <option value="cancelled">Cancelled</option>
+                      <option value="cancelled_by_affiliate">Cancelled by Affiliate</option>
+                      <option value="late_cancel">Late Cancel</option>
+                      <option value="late_cancelled">Late Cancelled</option>
+                      <option value="no_show">No Show</option>
+                      <option value="covid19_cancellation">COVID-19 Cancellation</option>
+                    </optgroup>
                   </select>
                 </div>
 
@@ -877,7 +924,7 @@
                   </div>
                   <div class="form-group" style="flex: 1;">
                     <label>eFarm Status:</label>
-                    <input type="text" id="eFarmStatus" class="form-control status-indicator" value="NOT FARMED OUT" readonly />
+                    <input type="text" id="eFarmStatus" class="form-control status-indicator" value="Farm-out Unassigned" readonly />
                   </div>
                 </div>
 

@@ -75,6 +75,8 @@ export class MapManager {
     const colors = {
       'available': '#4caf50',
       'enroute': '#ffa726',
+      'arrived': '#ffd54f',
+      'passenger_onboard': '#81c784',
       'busy': '#ef5350',
       'offline': '#9e9e9e'
     };

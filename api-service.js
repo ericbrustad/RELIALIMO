@@ -196,9 +196,20 @@ export async function createDriver(driverData) {
   if (!client) return null;
   
   try {
+    const { organizationId } = await getOrgContextOrThrow(client);
+    const timestamp = new Date().toISOString();
+    const payload = {
+      ...driverData,
+      organization_id: driverData.organization_id || organizationId,
+      created_at: driverData.created_at || timestamp,
+      updated_at: driverData.updated_at || timestamp,
+    };
+
     const { data, error } = await client
       .from('drivers')
-      .insert([driverData]);
+      .insert([payload])
+      .select()
+      .maybeSingle();
     
     if (error) throw error;
     return data;
@@ -216,10 +227,17 @@ export async function updateDriver(driverId, driverData) {
   if (!client) return null;
   
   try {
+    const payload = {
+      ...driverData,
+      updated_at: driverData.updated_at || new Date().toISOString(),
+    };
+
     const { data, error } = await client
       .from('drivers')
-      .update(driverData)
-      .eq('id', driverId);
+      .update(payload)
+      .eq('id', driverId)
+      .select()
+      .maybeSingle();
     
     if (error) throw error;
     return data;
@@ -379,6 +397,98 @@ export async function deleteAffiliate(affiliateId) {
   }
 }
 
+// ============================================================================
+// VEHICLE TYPE CRUD OPERATIONS
+// ============================================================================
+
+function sanitizeVehiclePayload(payload) {
+  const cleaned = { ...payload };
+  Object.keys(cleaned).forEach((key) => {
+    if (cleaned[key] === undefined) {
+      delete cleaned[key];
+    }
+  });
+  return cleaned;
+}
+
+export async function fetchVehicleTypes() {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    const { data, error } = await client
+      .from('vehicle_types')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching vehicle types:', error);
+    lastApiError = error;
+    return [];
+  }
+}
+
+export async function upsertVehicleType(vehicleType) {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase client not initialized');
+
+  try {
+    lastApiError = null;
+    const { organizationId, user } = await getOrgContextOrThrow(client);
+    const now = new Date().toISOString();
+    const isValidId = typeof vehicleType.id === 'string'
+      && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(vehicleType.id);
+
+    const payload = sanitizeVehiclePayload({
+      id: isValidId ? vehicleType.id : undefined,
+      organization_id: organizationId,
+      name: vehicleType.name?.trim() || null,
+      code: vehicleType.code?.trim() || null,
+      status: (vehicleType.status || 'ACTIVE').toUpperCase(),
+      pricing_basis: (vehicleType.pricing_basis || 'HOURS').toUpperCase(),
+      passenger_capacity: vehicleType.passenger_capacity !== undefined && vehicleType.passenger_capacity !== null && vehicleType.passenger_capacity !== ''
+        ? Number(vehicleType.passenger_capacity)
+        : null,
+      luggage_capacity: vehicleType.luggage_capacity !== undefined && vehicleType.luggage_capacity !== null && vehicleType.luggage_capacity !== ''
+        ? Number(vehicleType.luggage_capacity)
+        : null,
+      color_hex: vehicleType.color_hex?.trim() || null,
+      service_type_tags: Array.isArray(vehicleType.service_type_tags)
+        ? vehicleType.service_type_tags
+        : (vehicleType.service_type ? [vehicleType.service_type] : []),
+      accessible: vehicleType.accessible === true,
+      hide_from_online: vehicleType.hide_from_online === true,
+      description: vehicleType.description?.trim() || null,
+      sort_order: Number.isFinite(vehicleType.sort_order) ? vehicleType.sort_order : 0,
+      metadata: vehicleType.metadata ?? {},
+      updated_at: now,
+      updated_by: user.id,
+      created_at: isValidId ? undefined : now,
+      created_by: isValidId ? undefined : user.id,
+    });
+
+    const { data, error } = await client
+      .from('vehicle_types')
+      .upsert([payload], { onConflict: 'id' })
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error upserting vehicle type:', error);
+    lastApiError = error;
+    throw error;
+  }
+}
+
 /**
  * Remove duplicate affiliates from the database
  * Keeps the first occurrence (by id) and deletes duplicates based on company_name
@@ -432,6 +542,80 @@ export async function removeDuplicateAffiliates() {
     return { success: true, removed: duplicateIds.length, message: `Removed ${duplicateIds.length} duplicates` };
   } catch (error) {
     console.error('Error removing duplicate affiliates:', error);
+    return { success: false, error: error.message, removed: 0 };
+  }
+}
+
+function buildDriverDuplicateKey(driver) {
+  if (!driver) {
+    return null;
+  }
+  const org = driver.organization_id || 'no_org';
+  const email = (driver.email || '').trim().toLowerCase();
+  if (email) {
+    return `${org}|email|${email}`;
+  }
+  const phone = (driver.phone || '').replace(/[^0-9]/g, '');
+  if (phone.length >= 7) {
+    return `${org}|phone|${phone}`;
+  }
+  const first = (driver.first_name || '').trim().toLowerCase();
+  const last = (driver.last_name || '').trim().toLowerCase();
+  if (first || last) {
+    return `${org}|name|${first} ${last}`.trim();
+  }
+  return null;
+}
+
+/**
+ * Remove duplicate drivers from the database
+ * Duplicates are detected per organization by email, then phone, then full name.
+ */
+export async function removeDuplicateDrivers() {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Client not initialized', removed: 0 };
+
+  try {
+    const { data: drivers, error: fetchError } = await client
+      .from('drivers')
+      .select('id, organization_id, email, phone, first_name, last_name, created_at')
+      .order('created_at', { ascending: true });
+
+    if (fetchError) throw fetchError;
+    if (!drivers || drivers.length === 0) {
+      return { success: true, removed: 0, message: 'No drivers found' };
+    }
+
+    const seen = new Map();
+    const duplicateIds = [];
+
+    drivers.forEach(driver => {
+      const key = buildDriverDuplicateKey(driver);
+      if (!key) {
+        return;
+      }
+      if (seen.has(key)) {
+        duplicateIds.push(driver.id);
+      } else {
+        seen.set(key, driver.id);
+      }
+    });
+
+    if (duplicateIds.length === 0) {
+      return { success: true, removed: 0, message: 'No duplicates found' };
+    }
+
+    const { error: deleteError } = await client
+      .from('drivers')
+      .delete()
+      .in('id', duplicateIds);
+
+    if (deleteError) throw deleteError;
+
+    console.log(`✅ Removed ${duplicateIds.length} duplicate drivers`);
+    return { success: true, removed: duplicateIds.length, message: `Removed ${duplicateIds.length} duplicates` };
+  } catch (error) {
+    console.error('Error removing duplicate drivers:', error);
     return { success: false, error: error.message, removed: 0 };
   }
 }

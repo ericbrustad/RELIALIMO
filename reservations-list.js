@@ -139,7 +139,7 @@ class ReservationsList {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const confNumber = e.target.dataset.conf;
-        window.location.href = `reservation-form.html?conf=${confNumber}`;
+        this.openReservationInParent(confNumber);
       });
     });
 
@@ -152,6 +152,60 @@ class ReservationsList {
         this.selectReservation(confNumber);
       });
     });
+
+    // Make entire row clickable to open reservation
+    document.querySelectorAll('#newReservationsTab tbody tr').forEach(row => {
+      // Exclude header row
+      if (row.querySelector('.conf-link')) {
+        row.style.cursor = 'pointer';
+        
+        row.addEventListener('click', (e) => {
+          // Don't trigger if clicking on a link
+          if (e.target.tagName === 'A') return;
+          
+          const confLink = row.querySelector('.conf-link');
+          if (confLink) {
+            const confNumber = confLink.dataset.conf;
+            this.openReservationInParent(confNumber);
+          }
+        });
+
+        // Add hover effect
+        row.addEventListener('mouseenter', () => {
+          row.style.backgroundColor = 'rgba(102, 126, 234, 0.1)';
+        });
+
+        row.addEventListener('mouseleave', () => {
+          row.style.backgroundColor = '';
+        });
+      }
+    });
+  }
+
+  /**
+   * Open reservation in parent frame (if running in iframe)
+   * Falls back to direct navigation if not in iframe
+   */
+  openReservationInParent(confNumber) {
+    try {
+      // Check if we're in an iframe
+      if (window.self !== window.top) {
+        // Send message to parent to open reservation
+        window.parent.postMessage({
+          action: 'openReservation',
+          conf: confNumber
+        }, '*');
+        console.log('📤 Sent openReservation message to parent for conf:', confNumber);
+      } else {
+        // Not in iframe, navigate directly
+        window.location.href = `reservation-form.html?conf=${confNumber}`;
+        console.log('🔗 Navigating directly to reservation-form for conf:', confNumber);
+      }
+    } catch (error) {
+      console.error('❌ Error opening reservation:', error);
+      // Fallback to direct navigation
+      window.location.href = `reservation-form.html?conf=${confNumber}`;
+    }
   }
   
   formatDate(dateString) {
@@ -251,7 +305,7 @@ class ReservationsList {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const row = e.target.closest('tr');
-        const confNumber = row.querySelector('.conf-link').textContent;
+        const confNumber = row.querySelector('.conf-link')?.dataset?.conf;
         this.selectReservation(confNumber);
       });
     });
@@ -270,9 +324,12 @@ class ReservationsList {
   }
 
   selectReservation(confNumber) {
+    if (!confNumber) {
+      console.warn('⚠️ No confirmation number provided to selectReservation');
+      return;
+    }
     console.log('Selected reservation:', confNumber);
-    // Navigate to the reservation details
-    window.location.href = `reservation-form.html?conf=${confNumber}`;
+    this.openReservationInParent(confNumber);
   }
 }
 

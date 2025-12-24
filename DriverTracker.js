@@ -20,6 +20,8 @@ export class DriverTracker {
         name: 'Mike Driver',
         status: 'available',
         vehicle: 'Sedan',
+        affiliate: 'RELIA Fleet',
+        phone: '(555) 200-1001',
         position: [baseLat, baseLng], // Center
         heading: 45, // Direction in degrees
         speed: 0.001, // Speed factor for movement
@@ -30,6 +32,8 @@ export class DriverTracker {
         name: 'Lisa Driver',
         status: 'available',
         vehicle: 'SUV Limousine',
+        affiliate: 'RELIA Fleet',
+        phone: '(555) 200-1002',
         position: [baseLat + 0.05, baseLng - 0.05], // NW
         heading: 135,
         speed: 0.0008,
@@ -40,6 +44,8 @@ export class DriverTracker {
         name: 'Tom Driver',
         status: 'available',
         vehicle: 'Stretch Limousine',
+        affiliate: 'RELIA Fleet',
+        phone: '(555) 200-1003',
         position: [baseLat + 0.03, baseLng + 0.03], // NE
         heading: 225,
         speed: 0.0012,
@@ -50,6 +56,8 @@ export class DriverTracker {
         name: 'Sarah Driver',
         status: 'available',
         vehicle: 'Luxury Sedan',
+        affiliate: 'RELIA Fleet',
+        phone: '(555) 200-1004',
         position: [baseLat - 0.04, baseLng - 0.04], // SW
         heading: 315,
         speed: 0.0009,
@@ -60,12 +68,16 @@ export class DriverTracker {
         name: 'John Driver',
         status: 'available',
         vehicle: 'SUV',
+        affiliate: 'RELIA Fleet',
+        phone: '(555) 200-1005',
         position: [baseLat - 0.02, baseLng + 0.04], // SE
         heading: 90,
         speed: 0.001,
         assignedReservationId: null
       }
     ];
+
+    this.applyStatusOverrides();
   }
 
   startTracking(callback) {
@@ -78,6 +90,7 @@ export class DriverTracker {
 
     // Update driver positions periodically
     this.trackingInterval = setInterval(() => {
+      this.applyStatusOverrides();
       this.updateDriverPositions();
       if (callback) {
         callback(this.drivers);
@@ -146,6 +159,7 @@ export class DriverTracker {
     if (driver) {
       driver.assignedReservationId = reservationId;
       driver.status = 'enroute';
+      this.persistStatusOverrides();
     }
   }
 
@@ -153,6 +167,44 @@ export class DriverTracker {
     const driver = this.drivers.find(d => d.id === driverId);
     if (driver) {
       driver.status = status;
+      if (status === 'available') {
+        driver.assignedReservationId = null;
+      }
+      this.persistStatusOverrides();
+    }
+  }
+
+  applyStatusOverrides() {
+    try {
+      const raw = localStorage.getItem('relia_driver_status_overrides');
+      if (!raw) return;
+      const overrides = JSON.parse(raw);
+      if (!Array.isArray(overrides)) return;
+      overrides.forEach(override => {
+        const driver = this.drivers.find(d => d.id === override.id);
+        if (!driver) return;
+        if (override.status) {
+          driver.status = override.status;
+        }
+        if (override.notes) {
+          driver.notes = override.notes;
+        }
+      });
+    } catch (error) {
+      console.warn('[DriverTracker] Unable to apply driver status overrides:', error);
+    }
+  }
+
+  persistStatusOverrides() {
+    try {
+      const overrides = this.drivers.map(driver => ({
+        id: driver.id,
+        status: driver.status,
+        notes: driver.notes || ''
+      }));
+      localStorage.setItem('relia_driver_status_overrides', JSON.stringify(overrides));
+    } catch (error) {
+      console.warn('[DriverTracker] Unable to persist driver status overrides:', error);
     }
   }
 

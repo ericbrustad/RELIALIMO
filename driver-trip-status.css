@@ -1,0 +1,195 @@
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #111;
+  color: #f3f3f3;
+}
+
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.page-subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #9e9e9e;
+}
+
+.status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.status-card {
+  background: #1a1a1a;
+  border: 1px solid #2f2f2f;
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.status-card.active {
+  border-color: #c44536;
+  transform: translateY(-1px);
+}
+
+.status-card.completed {
+  border-color: #4caf50;
+}
+
+.status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.status-description {
+  font-size: 12px;
+  color: #9e9e9e;
+}
+
+.status-meta {
+  font-size: 11px;
+  color: #7a7a7a;
+}
+
+.status-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.btn {
+  padding: 10px 16px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-primary {
+  background: #c44536;
+  border-color: #c44536;
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: #d15546;
+}
+
+.btn-secondary {
+  background: #1f1f1f;
+  border-color: #3a3a3a;
+  color: #e0e0e0;
+}
+
+.btn-secondary:hover {
+  background: #2a2a2a;
+}
+
+.btn-outline {
+  background: transparent;
+  border-color: #4a4a4a;
+  color: #9e9e9e;
+}
+
+.btn-outline:hover {
+  border-color: #c44536;
+  color: #ffffff;
+}
+
+.notes-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notes-section label {
+  font-size: 13px;
+  color: #9e9e9e;
+}
+
+#driverNotes {
+  min-height: 100px;
+  padding: 12px;
+  border-radius: 4px;
+  background: #161616;
+  border: 1px solid #2f2f2f;
+  color: #e0e0e0;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.timestamp {
+  font-size: 12px;
+  color: #8d8d8d;
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(32, 32, 32, 0.95);
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 12px 18px;
+  font-size: 13px;
+  color: #f3f3f3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.toast.visible {
+  opacity: 1;
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .status-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .status-action {
+    width: 100%;
+    align-items: stretch;
+  }
+}

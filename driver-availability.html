@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Availability</title>
+  <link rel="stylesheet" href="driver-availability.css">
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>Driver Availability</h1>
+      <p class="page-subtitle">Set your status so dispatch knows who is ready for farm-outs.</p>
+    </header>
+    <main>
+      <div class="controls">
+        <div class="control-group">
+          <button id="resetOverrides" class="btn btn-secondary" type="button">Reset All</button>
+          <button id="refreshView" class="btn btn-secondary" type="button">Refresh</button>
+        </div>
+        <span id="lastSync" class="timestamp">Last sync: —</span>
+      </div>
+      <section id="driverGrid" class="driver-grid"></section>
+    </main>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script type="module" src="driver-availability.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Trip Status</title>
+  <link rel="stylesheet" href="driver-trip-status.css">
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1 id="pageTitle">Trip Status</h1>
+      <p id="pageSubtitle" class="page-subtitle">Update the trip milestones as you go.</p>
+    </header>
+    <main>
+      <section id="statusList" class="status-list"></section>
+      <section class="notes-section">
+        <label for="driverNotes">Notes to dispatch</label>
+        <textarea id="driverNotes" placeholder="Add quick updates or questions for dispatch."></textarea>
+      </section>
+    </main>
+    <footer class="page-footer">
+      <button id="supportBtn" class="btn btn-secondary" type="button">Need help? Contact dispatch</button>
+      <span id="lastUpdate" class="timestamp">Last update: —</span>
+    </footer>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script type="module" src="driver-trip-status.js"></script>
+</body>
+</html>

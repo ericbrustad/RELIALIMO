@@ -1552,7 +1552,7 @@ class Accounts {
             dispatchNotes: reservationRecord.dispatch_notes || ''
           },
           details: {
-            efarmStatus: reservationRecord.efarm_status || 'NOT FARMED OUT'
+            efarmStatus: reservationRecord.efarm_status || 'Farm-out Unassigned'
           },
           costs: {
             flat: { qty: '0', rate: '0' },

@@ -36,6 +36,20 @@
     .template-info { background: #fff3e0; border: 1px solid #ffcc80; padding: 16px; border-radius: 4px; margin-bottom: 20px; }
     .template-info h4 { margin: 0 0 10px 0; color: #e65100; }
     .template-info code { background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+    .mapping-section { margin-top: 24px; border-top: 1px solid #e0e0e0; padding-top: 24px; }
+    .mapping-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; align-items: flex-start; }
+    .mapping-panel { background: #fafafa; border: 1px solid #ddd; border-radius: 6px; padding: 16px; max-height: 420px; overflow-y: auto; }
+    .mapping-panel h4 { margin: 0 0 12px 0; color: #1565c0; font-size: 15px; }
+    .mapping-item { padding: 8px 10px; border: 1px solid #bbb; border-radius: 4px; margin-bottom: 8px; background: #fff; cursor: grab; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+    .mapping-item.assigned { opacity: 0.6; background: #e3f2fd; border-color: #64b5f6; }
+    .mapping-item span { font-size: 11px; color: #6b6b6b; }
+    .mapping-field { border: 1px dashed #b0bec5; border-radius: 4px; padding: 8px 10px; margin-bottom: 8px; background: #fff; }
+    .mapping-field[data-active="true"] { border-style: solid; border-color: #42a5f5; background: #e3f2fd; }
+    .mapping-field strong { display: block; font-size: 13px; color: #37474f; margin-bottom: 4px; }
+    .mapping-slot { min-height: 32px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #546e7a; }
+    .mapping-slot span { flex: 1; }
+    .mapping-clear { border: none; background: transparent; color: #c62828; cursor: pointer; font-size: 12px; margin-left: 8px; }
+    .mapping-helper { font-size: 12px; color: #546e7a; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -48,7 +62,7 @@
 
   <div id="schemaWarning" class="status error" style="display:none;">
     Driver schema mismatch detected. Please run Utilities → "Ensure Driver Schema Exists" to apply fixes.
-    <a href="utilities.html" style="color:#1565c0; text-decoration:underline; font-weight:600;">Open Utilities</a>
+    <a href="utilities.html#ensureDriverSchemaBtn" style="color:#1565c0; text-decoration:underline; font-weight:600;">Open Utilities</a>
     <button id="recheckSchemaBtn" class="btn btn-warning" style="margin-left:8px; padding:6px 10px;">Recheck</button>
   </div>
 
@@ -65,7 +79,7 @@
       <h4>Upload Header Columns (exact order):</h4>
       <p style="line-height:1.8; font-size:12px;">
         <code>FName</code>, <code>LName</code>, <code>Level</code>, <code>Addr</code>, <code>AptSte</code>, <code>City</code>, <code>State</code>, <code>Zip</code>,
-        <code>PhoneH</code>, <code>PhoneFax</code>, <code>PhoneOth</code>, <code>PhoneOthProvider</code>, <code>Pager</code>, <code>PagerProvider</code>, <code>Email</code>,
+        <code>CellPhone</code>, <code>PhoneH</code>, <code>PhoneFax</code>, <code>PhoneOth</code>, <code>PhoneOthProvider</code>, <code>Pager</code>, <code>PagerProvider</code>, <code>Email</code>,
         <code>NotifyEmail</code>, <code>NotifyFax</code>, <code>NotifySMS</code>, <code>SSN</code>, <code>DL</code>, <code>DOB</code>, <code>Type</code>, <code>Status</code>,
         <code>Web</code>, <code>WebUID</code>, <code>WebPass</code>, <code>VoucherFee</code>, <code>Notes</code>, <code>Date Created</code>, <code>ExtraFldNV1</code>,
         <code>ExtraFldNV2</code>, <code>ExtraFldNV3</code>, <code>ExtraFldFL1</code>, <code>ExtraFldFL2</code>, <code>ExtraFldFL3</code>, <code>SchedDaysIn</code>,
@@ -92,6 +106,21 @@
       <h3>Preview (first 10 rows):</h3>
       <table class="preview-table" id="previewTable"></table>
     </div>
+    <div id="mappingSection" class="mapping-section" style="display:none;">
+      <h3>Field Mapping</h3>
+      <p class="mapping-helper">Drag a source column onto a system field to adjust the mapping. Click the field name to clear it. Unmapped fields import as empty.</p>
+      <div class="mapping-grid">
+        <div class="mapping-panel">
+          <h4>Uploaded Columns</h4>
+          <div id="sourceColumnsList"></div>
+        </div>
+        <div class="mapping-panel">
+          <h4>System Fields</h4>
+          <div id="targetFieldsList"></div>
+        </div>
+      </div>
+      <div id="mappingStatus" class="status info" style="display:none;"></div>
+    </div>
   </div>
 
   <div class="section">
@@ -105,12 +134,272 @@
 <script type="module">
 import { setupAPI, getSupabaseClient } from './api-service.js';
 import { signInWithEmail } from './supabase-client.js';
+import * as driverFieldConfig from './driver-field-config.js';
 
 let supabaseClient = null;
 let importData = null;
+let rawImportRows = null;
+let sourceHeaders = [];
+let columnMapping = {};
+
+const FIELD_FRIENDLY_NAMES = {
+  FName: 'First Name',
+  LName: 'Last Name',
+  Level: 'Level',
+  Addr: 'Street Address',
+  AptSte: 'Apt / Suite',
+  City: 'City',
+  State: 'State',
+  Zip: 'ZIP Code',
+  CellPhone: 'Cellular Phone',
+  PhoneH: 'Home Phone',
+  PhoneFax: 'Fax',
+  PhoneOth: 'Other Phone',
+  PhoneOthProvider: 'Other Phone Provider',
+  Pager: 'Pager',
+  PagerProvider: 'Pager Provider',
+  Email: 'Email',
+  NotifyEmail: 'Notify by Email',
+  NotifyFax: 'Notify by Fax',
+  NotifySMS: 'Notify by SMS',
+  SSN: 'SSN',
+  DL: 'License Number',
+  DOB: 'Date of Birth',
+  Type: 'Type',
+  Status: 'Status',
+  Web: 'Web Access',
+  WebUID: 'Web Username',
+  WebPass: 'Web Password',
+  VoucherFee: 'Voucher Fee',
+  Notes: 'Notes',
+  'Date Created': 'Date Created',
+  ExtraFldNV1: 'Extra Field NV1',
+  ExtraFldNV2: 'Extra Field NV2',
+  ExtraFldNV3: 'Extra Field NV3',
+  ExtraFldFL1: 'Extra Field FL1',
+  ExtraFldFL2: 'Extra Field FL2',
+  ExtraFldFL3: 'Extra Field FL3',
+  SchedDaysIn: 'Schedule Days In',
+  SchedMonTmIn: 'Monday Start',
+  SchedMonTmOut: 'Monday End',
+  SchedTueTmIn: 'Tuesday Start',
+  SchedTueTmOut: 'Tuesday End',
+  SchedWedTmIn: 'Wednesday Start',
+  SchedWedTmOut: 'Wednesday End',
+  SchedThuTmIn: 'Thursday Start',
+  SchedThuTmOut: 'Thursday End',
+  SchedFriTmIn: 'Friday Start',
+  SchedFriTmOut: 'Friday End',
+  SchedSatTmIn: 'Saturday Start',
+  SchedSatTmOut: 'Saturday End',
+  SchedSunTmIn: 'Sunday Start',
+  SchedSunTmOut: 'Sunday End',
+  DLExpDate: 'License Expiration',
+  DLState: 'License State',
+  BadgeNo: 'Badge Number',
+  BadgeNoExpDate: 'Badge Expiration',
+  Country: 'Country',
+  IncPh1: 'Include Phone 1',
+  IncPh2: 'Include Phone 2',
+  IncPh3: 'Include Phone 3',
+  DispName: 'Dispatch Name',
+  HourlyReg: 'Hourly (Regular)',
+  HourlyOvr: 'Hourly (Overtime)',
+  HourlyDbl: 'Hourly (Double)',
+  TSName: 'Trip Sheets Name'
+};
 
 // Single source of truth for driver headers
-const DRIVER_HEADERS = ['FName','LName','Level','Addr','AptSte','City','State','Zip','PhoneH','PhoneFax','PhoneOth','PhoneOthProvider','Pager','PagerProvider','Email','NotifyEmail','NotifyFax','NotifySMS','SSN','DL','DOB','Type','Status','Web','WebUID','WebPass','VoucherFee','Notes','Date Created','ExtraFldNV1','ExtraFldNV2','ExtraFldNV3','ExtraFldFL1','ExtraFldFL2','ExtraFldFL3','SchedDaysIn','SchedMonTmIn','SchedMonTmOut','SchedTueTmIn','SchedTueTmOut','SchedWedTmIn','SchedWedTmOut','SchedThuTmIn','SchedThuTmOut','SchedFriTmIn','SchedFriTmOut','SchedSatTmIn','SchedSatTmOut','SchedSunTmIn','SchedSunTmOut','DLExpDate','DLState','BadgeNo','BadgeNoExpDate','Country','IncPh1','IncPh2','IncPh3','DispName','HourlyReg','HourlyOvr','HourlyDbl','TSName'];
+const DRIVER_HEADERS = ['FName','LName','Level','Addr','AptSte','City','State','Zip','CellPhone','PhoneH','PhoneFax','PhoneOth','PhoneOthProvider','Pager','PagerProvider','Email','NotifyEmail','NotifyFax','NotifySMS','SSN','DL','DOB','Type','Status','Web','WebUID','WebPass','VoucherFee','Notes','Date Created','ExtraFldNV1','ExtraFldNV2','ExtraFldNV3','ExtraFldFL1','ExtraFldFL2','ExtraFldFL3','SchedDaysIn','SchedMonTmIn','SchedMonTmOut','SchedTueTmIn','SchedTueTmOut','SchedWedTmIn','SchedWedTmOut','SchedThuTmIn','SchedThuTmOut','SchedFriTmIn','SchedFriTmOut','SchedSatTmIn','SchedSatTmOut','SchedSunTmIn','SchedSunTmOut','DLExpDate','DLState','BadgeNo','BadgeNoExpDate','Country','IncPh1','IncPh2','IncPh3','DispName','HourlyReg','HourlyOvr','HourlyDbl','TSName'];
+
+const DRIVER_TABLE_COLUMNS_EXPECTED = Array.from(new Set(
+  driverFieldConfig.driverTableFieldList
+    .map((field) => field.column)
+    .filter((column) => column && column !== 'id')
+));
+
+function getFriendlyLabel(field) {
+  return FIELD_FRIENDLY_NAMES[field] ? `${FIELD_FRIENDLY_NAMES[field]} (${field})` : field;
+}
+
+function buildInitialMapping(headerRow) {
+  const norm = (s) => String(s || '').trim().replace(/\s+/g, '').toLowerCase();
+  const used = new Set();
+  const mapping = {};
+  const canonicalNorm = DRIVER_HEADERS.map(norm);
+  headerRow.forEach((header) => {
+    const normalized = norm(header);
+    const idx = canonicalNorm.indexOf(normalized);
+    if (idx !== -1 && !used.has(DRIVER_HEADERS[idx])) {
+      mapping[DRIVER_HEADERS[idx]] = header;
+      used.add(DRIVER_HEADERS[idx]);
+    }
+  });
+  DRIVER_HEADERS.forEach((field) => {
+    if (!(field in mapping)) mapping[field] = null;
+  });
+  return mapping;
+}
+
+function renderMappingUI() {
+  const mappingSection = document.getElementById('mappingSection');
+  if (!mappingSection) return;
+  if (!sourceHeaders || sourceHeaders.length === 0) {
+    mappingSection.style.display = 'none';
+    return;
+  }
+
+  mappingSection.style.display = 'block';
+  const sourceList = document.getElementById('sourceColumnsList');
+  const targetList = document.getElementById('targetFieldsList');
+  if (!sourceList || !targetList) return;
+
+  sourceList.innerHTML = '';
+  const entries = Object.entries(columnMapping || {});
+  sourceHeaders.forEach((header) => {
+    const item = document.createElement('div');
+    item.className = 'mapping-item';
+    item.draggable = true;
+    item.dataset.source = header;
+    const assigned = entries.find(([field, src]) => src === header);
+    if (assigned) item.classList.add('assigned');
+    item.textContent = header;
+    if (assigned) {
+      const span = document.createElement('span');
+      span.textContent = `→ ${assigned[0]}`;
+      item.appendChild(span);
+    }
+    item.addEventListener('dragstart', handleDragStart);
+    sourceList.appendChild(item);
+  });
+
+  targetList.innerHTML = '';
+  DRIVER_HEADERS.forEach((field) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mapping-field';
+    wrapper.dataset.field = field;
+
+    const label = document.createElement('strong');
+    label.textContent = getFriendlyLabel(field);
+    label.style.cursor = 'pointer';
+    label.addEventListener('click', () => {
+      columnMapping[field] = null;
+      renderMappingUI();
+      applyMappingAndPreview();
+    });
+
+    const slot = document.createElement('div');
+    slot.className = 'mapping-slot';
+    const span = document.createElement('span');
+    const mappedSource = columnMapping[field];
+    span.textContent = mappedSource || 'Drop column here';
+    if (!mappedSource) span.style.fontStyle = 'italic';
+
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'mapping-clear';
+    clearBtn.style.display = mappedSource ? 'inline' : 'none';
+    clearBtn.textContent = 'Clear';
+    clearBtn.addEventListener('click', () => {
+      columnMapping[field] = null;
+      renderMappingUI();
+      applyMappingAndPreview();
+    });
+
+    slot.appendChild(span);
+    slot.appendChild(clearBtn);
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(slot);
+    wrapper.addEventListener('dragenter', () => { wrapper.dataset.active = 'true'; });
+    wrapper.addEventListener('dragover', handleDragOver);
+    wrapper.addEventListener('drop', handleDrop);
+    wrapper.addEventListener('dragleave', handleDragLeave);
+
+    targetList.appendChild(wrapper);
+  });
+
+  updateMappingStatus();
+}
+
+function handleDragStart(event) {
+  const source = event.currentTarget?.dataset?.source;
+  if (!source) return;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', source);
+}
+
+function handleDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.dataset.active = 'true';
+}
+
+function handleDragLeave(event) {
+  event.currentTarget.dataset.active = 'false';
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  const field = event.currentTarget?.dataset?.field;
+  const source = event.dataTransfer.getData('text/plain');
+  event.currentTarget.dataset.active = 'false';
+  if (!field || !source) return;
+  Object.keys(columnMapping).forEach((key) => {
+    if (columnMapping[key] === source) columnMapping[key] = null;
+  });
+  columnMapping[field] = source;
+  renderMappingUI();
+  applyMappingAndPreview();
+}
+
+function applyMappingAndPreview() {
+  if (!rawImportRows || rawImportRows.length === 0) {
+    importData = null;
+    updateMappingStatus(true);
+    preview([]);
+    document.getElementById('importBtn').disabled = true;
+    return;
+  }
+
+  const mappedRows = rawImportRows.map((raw) => {
+    const obj = {};
+    DRIVER_HEADERS.forEach((field) => {
+      const source = columnMapping[field];
+      obj[field] = source ? raw[source] ?? '' : '';
+    });
+    return obj;
+  });
+
+  importData = mappedRows;
+  preview(mappedRows.slice(0, 10));
+  document.getElementById('importBtn').disabled = mappedRows.length === 0;
+  updateMappingStatus();
+}
+
+function updateMappingStatus(forceHide = false) {
+  const statusEl = document.getElementById('mappingStatus');
+  if (!statusEl) return;
+  if (forceHide) {
+    statusEl.style.display = 'none';
+    return;
+  }
+
+  const unmapped = DRIVER_HEADERS.filter((field) => !columnMapping[field]);
+  if (!rawImportRows || rawImportRows.length === 0) {
+    statusEl.style.display = 'none';
+    return;
+  }
+
+  if (unmapped.length) {
+    statusEl.className = 'status error';
+    statusEl.textContent = `Fields without a mapped column: ${unmapped.slice(0, 8).join(', ')}${unmapped.length > 8 ? '…' : ''}`;
+  } else {
+    statusEl.className = 'status success';
+    statusEl.textContent = 'All system fields currently have a mapped column.';
+  }
+  statusEl.style.display = 'block';
+}
 
 async function ensureValidSession() {
   await setupAPI();
@@ -139,7 +428,7 @@ async function getOrgContext() {
 async function checkDriverSchema() {
   try {
     const el = document.getElementById('schemaWarning');
-    const suggested = ['address_line2','fax','other_phone','other_phone_provider','pager_phone','pager_provider','notify_email','notify_fax','notify_sms','web_username','web_password','voucher_fee','driver_notes','extra_nv_1','extra_nv_2','extra_nv_3','extra_fl_1','extra_fl_2','extra_fl_3','license_exp_date','license_state','badge_id','badge_exp_date','country','include_phone_1','include_phone_2','include_phone_3','dispatch_display_name','trip_sheets_display_name'];
+    const expectedColumns = DRIVER_TABLE_COLUMNS_EXPECTED;
 
     async function columnExists(col) {
       const { data, error } = await supabaseClient
@@ -151,9 +440,9 @@ async function checkDriverSchema() {
     }
 
     const missing = [];
-    for (const c of suggested) {
-      const ok = await columnExists(c);
-      if (!ok) missing.push(c);
+    for (const columnName of expectedColumns) {
+      const ok = await columnExists(columnName);
+      if (!ok) missing.push(columnName);
     }
 
     if (missing.length) {
@@ -172,6 +461,14 @@ function parseFile(file) {
   const isCsv = /\.csv$/i.test(file.name || '');
   const isHtml = /\.html?$/i.test(file.name || '');
   const reader = new FileReader();
+
+  rawImportRows = null;
+  sourceHeaders = [];
+  columnMapping = {};
+  renderMappingUI();
+  updateMappingStatus(true);
+  preview([]);
+  document.getElementById('importBtn').disabled = true;
 
   reader.onload = (e) => {
     try {
@@ -204,50 +501,44 @@ function parseFile(file) {
       }
 
       const headerRow = (aoa[headerIdx] || []).map(h => String(h || '').trim());
-      // Validate exact header order against DRIVER_HEADERS (case/space-insensitive)
       const expectedOrder = DRIVER_HEADERS.map(norm);
       const actualOrder = headerRow.map(norm);
       let exactOk = expectedOrder.length === actualOrder.length;
       if (exactOk) {
-        for (let i=0;i<expectedOrder.length;i++){ if (expectedOrder[i] !== actualOrder[i]) { exactOk = false; break; } }
+        for (let i = 0; i < expectedOrder.length; i++) {
+          if (expectedOrder[i] !== actualOrder[i]) { exactOk = false; break; }
+        }
       }
       if (!exactOk) {
-        const firstMismatchIdx = expectedOrder.findIndex((v,i)=> actualOrder[i] !== v);
+        const firstMismatchIdx = expectedOrder.findIndex((v, i) => actualOrder[i] !== v);
         const expectedAt = firstMismatchIdx >= 0 ? DRIVER_HEADERS[firstMismatchIdx] : '(length mismatch)';
-        const actualAt = firstMismatchIdx >= 0 ? (headerRow[firstMismatchIdx]||'(missing)') : '(length mismatch)';
-        setStatus('importStatus','error', `Header mismatch. Expected exact column order. First mismatch at index ${firstMismatchIdx}: expected "${expectedAt}", found "${actualAt}". Use the Template button to download the required layout.`);
-        document.getElementById('importBtn').disabled = true;
-        // Still show preview for reference
+        const actualAt = firstMismatchIdx >= 0 ? (headerRow[firstMismatchIdx] || '(missing)') : '(length mismatch)';
+        setStatus('importStatus', 'error', `Header mismatch. Expected exact column order. First mismatch at index ${firstMismatchIdx}: expected "${expectedAt}", found "${actualAt}". Use the mapping panel below to adjust or download the template.`);
       }
 
-      // Build a name map to standardize incoming headers to our canonical DRIVER_HEADERS
-      const nameMap = new Map(); // column index -> canonical name
-      headerRow.forEach((h, idx) => {
-        const n = norm(h);
-        const pos = expectedOrder.indexOf(n);
-        if (pos !== -1) nameMap.set(idx, DRIVER_HEADERS[pos]); else nameMap.set(idx, h);
-      });
-      const colIndex = headerRow.map((h, idx) => ({ name: nameMap.get(idx) || h, idx })).filter(c => c.name);
-
-      // Build objects from AOA using detected header row
-      const rows = [];
+      const rawRows = [];
       for (let r = headerIdx + 1; r < aoa.length; r++) {
         const rowArr = aoa[r] || [];
-        // Check if row is effectively empty
         const nonEmpty = rowArr.some(v => String(v || '').trim() !== '');
         if (!nonEmpty) continue;
         const obj = {};
-        for (const c of colIndex) { obj[c.name] = rowArr[c.idx] ?? ''; }
-        rows.push(obj);
+        headerRow.forEach((headerCell, idx) => {
+          obj[headerCell] = rowArr[idx] ?? '';
+        });
+        rawRows.push(obj);
       }
 
-      importData = rows;
-      preview(rows.slice(0, 10));
-      document.getElementById('importBtn').disabled = rows.length === 0;
-      if (rows.length === 0) {
-        setStatus('importStatus', 'error', 'Loaded 0 rows. Ensure the first sheet with data has a header row matching the template, or save as .xlsx and retry.');
+      rawImportRows = rawRows;
+      sourceHeaders = headerRow;
+      columnMapping = buildInitialMapping(headerRow);
+      renderMappingUI();
+      applyMappingAndPreview();
+
+      if (!rawRows.length) {
+        setStatus('importStatus', 'error', 'Loaded 0 rows. Ensure the sheet has data under the detected headers or save as .xlsx and retry.');
+        document.getElementById('importBtn').disabled = true;
       } else {
-        setStatus('importStatus', 'success', `Loaded ${rows.length} rows from "${bestSheetName}"`);
+        setStatus('importStatus', 'success', `Loaded ${rawRows.length} rows from "${bestSheetName}"`);
       }
     } catch (err) {
       console.error('Parse error:', err);
@@ -289,6 +580,7 @@ function mapRowToDriver(row, orgId) {
     city: row['City'] || null,
     state: row['State'] || null,
     address_zip: row['Zip'] || null,
+    cell_phone: row['CellPhone'] || null,
     home_phone: row['PhoneH'] || null,
     fax: row['PhoneFax'] || null,
     other_phone: row['PhoneOth'] || null,
@@ -389,7 +681,7 @@ async function exportDrivers() {
     const r = ratesByDriver[d.id]||{}; const s = schedByDriver[d.id]||{};
     function take(day, field){ return (s[day]&&s[day][field]) ? String(s[day][field]).slice(0,5) : ''; }
     return {
-      'FName': d.first_name||'', 'LName': d.last_name||'', 'Level': d.driver_level||'', 'Addr': d.primary_address||'', 'AptSte': d.address_line2||'', 'City': d.city||'', 'State': d.state||'', 'Zip': d.address_zip||'', 'PhoneH': d.home_phone||'', 'PhoneFax': d.fax||'', 'PhoneOth': d.other_phone||'', 'PhoneOthProvider': d.other_phone_provider||'', 'Pager': d.pager_phone||'', 'PagerProvider': d.pager_provider||'', 'Email': d.email||'', 'NotifyEmail': d.notify_email? 'Y':'N', 'NotifyFax': d.notify_fax? 'Y':'N', 'NotifySMS': d.notify_sms? 'Y':'N', 'SSN': d.ssn||'', 'DL': d.license_number||'', 'DOB': d.dob||'', 'Type': d.type||'', 'Status': d.status||'', 'Web': d.web_access||'', 'WebUID': d.web_username||'', 'WebPass': d.web_password||'', 'VoucherFee': d.voucher_fee||'', 'Notes': d.driver_notes||'', 'Date Created': d.created_at||'', 'ExtraFldNV1': d.extra_nv_1||'', 'ExtraFldNV2': d.extra_nv_2||'', 'ExtraFldNV3': d.extra_nv_3||'', 'ExtraFldFL1': d.extra_fl_1||'', 'ExtraFldFL2': d.extra_fl_2||'', 'ExtraFldFL3': d.extra_fl_3||'', 'SchedDaysIn': '', 'SchedMonTmIn': take('Monday','start_time'), 'SchedMonTmOut': take('Monday','end_time'), 'SchedTueTmIn': take('Tuesday','start_time'), 'SchedTueTmOut': take('Tuesday','end_time'), 'SchedWedTmIn': take('Wednesday','start_time'), 'SchedWedTmOut': take('Wednesday','end_time'), 'SchedThuTmIn': take('Thursday','start_time'), 'SchedThuTmOut': take('Thursday','end_time'), 'SchedFriTmIn': take('Friday','start_time'), 'SchedFriTmOut': take('Friday','end_time'), 'SchedSatTmIn': take('Saturday','start_time'), 'SchedSatTmOut': take('Saturday','end_time'), 'SchedSunTmIn': take('Sunday','start_time'), 'SchedSunTmOut': take('Sunday','end_time'), 'DLExpDate': d.license_exp_date||'', 'DLState': d.license_state||'', 'BadgeNo': d.badge_id||'', 'BadgeNoExpDate': d.badge_exp_date||'', 'Country': d.country||'', 'IncPh1': d.include_phone_1||'', 'IncPh2': d.include_phone_2||'', 'IncPh3': d.include_phone_3||'', 'DispName': d.dispatch_display_name||'', 'HourlyReg': r.trip_regular_rate||'', 'HourlyOvr': r.trip_overtime_rate||'', 'HourlyDbl': r.trip_double_time_rate||'', 'TSName': d.trip_sheets_display_name||''
+      'FName': d.first_name||'', 'LName': d.last_name||'', 'Level': d.driver_level||'', 'Addr': d.primary_address||'', 'AptSte': d.address_line2||'', 'City': d.city||'', 'State': d.state||'', 'Zip': d.address_zip||'', 'CellPhone': d.cell_phone||d.phone||d.mobile_phone||'', 'PhoneH': d.home_phone||'', 'PhoneFax': d.fax||'', 'PhoneOth': d.other_phone||'', 'PhoneOthProvider': d.other_phone_provider||'', 'Pager': d.pager_phone||'', 'PagerProvider': d.pager_provider||'', 'Email': d.email||'', 'NotifyEmail': d.notify_email? 'Y':'N', 'NotifyFax': d.notify_fax? 'Y':'N', 'NotifySMS': d.notify_sms? 'Y':'N', 'SSN': d.ssn||'', 'DL': d.license_number||'', 'DOB': d.dob||'', 'Type': d.type||'', 'Status': d.status||'', 'Web': d.web_access||'', 'WebUID': d.web_username||'', 'WebPass': d.web_password||'', 'VoucherFee': d.voucher_fee||'', 'Notes': d.driver_notes||'', 'Date Created': d.created_at||'', 'ExtraFldNV1': d.extra_nv_1||'', 'ExtraFldNV2': d.extra_nv_2||'', 'ExtraFldNV3': d.extra_nv_3||'', 'ExtraFldFL1': d.extra_fl_1||'', 'ExtraFldFL2': d.extra_fl_2||'', 'ExtraFldFL3': d.extra_fl_3||'', 'SchedDaysIn': '', 'SchedMonTmIn': take('Monday','start_time'), 'SchedMonTmOut': take('Monday','end_time'), 'SchedTueTmIn': take('Tuesday','start_time'), 'SchedTueTmOut': take('Tuesday','end_time'), 'SchedWedTmIn': take('Wednesday','start_time'), 'SchedWedTmOut': take('Wednesday','end_time'), 'SchedThuTmIn': take('Thursday','start_time'), 'SchedThuTmOut': take('Thursday','end_time'), 'SchedFriTmIn': take('Friday','start_time'), 'SchedFriTmOut': take('Friday','end_time'), 'SchedSatTmIn': take('Saturday','start_time'), 'SchedSatTmOut': take('Saturday','end_time'), 'SchedSunTmIn': take('Sunday','start_time'), 'SchedSunTmOut': take('Sunday','end_time'), 'DLExpDate': d.license_exp_date||'', 'DLState': d.license_state||'', 'BadgeNo': d.badge_id||'', 'BadgeNoExpDate': d.badge_exp_date||'', 'Country': d.country||'', 'IncPh1': d.include_phone_1||'', 'IncPh2': d.include_phone_2||'', 'IncPh3': d.include_phone_3||'', 'DispName': d.dispatch_display_name||'', 'HourlyReg': r.trip_regular_rate||'', 'HourlyOvr': r.trip_overtime_rate||'', 'HourlyDbl': r.trip_double_time_rate||'', 'TSName': d.trip_sheets_display_name||''
     };
   });
 

@@ -18,6 +18,8 @@
 import { googleMapsService } from './GoogleMapsService.js';
 import { reservationAddressSearchModule } from './ReservationAddressSearchModule.js';
 
+export const googleMapsIntegrationTemplate = {
+
 
 // ============================================
 // STEP 2: ADD THIS METHOD TO YOUR FORM CLASS
@@ -27,7 +29,7 @@ import { reservationAddressSearchModule } from './ReservationAddressSearchModule
  * Initialize Google Maps address search for the reservation form
  * Call this method when the form initializes or after DOM is loaded
  */
-initializeAddressSearch() {
+  initializeAddressSearch() {
   const addressInput = document.getElementById('address1');
   const suggestionsContainer = document.getElementById('addressSuggestions');
 
@@ -61,12 +63,12 @@ initializeAddressSearch() {
   });
 
   console.log('✅ Google Maps address search initialized');
-}
+  },
 
 /**
  * Optional: Show user feedback when address is selected
  */
-showAddressConfirmed(addressData) {
+  showAddressConfirmed(addressData) {
   // You can add a visual indicator that address was successfully selected
   const addressInput = document.getElementById('address1');
   if (addressInput) {
@@ -79,12 +81,12 @@ showAddressConfirmed(addressData) {
       addressInput.style.backgroundColor = '';
     }, 2000);
   }
-}
+  },
 
 /**
  * Optional: Search for nearby businesses when address is confirmed
  */
-async searchNearbyBusinesses(businessType = 'hotels') {
+  async searchNearbyBusinesses(businessType = 'hotels') {
   try {
     const addressData = reservationAddressSearchModule.getSelectedAddressData();
     
@@ -106,15 +108,15 @@ async searchNearbyBusinesses(businessType = 'hotels') {
     console.error('Business search error:', error);
     return [];
   }
-}
+  },
 
 /**
  * Optional: Clear address selection
  */
-clearAddressSelection() {
+  clearAddressSelection() {
   reservationAddressSearchModule.clearAddressData();
   console.log('Address cleared');
-}
+  },
 
 
 // ============================================
@@ -241,9 +243,12 @@ const reservationForm = {
  * Add this event listener if you want business search functionality
  * This code searches for businesses when user types in businessSearch field
  */
-setupBusinessSearchHandler() {
+  setupBusinessSearchHandler() {
   const businessSearchInput = document.getElementById('businessSearch');
   if (!businessSearchInput) return;
+
+  const resultsContainer = document.getElementById('businessResults');
+  if (!resultsContainer) return;
 
   let searchTimeout;
 
@@ -255,7 +260,7 @@ setupBusinessSearchHandler() {
 
     // Don't search for very short queries
     if (query.length < 2) {
-      document.getElementById('businessResults').innerHTML = '';
+      resultsContainer.innerHTML = '';
       return;
     }
 
@@ -265,7 +270,7 @@ setupBusinessSearchHandler() {
         // Check if address was selected
         const addressData = reservationAddressSearchModule.getSelectedAddressData();
         if (!addressData) {
-          document.getElementById('businessResults').innerHTML = 
+          resultsContainer.innerHTML = 
             '<p style="padding: 10px; color: #f57c00;">📍 Please select a pickup address first</p>';
           return;
         }
@@ -282,7 +287,7 @@ setupBusinessSearchHandler() {
 
         // Display results
         if (businesses.length === 0) {
-          document.getElementById('businessResults').innerHTML = 
+          resultsContainer.innerHTML = 
             '<p style="padding: 10px; color: #999;">No businesses found</p>';
           return;
         }
@@ -297,18 +302,19 @@ setupBusinessSearchHandler() {
           </div>
         `).join('');
 
-        document.getElementById('businessResults').innerHTML = resultsHtml;
+        resultsContainer.innerHTML = resultsHtml;
 
       } catch (error) {
         console.error('Business search error:', error);
-        document.getElementById('businessResults').innerHTML = 
+        resultsContainer.innerHTML = 
           '<p style="padding: 10px; color: #d32f2f;">Error searching businesses</p>';
       }
     }, 500);
   });
 
   console.log('✅ Business search handler setup complete');
-}
+  }
+};
 
 
 // ============================================

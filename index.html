@@ -16,9 +16,17 @@
       /* Main section visibility control */
       .app-main-section {
         display: none !important;
+        opacity: 0;
+        transition: opacity 0.15s ease-in-out;
       }
       .app-main-section.active {
         display: block !important;
+        opacity: 1;
+      }
+      
+      /* Smooth iframe transitions */
+      .app-main-section iframe {
+        transition: opacity 0.15s ease-in-out;
       }
       
       /* Ensure only one header shows */
@@ -139,24 +147,125 @@
       <div id="new-reservationSection" class="app-main-section">
         <iframe src="reservation-form.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
       </div>
+
+      <!-- CONFIRMED RESERVATION SECTION (VIEW MODE) -->
+      <div id="confirmedReservationSection" class="app-main-section">
+        <iframe src="confirmed-reservation.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
     </div>
 
     <script>
+      // Track which section is currently active to prevent redundant switches
+      let currentActiveSection = 'office';
+      const iframeCache = new Map();
+
       // Wire all navigation buttons with event delegation
       document.addEventListener('DOMContentLoaded', () => {
+        // Check if user has a startup page preference and navigate there
+        checkStartupPagePreference();
+        
         const mainNav = document.querySelector('.main-nav');
         if (mainNav) {
           mainNav.addEventListener('click', (e) => {
-            const btn = e.target.closest('.nav-btn');
-            if (btn?.dataset.section) {
+            const target = e.target;
+            const btn = target instanceof Element ? target.closest('.nav-btn') : null;
+            if (btn && btn.dataset.section) {
               switchMainSection(btn.dataset.section);
             }
           });
         }
       });
 
+      /**
+       * Check for startup page preference and navigate if applicable
+       */
+      function checkStartupPagePreference() {
+        try {
+          // Only navigate from index.html, index-reservations.html, or root path
+          const currentPath = (window.location.pathname || '').toLowerCase();
+          let currentFile = currentPath.split('/').pop() || '';
+          
+          // Remove .html extension for comparison
+          if (currentFile.endsWith('.html')) {
+            currentFile = currentFile.replace('.html', '');
+          }
+          
+          console.log('[StartupPage] ========== CHECKING STARTUP PAGE NAVIGATION ==========');
+          console.log('[StartupPage] Current file (normalized):', currentFile);
+          
+          // Valid entry points for startup page navigation (normalized without .html)
+          const validEntryPoints = ['index', 'index-reservations', ''];
+          const isValidEntry = validEntryPoints.includes(currentFile) || !currentFile;
+          console.log('[StartupPage] Is valid entry point?', isValidEntry);
+          
+          if (!isValidEntry) {
+            console.log('[StartupPage] Not on a valid entry point, skipping navigation');
+            return;
+          }
+
+          // Check if CompanySettingsManager is available
+          if (!window.CompanySettingsManager) {
+            console.log('[StartupPage] CompanySettingsManager not available yet');
+            return;
+          }
+
+          console.log('[StartupPage] ===== LOADING SETTINGS =====');
+          const settingsManager = new window.CompanySettingsManager();
+          const startPage = settingsManager.getSetting('defaultStartPage');
+          console.log('[StartupPage] Raw getSetting("defaultStartPage"):', startPage);
+          const finalPage = startPage || 'reservations';
+          console.log('[StartupPage] After fallback:', finalPage);
+
+          // Map setting values to section names
+          const STARTUP_SECTIONS = {
+            'new-reservation': 'new-reservation',
+            'farmout-dashboard': 'dashboard',
+            'office': 'office',
+            'accounts': 'accounts',
+            'calendar': 'calendar',
+            'quotes': 'quotes',
+            'reservations': 'reservations',
+            'dispatch': 'dispatch',
+            'network': 'network',
+            'settle': 'settle',
+            'receivables': 'receivables',
+            'payables': 'payables',
+            'memos': 'memos',
+            'files': 'files',
+            'tools': 'tools',
+            'reports': 'reports'
+          };
+
+          const section = STARTUP_SECTIONS[finalPage];
+          console.log('[StartupPage] ===== SECTION LOOKUP =====');
+          console.log('[StartupPage] Looking up section for:', finalPage);
+          console.log('[StartupPage] Available sections:', Object.keys(STARTUP_SECTIONS));
+          console.log('[StartupPage] Section lookup result:', section);
+          
+          // If we found a valid section and it's not the default, navigate to it
+          if (section && section !== 'office') { // 'office' is the default
+            console.log('[StartupPage] ✅ Navigating to startup section:', section);
+            switchMainSection(section);
+            return;
+          }
+          
+          console.log('[StartupPage] Using default section (office)');
+        } catch (error) {
+          console.error('[StartupPage] Error checking startup page:', error);
+        }
+      }
+
       function switchMainSection(section) {
+        const isNewReservationRequest = section === 'new-reservation';
+
+        // Skip if already on this section unless forcing a fresh new reservation load
+        if (currentActiveSection === section && !isNewReservationRequest) {
+          console.log('ℹ️ Already on section:', section);
+          return;
+        }
+
         console.log('Switching to section:', section);
+        currentActiveSection = section;
         
         // Update nav button active state
         document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -166,7 +275,7 @@
           }
         });
 
-        // Force hide all sections first - remove active class
+        // Hide all sections
         document.querySelectorAll('.app-main-section').forEach(sec => {
           sec.classList.remove('active');
         });
@@ -177,16 +286,26 @@
           sectionElement.classList.add('active');
           console.log('✓ Activated section:', section);
           
-          // For reservations, always reset iframe to reservations-list.html
+          // For reservations, ensure we're on the list view but don't reload if already there
           if (section === 'reservations') {
             const reservationsIframe = sectionElement.querySelector('iframe');
             if (reservationsIframe) {
-              const currentSrc = reservationsIframe.contentWindow?.location?.pathname || '';
-              // Reset if not already on reservations-list.html
+              const currentSrc = (reservationsIframe.src || '').toLowerCase();
               if (!currentSrc.includes('reservations-list.html')) {
+                console.log('🔄 Loading reservations-list.html');
                 reservationsIframe.src = 'reservations-list.html';
-                console.log('✓ Reset reservations iframe to list view');
+              } else {
+                console.log('✓ Reservations iframe already on list view, no reload');
               }
+            }
+          } else if (section === 'new-reservation') {
+            const reservationIframe = sectionElement.querySelector('iframe');
+            if (reservationIframe) {
+              console.log('🔄 Preparing fresh reservation form');
+              reservationIframe.dataset.confNumber = '';
+              delete reservationIframe.dataset.viewMode;
+              const timestamp = Date.now();
+              reservationIframe.src = `reservation-form.html?_new=${timestamp}`;
             }
           }
         } else {
@@ -196,6 +315,12 @@
 
       // Listen for messages from iframes
       window.addEventListener('message', function(event) {
+        // Handle reservation form signals
+        if (event.data.action === 'reservationFormScriptLoaded') {
+          console.log('📨 [iframe→parent] Reservation form script loaded, readyState:', event.data.readyState);
+        } else if (event.data.action === 'reservationFormInitialized') {
+          console.log('📨 [iframe→parent] Reservation form initialized, editMode:', event.data.editMode);
+        }
         if (event.data.action === 'switchSection') {
           switchMainSection(event.data.section);
             if (event.data.section === 'reservations' && event.data.openConf) {
@@ -211,9 +336,61 @@
                 }
               }, 300);
             }
+        } else if (event.data.action === 'openReservation') {
+          // Handle opening a saved reservation from reservations-list iframe
+          const confNumber = event.data.openConf || event.data.conf;
+          // Switch to confirmed-reservation section (view mode) - NOT new-reservation
+          switchMainSection('confirmedReservation');
+          
+          // Small delay to ensure section is visible
+          setTimeout(() => {
+            const reservationIframe = document.querySelector('#confirmedReservationSection iframe');
+            if (reservationIframe) {
+              // Store conf as data attribute on the iframe
+              reservationIframe.dataset.confNumber = confNumber;
+              reservationIframe.dataset.viewMode = 'true';
+              // Load confirmed-reservation.html (view mode) instead of the edit form
+              const timestamp = new Date().getTime();
+              const encodedConf = encodeURIComponent(confNumber);
+              reservationIframe.src = `confirmed-reservation.html?conf=${encodedConf}&_reload=${timestamp}`;
+            }
+          }, 50);
+        } else if (event.data.action === 'newReservation') {
+          // Handle new reservation request from reservation form
+          switchMainSection('new-reservation');
+          
+          setTimeout(() => {
+            const reservationIframe = document.querySelector('#new-reservationSection iframe');
+            if (reservationIframe) {
+              // Clear any stored conf number
+              reservationIframe.dataset.confNumber = '';
+              delete reservationIframe.dataset.viewMode;
+              // Force reload to get a fresh blank form
+              const timestamp = new Date().getTime();
+              reservationIframe.src = `reservation-form.html?_new=${timestamp}`;
+            }
+          }, 50);
+        } else if (event.data.action === 'editReservation') {
+          // Handle edit mode request from confirmed-reservation iframe
+          const confNumber = event.data.conf;
+          // Switch to new-reservation section for editing
+          switchMainSection('new-reservation');
+          
+          setTimeout(() => {
+            const reservationIframe = document.querySelector('#new-reservationSection iframe');
+            if (reservationIframe) {
+              // Store conf as data attribute on the iframe
+              reservationIframe.dataset.confNumber = confNumber;
+              delete reservationIframe.dataset.viewMode;
+              // Load reservation-form.html in edit mode
+              const timestamp = new Date().getTime();
+              reservationIframe.src = `reservation-form.html?_edit=${timestamp}`;
+            }
+          }, 50);
+        } else if (event.data.action === 'switchToReservations') {
+          // Switch back to reservations list
+          switchMainSection('reservations');
         } else if (event.data.action === 'navigate') {
-          // Navigate to a specific URL
-          window.location.href = event.data.url;
         } else if (event.data.action === 'switchToDashboard') {
           // Switch to dashboard first
           switchMainSection('dashboard');
@@ -247,5 +424,9 @@
     <!-- Authentication Protection & User Menu -->
     <script type="module" src="auth-guard.js"></script>
     <script type="module" src="user-menu.js"></script>
+    
+    <!-- Company Settings & Application -->
+    <script src="CompanySettingsManager.js"></script>
+    <script src="SettingsApplicationManager.js"></script>
   </body>
 </html>

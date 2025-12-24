@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver Trip Monitor</title>
+  <link rel="stylesheet" href="driver-trip-monitor.css">
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>Driver Trip Monitor</h1>
+      <p class="page-subtitle">Live view of farm-out assignments and driver progress.</p>
+    </header>
+    <main>
+      <div class="controls">
+        <button id="refreshBtn" class="btn" type="button">Refresh</button>
+        <span id="lastSync" class="timestamp">Last sync: —</span>
+      </div>
+      <section id="assignmentList" class="assignment-list"></section>
+    </main>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script type="module" src="driver-trip-monitor.js"></script>
+</body>
+</html>
