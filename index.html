@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" style="visibility:hidden">
+<html lang="en" data-layout="vertical">
   <head>
-    <script>
+    <!-- <script>
       // INSTANT startup page redirect - must be first script
       (function() {
         try {
@@ -9,24 +9,51 @@
           if (s) {
             var p = JSON.parse(s).defaultStartPage;
             var r = {'new-reservation':'reservation-form.html','farmout-dashboard':'dashboard.html','office':'my-office.html','accounts':'accounts.html','calendar':'calendar.html','quotes':'quotes.html','dispatch':'dispatch-grid.html','network':'network.html','settle':'settle.html','receivables':'receivables.html','payables':'payables.html','memos':'memos.html','files':'files.html','tools':'tools.html','reports':'reports.html'};
-            if (r[p]) { window.location.replace(r[p]); return; }
+            if (r[p] && window.location.pathname.indexOf(r[p]) === -1) {
+              window.location.replace(r[p]);
+              return;
+            }
           }
-        } catch(e) {}
+        } catch(e) {
+          console.error('Startup script failed:', e);
+        }
         document.documentElement.style.visibility = 'visible';
       })();
-    </script>
+    </script> -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RELIA LIMO™</title>
     <link rel="icon" href="favicon.png" />
+    <!-- Load Supabase SDK from unpkg CDN with ES module -->
+    <!-- Supabase SDK is now loaded via ES Module import in config.js -->
     <!-- Load environment variables first -->
     <script src="env.js"></script>
+    <script>
+      // Apply saved layout mode early to avoid flash
+      (function() {
+        // Migrate old stored layout key so stale "horizontal" values don't override desired vertical default
+        if (localStorage.getItem('headerLayout')) {
+          localStorage.removeItem('headerLayout');
+        }
+        const savedLayout = localStorage.getItem('headerLayoutV2') || 'vertical';
+        document.documentElement.setAttribute('data-layout', savedLayout);
+      })();
+    </script>
+    <script type="module" src="auth-guard.js"></script>
+    <script type="module" src="user-menu.js"></script>
+    <script type="module" src="CompanySettingsManager.js"></script>
+    <script type="module" src="SettingsApplicationManager.js"></script>
+    <script type="module" src="dev-mode-banner.js"></script>
     <link rel="stylesheet" href="my-office.css" />
     <link rel="stylesheet" href="accounts.css" />
     <link rel="stylesheet" href="quotes.css" />
     <link rel="stylesheet" href="calendar.css" />
     <link rel="stylesheet" href="user-menu.css" />
     <style>
+      :root {
+        --sidebar-width: 220px;
+      }
+
       /* Main section visibility control */
       .app-main-section {
         display: none !important;
@@ -41,16 +68,335 @@
       /* Smooth iframe transitions */
       .app-main-section iframe {
         transition: opacity 0.15s ease-in-out;
+        width: 100% !important;
+        height: calc(100vh - 24px) !important;
+        border: none;
       }
-      
-      /* Ensure only one header shows */
+
+      /* Base reset */
       body {
         margin: 0;
         padding: 0;
       }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Vertical layout */
+      html[data-layout="vertical"] body {
+        padding-left: var(--sidebar-width) !important;
+      }
+
+      html[data-layout="vertical"] #app > header.header {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: var(--sidebar-width) !important;
+        max-width: var(--sidebar-width) !important;
+        min-width: var(--sidebar-width) !important;
+        display: flex;
+        flex-direction: column;
+        background: #1f2a44;
+        color: white;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+      }
+
+      html[data-layout="vertical"] #app > header.header .header-content {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 16px;
+        height: 100%;
+        box-sizing: border-box;
+      }
+
+      html[data-layout="vertical"] #app > header.header .main-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+      }
+
+      html[data-layout="vertical"] #app > header.header .nav-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.05);
+        color: white;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 6px;
+        transition: background 0.15s ease, transform 0.05s ease;
+      }
+
+      html[data-layout="vertical"] #app > header.header .nav-btn:hover {
+        background: rgba(255,255,255,0.12);
+        transform: translateX(2px);
+      }
+
+      html[data-layout="vertical"] #app > header.header .nav-btn.active {
+        background: #e74c3c;
+        border-color: #e74c3c;
+      }
+
+      html[data-layout="vertical"] #app > header.header .logo {
+        font-size: 16px;
+        font-weight: 800;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+      }
+
+      html[data-layout="vertical"] .app-main-section {
+        padding: 12px;
+        width: calc(100% - var(--sidebar-width)) !important;
+        box-sizing: border-box;
+      }
+
+      /* Guard against global .header styles from iframes/other pages */
+      #app > header.header {
+        box-sizing: border-box;
+      }
+
+      /* Horizontal layout (original) */
+      html[data-layout="horizontal"] body {
+        padding: 0;
+      }
+
+      html[data-layout="horizontal"] #app > header.header {
+        position: relative;
+        width: 100%;
+        display: block;
+        background: #1f2a44;
+        color: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      }
+
+      html[data-layout="horizontal"] #app > header.header .header-content {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+      }
+
+      html[data-layout="horizontal"] #app > header.header .main-nav {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        flex: 1;
+        flex-wrap: wrap;
+      }
+
+      html[data-layout="horizontal"] #app > header.header .nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.05);
+        color: white;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 6px;
+        transition: background 0.15s ease, transform 0.05s ease;
+      }
+
+      html[data-layout="horizontal"] #app > header.header .nav-btn:hover {
+        background: rgba(255,255,255,0.12);
+        transform: translateY(-1px);
+      }
+
+      html[data-layout="horizontal"] #app > header.header .nav-btn.active {
+        background: #e74c3c;
+        border-color: #e74c3c;
+      }
+
+      html[data-layout="horizontal"] .app-main-section {
+        padding: 10px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      html[data-layout="horizontal"] .app-main-section iframe {
+        height: calc(100vh - 120px) !important;
+      }
+
+      /* Layout switcher */
+      .layout-toggle {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        width: 160px;
+        z-index: 2001;
+      }
+
+      .layout-toggle button {
+        padding: 6px 8px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        min-width: 0;
+        width: calc(50% - 3px);
+      }
+
+      .layout-toggle button.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      /* FINAL GUARD: force sidebar width regardless of late styles */
+      html[data-layout="vertical"] body {
+        padding-left: 220px !important;
+      }
+      html[data-layout="vertical"] #app > header.header {
+        width: 220px !important;
+        min-width: 220px !important;
+        max-width: 220px !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+      }
+      html[data-layout="horizontal"] body {
+        padding-left: 0 !important;
+      }
+      html[data-layout="horizontal"] #app > header.header {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        position: relative !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Prevent nav buttons from forcing sidebar wider */
+      #app > header.header .header-content { width: 100%; box-sizing: border-box; }
+      #app > header.header .main-nav { width: 100%; box-sizing: border-box; }
+      #app > header.header .nav-btn {
+        max-width: 100%;
+        box-sizing: border-box;
+        word-break: break-word;
+        white-space: normal;
+      }
+      #app > header.header .nav-btn span { display: inline-block; max-width: 100%; }
+
+      /* Keep user menu visible in vertical layout */
+      html[data-layout="vertical"] #userMenuContainer {
+        margin-left: 0;
+        width: 100%;
+        padding: 8px 0 4px;
+        justify-content: flex-start;
+        position: sticky;
+        bottom: 8px;
+      }
     </style>
+    <script>
+      function setLayout(mode) {
+        const normalized = mode === 'horizontal' ? 'horizontal' : 'vertical';
+        localStorage.setItem('headerLayoutV2', normalized);
+        document.documentElement.setAttribute('data-layout', normalized);
+        document.querySelectorAll('.layout-toggle button').forEach(btn => {
+          const isVerticalButton = btn.id === 'layoutVertical';
+          const isActive = isVerticalButton ? normalized === 'vertical' : normalized === 'horizontal';
+          btn.classList.toggle('active', isActive);
+        });
+        stabilizeSidebarLayout();
+      }
+
+      function enforceSavedLayout() {
+        const savedLayout = localStorage.getItem('headerLayoutV2') || 'vertical';
+        document.documentElement.setAttribute('data-layout', savedLayout);
+        document.querySelectorAll('.layout-toggle button').forEach(btn => {
+          const isVerticalButton = btn.id === 'layoutVertical';
+          const isActive = isVerticalButton ? savedLayout === 'vertical' : savedLayout === 'horizontal';
+          btn.classList.toggle('active', isActive);
+        });
+        stabilizeSidebarLayout();
+      }
+
+      function initLayoutToggle() {
+        const savedLayout = localStorage.getItem('headerLayoutV2') || 'vertical';
+        setLayout(savedLayout);
+        const verticalBtn = document.getElementById('layoutVertical');
+        const horizontalBtn = document.getElementById('layoutHorizontal');
+        if (verticalBtn && horizontalBtn) {
+          verticalBtn.addEventListener('click', () => setLayout('vertical'));
+          horizontalBtn.addEventListener('click', () => setLayout('horizontal'));
+        }
+      }
+
+      function stabilizeSidebarLayout() {
+        lockSidebarLayout();
+        // Re-apply shortly after potential reflows or late styles load
+        setTimeout(lockSidebarLayout, 50);
+        setTimeout(lockSidebarLayout, 200);
+        setTimeout(lockSidebarLayout, 600);
+      }
+
+      function lockSidebarLayout() {
+        const layout = document.documentElement.getAttribute('data-layout') || 'vertical';
+        const headerEl = document.querySelector('#app > header.header');
+        if (layout === 'vertical') {
+          if (headerEl) {
+            headerEl.style.setProperty('position', 'fixed', 'important');
+            headerEl.style.setProperty('top', '0', 'important');
+            headerEl.style.setProperty('left', '0', 'important');
+            headerEl.style.setProperty('bottom', '0', 'important');
+            headerEl.style.setProperty('width', '220px', 'important');
+            headerEl.style.setProperty('min-width', '220px', 'important');
+            headerEl.style.setProperty('max-width', '220px', 'important');
+            headerEl.style.setProperty('box-sizing', 'border-box', 'important');
+          }
+          document.body.style.setProperty('padding-left', '220px', 'important');
+        } else {
+          if (headerEl) {
+            headerEl.style.removeProperty('min-width');
+            headerEl.style.removeProperty('max-width');
+            headerEl.style.removeProperty('box-sizing');
+            headerEl.style.setProperty('position', 'relative', 'important');
+            headerEl.style.setProperty('top', '', 'important');
+            headerEl.style.setProperty('left', '', 'important');
+            headerEl.style.setProperty('bottom', '', 'important');
+            headerEl.style.setProperty('width', '100%', 'important');
+          }
+          document.body.style.setProperty('padding-left', '0', 'important');
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        initLayoutToggle();
+        stabilizeSidebarLayout();
+      });
+    </script>
   </head>
   <body>
+    <div class="layout-toggle" aria-label="Header layout selector">
+      <button id="layoutVertical">Vertical</button>
+      <button id="layoutHorizontal">Horizontal</button>
+    </div>
     <div id="app">
       <!-- UNIFIED HEADER -->
       <header class="header">
@@ -270,6 +616,7 @@
       }
 
       function switchMainSection(section) {
+        enforceSavedLayout();
         const isNewReservationRequest = section === 'new-reservation';
 
         // Skip if already on this section unless forcing a fresh new reservation load

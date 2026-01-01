@@ -81,6 +81,10 @@ class SettingsApplicationManager {
       const companyCity = this.settingsManager.getSetting('companyCity');
       const companyState = this.settingsManager.getSetting('companyState');
       const companyZip = this.settingsManager.getSetting('companyZip');
+      const tickerSearchCity = (this.settingsManager.getSetting('tickerSearchCity') || '').toString();
+      const localRegionParts = tickerSearchCity.split(',').map(p => p.trim()).filter(Boolean);
+      const localCity = localRegionParts[0] || companyCity;
+      const localState = localRegionParts[1] || companyState;
 
       // Update global company info (if used by modules)
       window.COMPANY_INFO = {
@@ -92,6 +96,12 @@ class SettingsApplicationManager {
         city: companyCity,
         state: companyState,
         zip: companyZip
+      };
+
+      // Publish a simple city/state tuple for modules needing a default region
+      window.LOCAL_CITY_STATE = {
+        city: localCity || '',
+        state: localState || ''
       };
 
       console.log('[SettingsApplicationManager] Company info applied:', window.COMPANY_INFO);

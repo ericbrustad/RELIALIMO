@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Reservations - RELIA🐂LIMO™</title>
     <link rel="stylesheet" href="reservations-list.css" />
+    <style>
+      /* Prevent header flash when embedded; becomes active once html.embedded is set */
+      html.embedded body { padding-top: 0 !important; }
+      html.embedded .header, html.embedded header { display: none !important; }
+    </style>
     <script>
-      // Hide main navigation if in iframe
+      // Mark as embedded ASAP to avoid header flash when inside index iframe
       if (window.self !== window.top) {
-        document.addEventListener('DOMContentLoaded', function() {
-          const headerContent = document.querySelector('.header-content');
-          if (headerContent) {
-            headerContent.style.display = 'none';
-          }
-        });
+        document.documentElement.classList.add('embedded');
       }
     </script>
   </head>

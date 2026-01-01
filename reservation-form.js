@@ -1,8 +1,10 @@
 import { AccountManager } from './AccountManager.js';
 import { CostCalculator } from './CostCalculator.js';
 import { MapboxService } from './MapboxService.js';
+import { googleMapsService } from './GoogleMapsService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
+import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
 
@@ -138,39 +140,26 @@ function createNewReservation() {
   }, '*');
 }
 
-// Global function to go back to reservations list
-function goBackToReservations() {
-  // Use parent messaging if in iframe, otherwise direct navigation
-  if (window.self !== window.top && window.parent) {
-    console.log('📤 Sending switchSection message to parent: reservations');
-    window.parent.postMessage({ action: 'switchSection', section: 'reservations' }, '*');
-  } else {
-    window.location.href = 'reservations-list.html';
-  }
-}
-
-// Global navigation helper for iframe-aware navigation
-function navigateToSection(section, fallbackUrl) {
-  if (window.self !== window.top && window.parent) {
-    console.log('📤 Sending switchSection message to parent:', section);
-    window.parent.postMessage({ action: 'switchSection', section: section }, '*');
-  } else {
-    window.location.href = fallbackUrl;
-  }
-}
-
 // Expose for inline onclick handlers
 window.createNewReservation = createNewReservation;
-window.goBackToReservations = goBackToReservations;
-window.navigateToSection = navigateToSection;
 
 class ReservationForm {
   constructor() {
     this.accountManager = new AccountManager();
     this.costCalculator = new CostCalculator();
     this.mapboxService = new MapboxService();
+    this.googleMapsService = googleMapsService;
+    this.localCityState = this.getLocalCityStateString();
+    this.localBiasCoords = null;
     this.airlineService = new AirlineService();
     this.affiliateService = new AffiliateService();
+    const SettingsCtor = window.CompanySettingsManager;
+    if (SettingsCtor) {
+      this.companySettingsManager = new SettingsCtor();
+    } else {
+      console.warn('⚠️ CompanySettingsManager not available; confirmation settings will use defaults');
+      this.companySettingsManager = null;
+    }
     this.stops = [];
     this.selectedAirline = null;
     this.selectedFlight = null;
@@ -187,22 +176,48 @@ class ReservationForm {
     this.init();
   }
 
+  getLocalCityStateString() {
+    try {
+      // Prefer explicit company city/state from settings, fallback to ticker search city, then global local city/state
+      const settings = JSON.parse(localStorage.getItem('relia_company_settings') || '{}');
+
+      const companyCityStateZip = [settings.companyCity, settings.companyState, settings.companyZip]
+        .map(part => (part || '').toString().trim())
+        .filter(Boolean)
+        .join(', ');
+      if (companyCityStateZip) return companyCityStateZip;
+
+      const tickerCity = (settings.tickerSearchCity || '').toString();
+      const tickerParts = tickerCity.split(',').map(p => p.trim()).filter(Boolean);
+      if (tickerParts.length) return tickerParts.join(', ');
+
+      if (window.LOCAL_CITY_STATE && (window.LOCAL_CITY_STATE.city || window.LOCAL_CITY_STATE.state)) {
+        const { city, state } = window.LOCAL_CITY_STATE;
+        return [city, state].filter(Boolean).join(', ');
+      }
+
+      return '';
+    } catch (e) {
+      console.warn('⚠️ Failed to read local city/state from settings:', e);
+      return '';
+    }
+  }
+
+  async ensureLocalBiasCoords() {
+    if (this.localBiasCoords || !this.localCityState) return this.localBiasCoords;
+    try {
+      const geo = await this.googleMapsService.geocodeAddress(this.localCityState);
+      if (geo?.latitude && geo?.longitude) {
+        this.localBiasCoords = { latitude: geo.latitude, longitude: geo.longitude };
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to geocode local city/state for bias:', e);
+    }
+    return this.localBiasCoords;
+  }
+
   detectViewMode() {
     try {
-      // Skip view mode for admin/dispatch users - they should always have full edit access
-      const userRole = localStorage.getItem('user_role') || window.RELIA_USER_ROLE || '';
-      const isAdminOrDispatch = ['admin', 'dispatch', 'administrator', 'dispatcher', 'super_admin'].includes(userRole.toLowerCase());
-      if (isAdminOrDispatch) {
-        console.log('👤 [ReservationForm] User is admin/dispatch - view mode disabled');
-        return false;
-      }
-      
-      // Development mode: never use view mode on localhost
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        console.log('🔧 [ReservationForm] Development mode - view mode disabled');
-        return false;
-      }
-      
       if (window.RELIA_VIEW_MODE === true || window.RELIA_VIEW_MODE === 'true') {
         return true;
       }
@@ -411,6 +426,14 @@ class ReservationForm {
       
       this.setupEventListeners();
       console.log('✅ setupEventListeners complete');
+
+      // Warn if leaving with unsaved changes
+      window.addEventListener('beforeunload', (e) => {
+        if (this.dirty) {
+          e.preventDefault();
+          e.returnValue = '';
+        }
+      });
       
       this.initializeCostCalculations();
       console.log('✅ initializeCostCalculations complete');
@@ -462,6 +485,7 @@ class ReservationForm {
         await this.loadExistingReservation(this.editConfNumber);
       } else {
         this.applyReservationDraftIfPresent();
+        this.applyCompanyStateDefault();
       }
       
       console.log('✅ ReservationForm.init() finished successfully');
@@ -470,6 +494,28 @@ class ReservationForm {
       this.checkForTestData();
     } catch (error) {
       console.error('❌ Error during init:', error);
+    }
+  }
+
+  applyCompanyStateDefault() {
+    if (this.isEditMode) return;
+    try {
+      const stateSelect = document.getElementById('state');
+      if (!stateSelect) return;
+      const current = (stateSelect.value || '').trim();
+      if (current) return; // respect existing/draft value
+
+      const settings = JSON.parse(localStorage.getItem('relia_company_settings') || '{}');
+      const companyState = (settings.companyState || '').toString().trim().toUpperCase();
+      if (!companyState) return;
+
+      const match = Array.from(stateSelect.options).find(opt => opt.value.toUpperCase() === companyState);
+      if (match) {
+        stateSelect.value = match.value;
+        console.log('[ReservationForm] Applied company default state to address form:', companyState);
+      }
+    } catch (e) {
+      console.warn('⚠️ [ReservationForm] Failed to apply company state default:', e);
     }
   }
 
@@ -484,7 +530,7 @@ class ReservationForm {
     this.setBillingAccountNumberDisplay(accountNumber);
   }
 
-  async tryResolveBillingAccountAndUpdateDisplay() {
+  tryResolveBillingAccountAndUpdateDisplay() {
     const input = document.getElementById('billingAccountSearch');
     if (!input) return;
     const raw = (input.value || '').toString().trim();
@@ -497,9 +543,7 @@ class ReservationForm {
     const candidate = raw.split('-')[0]?.trim() || raw;
 
     try {
-      // Use async database call
-      const accounts = await db.getAllAccounts();
-      const account = accounts?.find(a => {
+      const account = db.getAllAccounts()?.find(a => {
         const id = (a?.id ?? '').toString();
         const acct = (a?.account_number ?? '').toString();
         return id === candidate || acct === candidate;
@@ -508,11 +552,11 @@ class ReservationForm {
         this.updateBillingAccountNumberDisplay(account);
         return;
       }
-    } catch (error) {
-      console.error('Error resolving billing account:', error);
+    } catch {
+      // ignore
     }
 
-    // If not found as account number, try other display formats
+    // If we can't resolve the account, show the candidate (still useful when user manually typed it)
     this.setBillingAccountNumberDisplay(candidate);
   }
   
@@ -545,8 +589,54 @@ class ReservationForm {
     }
   }
 
+  getConfirmationNumberSettings() {
+    try {
+      const settings = this.companySettingsManager?.getAllSettings?.() || {};
+      const startRaw = settings.confirmationStartNumber;
+      const lastUsedRaw = settings.lastUsedConfirmationNumber;
+      const startNumber = Math.max(parseInt(startRaw, 10) || 0, 1) || 100000;
+      const lastUsedNumber = parseInt(lastUsedRaw, 10);
+
+      return {
+        startNumber,
+        lastUsedNumber: Number.isFinite(lastUsedNumber) && lastUsedNumber > 0 ? lastUsedNumber : null
+      };
+    } catch (error) {
+      console.warn('⚠️ Could not read confirmation settings, using defaults', error);
+      return { startNumber: 100000, lastUsedNumber: null };
+    }
+  }
+
+  async computeNextConfirmationNumber() {
+    const { startNumber, lastUsedNumber } = this.getConfirmationNumberSettings();
+    let candidate = Number.isFinite(lastUsedNumber) ? lastUsedNumber + 1 : startNumber;
+
+    if (!Number.isFinite(candidate) || candidate <= 0) {
+      candidate = startNumber || 100000;
+    }
+
+    this.pendingConfirmationNumber = candidate;
+    return candidate;
+  }
+
+  updateLastUsedConfirmationNumber(confNumber) {
+    if (!this.companySettingsManager?.updateSettings) return;
+
+    const parsedConf = parseInt(confNumber, 10);
+    if (!Number.isFinite(parsedConf)) return;
+
+    const { startNumber } = this.getConfirmationNumberSettings();
+    const normalizedStart = Number.isFinite(startNumber) && startNumber > 0 ? startNumber : 100000;
+    const normalizedLastUsed = Math.max(parsedConf, normalizedStart - 1);
+
+    this.companySettingsManager.updateSettings({
+      confirmationStartNumber: normalizedStart,
+      lastUsedConfirmationNumber: normalizedLastUsed
+    });
+  }
+
   async initializeConfirmationNumber() {
-    const confNumberField = document.getElementById('confNumber');
+    const confNumberField = document.getElementById('confNumber') || document.getElementById('confirmation-number');
     if (confNumberField) {
       const confFromUrl = this.getConfFromUrl();
       if (confFromUrl) {
@@ -561,151 +651,12 @@ class ReservationForm {
       confNumberField.setAttribute('readonly', 'true');
       confNumberField.style.color = '#999';
       
-      // Try to get a unique confirmation number from database with retry
-      let nextConfNumber;
-      const maxRetries = 3;
-      let retryCount = 0;
-      
-      while (retryCount < maxRetries && !nextConfNumber) {
-        try {
-          console.log(`🔢 Attempting to generate unique confirmation number (try ${retryCount + 1})`);
-          // Use the new duplicate-safe function
-          nextConfNumber = await SupabaseDB.generateUniqueConfirmationNumber();
-          console.log('🔢 Unique confirmation number generated:', nextConfNumber);
-          break;
-        } catch (error) {
-          retryCount++;
-          console.error(`🔢 Error generating confirmation number (try ${retryCount}):`, error);
-          
-          if (retryCount < maxRetries) {
-            // Wait a bit before retrying (authentication might still be initializing)
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-          } else {
-            // Fallback to the original method on final retry
-            try {
-              console.log('🔢 Falling back to getNextConfirmationNumber...');
-              nextConfNumber = await SupabaseDB.getNextConfirmationNumber();
-              console.log('🔢 Fallback confirmation number loaded:', nextConfNumber);
-            } catch (fallbackError) {
-              console.error('🔢 Fallback also failed:', fallbackError);
-            }
-          }
-        }
-      }
-      
-      if (nextConfNumber) {
-        confNumberField.value = nextConfNumber;
-        confNumberField.style.color = '#333';
-        console.log('🔢 Confirmation number set successfully:', nextConfNumber);
-      } else {
-        // Fallback to a reasonable starting number (not timestamp)
-        const fallbackNumber = 100000;
-        confNumberField.value = fallbackNumber;
-        confNumberField.style.color = '#333';
-        console.log('🔢 Using fallback confirmation number:', fallbackNumber);
-      }
-      
-      // Store the generated number to know it's system-generated
-      this.lastGeneratedConfNumber = nextConfNumber || 100000;
-    }
-  }
-
-  async validateConfirmationNumber(confirmationNumber) {
-    console.log('🔍 Validating confirmation number:', confirmationNumber);
-    
-    const confNumberField = document.getElementById('confirmationNumber');
-    if (!confNumberField) return;
-
-    try {
-      // Import the validation function
-      const SupabaseDB = await import('./supabase-db.js');
-      const exists = await SupabaseDB.checkConfirmationNumberExists(confirmationNumber);
-      
-      // Remove any existing validation message
-      const existingMsg = document.getElementById('confirmationValidationMsg');
-      if (existingMsg) {
-        existingMsg.remove();
-      }
-      
-      if (exists) {
-        // Show error - number already exists
-        confNumberField.style.borderColor = '#dc3545';
-        confNumberField.style.backgroundColor = '#fff5f5';
-        
-        const validationMsg = document.createElement('div');
-        validationMsg.id = 'confirmationValidationMsg';
-        validationMsg.style.cssText = `
-          color: #dc3545;
-          font-size: 12px;
-          margin-top: 4px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        `;
-        validationMsg.innerHTML = `
-          <span>⚠️</span>
-          <span>This confirmation number already exists. Please use a different number or leave blank to auto-generate.</span>
-        `;
-        
-        confNumberField.parentNode.appendChild(validationMsg);
-        
-        console.warn('❌ Confirmation number already exists:', confirmationNumber);
-        return false;
-      } else {
-        // Number is available
-        confNumberField.style.borderColor = '#28a745';
-        confNumberField.style.backgroundColor = '#f8fff8';
-        
-        const validationMsg = document.createElement('div');
-        validationMsg.id = 'confirmationValidationMsg';
-        validationMsg.style.cssText = `
-          color: #28a745;
-          font-size: 12px;
-          margin-top: 4px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        `;
-        validationMsg.innerHTML = `
-          <span>✅</span>
-          <span>Confirmation number is available.</span>
-        `;
-        
-        confNumberField.parentNode.appendChild(validationMsg);
-        
-        // Auto-hide success message after 3 seconds
-        setTimeout(() => {
-          if (validationMsg && validationMsg.parentNode) {
-            validationMsg.parentNode.removeChild(validationMsg);
-            confNumberField.style.borderColor = '';
-            confNumberField.style.backgroundColor = '';
-          }
-        }, 3000);
-        
-        console.log('✅ Confirmation number is available:', confirmationNumber);
-        return true;
-      }
-    } catch (error) {
-      console.error('❌ Error validating confirmation number:', error);
-      
-      // Show warning message
-      const validationMsg = document.createElement('div');
-      validationMsg.id = 'confirmationValidationMsg';
-      validationMsg.style.cssText = `
-        color: #856404;
-        font-size: 12px;
-        margin-top: 4px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      `;
-      validationMsg.innerHTML = `
-        <span>⚠️</span>
-        <span>Could not verify confirmation number. Please check your connection.</span>
-      `;
-      
-      confNumberField.parentNode.appendChild(validationMsg);
-      return true; // Allow to proceed on validation error
+      const nextConfNumber = await this.computeNextConfirmationNumber();
+      const fallbackNumber = 100000;
+      const finalNumber = Number.isFinite(nextConfNumber) && nextConfNumber > 0 ? nextConfNumber : fallbackNumber;
+      confNumberField.value = finalNumber;
+      confNumberField.style.color = '#333';
+      console.log('🔢 Confirmation number set successfully:', finalNumber);
     }
   }
 
@@ -873,15 +824,7 @@ class ReservationForm {
   }
 
   setupEventListeners() {
-    console.log('🔧 [SETUP] Setting up event listeners...');
-    
-    // Verify billing suggestions container exists
-    const accountSuggestions = document.getElementById('accountSuggestions');
-    if (accountSuggestions) {
-      console.log('✅ [SETUP] Found accountSuggestions container');
-    } else {
-      console.error('❌ [SETUP] accountSuggestions container NOT FOUND!');
-    }
+    console.log('🔧 Setting up event listeners...');
     
     // Back button (removed from UI but keeping check)
     const backBtn = document.getElementById('backBtn');
@@ -916,26 +859,16 @@ class ReservationForm {
       btn.addEventListener('click', (e) => {
         const action = e.target.dataset.action;
         
-        // Helper function to navigate (uses parent messaging if in iframe)
-        const navigateTo = (section, fallbackUrl) => {
-          if (window.self !== window.top && window.parent) {
-            console.log('📤 Sending switchSection message to parent:', section);
-            window.parent.postMessage({ action: 'switchSection', section: section }, '*');
-          } else {
-            window.location.href = fallbackUrl;
-          }
-        };
-        
         if (action === 'user-view') {
-          navigateTo('dashboard', 'index.html?view=user');
+          window.location.href = 'index.html?view=user';
         } else if (action === 'driver-view') {
-          navigateTo('dashboard', 'index.html?view=driver');
+          window.location.href = 'index.html?view=driver';
         } else if (action === 'reservations') {
-          navigateTo('reservations', 'reservations-list.html');
+          window.location.href = 'reservations-list.html';
         } else if (action === 'farm-out') {
-          navigateTo('dashboard', 'index.html?view=reservations');
+          window.location.href = 'index.html?view=reservations';
         } else if (action === 'new-reservation') {
-          navigateTo('new-reservation', 'reservation-form.html');
+          window.location.href = 'reservation-form.html';
         }
       });
     });
@@ -1054,108 +987,138 @@ class ReservationForm {
     // Account search - Billing Accounts section
     const billingAccountInput = document.getElementById('billingAccountSearch');
     if (billingAccountInput) {
-      console.log('✅ [SETUP] Found billingAccountSearch input, attaching listeners');
-      
-      billingAccountInput.addEventListener('input', async (e) => {
-        console.log('⌨️ [INPUT] Billing account input event:', e.target.value);
-        await this.searchAccounts(e.target.value);
+      billingAccountInput.addEventListener('input', (e) => {
+        this.searchAccounts(e.target.value);
       });
 
-      billingAccountInput.addEventListener('focus', async () => {
-        console.log('🔍 [FOCUS] Billing account focus event');
-        await this.tryResolveBillingAccountAndUpdateDisplay();
+      billingAccountInput.addEventListener('focus', () => {
+        this.tryResolveBillingAccountAndUpdateDisplay();
       });
 
       // Auto-fill other billing fields when account is selected
-      billingAccountInput.addEventListener('blur', async () => {
-        console.log('🔍 [BLUR] Billing account blur event');
-        await this.tryResolveBillingAccountAndUpdateDisplay();
+      billingAccountInput.addEventListener('blur', () => {
+        this.tryResolveBillingAccountAndUpdateDisplay();
         const suggestions = document.getElementById('accountSuggestions');
         if (suggestions) {
-          // Delay to allow click on suggestion to complete
           setTimeout(() => {
             suggestions.classList.remove('active');
-          }, 300);
+          }, 200);
         }
       });
-    } else {
-      console.error('❌ [SETUP] billingAccountSearch input NOT FOUND!');
+
+      billingAccountInput.addEventListener('input', () => {
+        this.dirty = true;
+      });
     }
 
-    // Passenger search - similar to billing but searches passengers
-    ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) {
-        console.log(`✅ [SETUP] Found ${id} input, attaching listeners`);
-        el.addEventListener('input', async (e) => {
-          console.log(`⌨️ [INPUT] ${id} input event:`, e.target.value);
-          await this.searchPassengers(e.target.value);
-        });
-        el.addEventListener('blur', () => {
-          const suggestions = document.getElementById('passengerSuggestions');
-          if (!suggestions) return;
-          setTimeout(() => suggestions.classList.remove('active'), 300);
-        });
-      } else {
-        console.warn(`⚠️ [SETUP] ${id} input NOT FOUND!`);
-      }
-    });
+    // Passenger account search - Multiple fields
+    const passengerFirstNameEl = document.getElementById('passengerFirstName');
+    if (passengerFirstNameEl) {
+      passengerFirstNameEl.addEventListener('input', (e) => {
+        this.searchAccountsForPassenger(e.target.value);
+        this.dirty = true;
+      });
+      
+      passengerFirstNameEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('passengerSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            if (!suggestions.dataset.hovering) {
+              suggestions.classList.remove('active');
+            }
+          }, 250);
+        }
+      });
+    }
 
-    // Booking Agent search - similar to billing but searches booking agents
-    ['bookedByFirstName', 'bookedByLastName', 'bookedByPhone', 'bookedByEmail'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) {
-        console.log(`✅ [SETUP] Found ${id} input, attaching listeners`);
-        el.addEventListener('input', async (e) => {
-          console.log(`⌨️ [INPUT] ${id} input event:`, e.target.value);
-          await this.searchBookingAgents(e.target.value);
-        });
-        el.addEventListener('blur', () => {
-          const suggestions = document.getElementById('bookingAgentSuggestions');
-          if (!suggestions) return;
-          setTimeout(() => suggestions.classList.remove('active'), 300);
-        });
-      } else {
-        console.warn(`⚠️ [SETUP] ${id} input NOT FOUND!`);
-      }
-    });
+    // Also add search to passenger last name field
+    const passengerLastNameEl = document.getElementById('passengerLastName');
+    if (passengerLastNameEl) {
+      passengerLastNameEl.addEventListener('input', (e) => {
+        this.searchAccountsForPassenger(e.target.value);
+        this.dirty = true;
+      });
+      
+      passengerLastNameEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('passengerSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            if (!suggestions.dataset.hovering) {
+              suggestions.classList.remove('active');
+            }
+          }, 250);
+        }
+      });
+    }
+
+    // Also add search to passenger phone field
+    const passengerPhoneEl = document.getElementById('passengerPhone');
+    if (passengerPhoneEl) {
+      passengerPhoneEl.addEventListener('input', (e) => {
+        this.searchAccountsForPassenger(e.target.value);
+        this.dirty = true;
+      });
+      
+      passengerPhoneEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('passengerSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            if (!suggestions.dataset.hovering) {
+              suggestions.classList.remove('active');
+            }
+          }, 250);
+        }
+      });
+    }
+
+    // Booking Agent account search - First Name field
+    const bookingFirstNameEl = document.getElementById('bookedByFirstName');
+    if (bookingFirstNameEl) {
+      bookingFirstNameEl.addEventListener('input', (e) => {
+        this.searchAccountsForBookingAgent(e.target.value);
+      });
+      
+      bookingFirstNameEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('bookingAgentSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            suggestions.classList.remove('active');
+          }, 200);
+        }
+      });
+    }
 
     // Billing autofill (3+ chars) from Accounts DB for ANY billing field
     // Company field only searches company names
     const billingCompanyEl = document.getElementById('billingCompany');
     if (billingCompanyEl) {
-      console.log('✅ [SETUP] Found billingCompany input, attaching listeners');
-      billingCompanyEl.addEventListener('input', async (e) => {
-        console.log('⌨️ [INPUT] Billing company input event:', e.target.value);
-        await this.searchAccountsByCompany(e.target.value);
+      billingCompanyEl.addEventListener('input', (e) => {
+        this.searchAccountsByCompany(e.target.value);
       });
       billingCompanyEl.addEventListener('blur', () => {
         const suggestions = document.getElementById('accountSuggestions');
         if (!suggestions) return;
-        setTimeout(() => suggestions.classList.remove('active'), 300);
+        setTimeout(() => suggestions.classList.remove('active'), 200);
       });
-    } else {
-      console.error('❌ [SETUP] billingCompany input NOT FOUND!');
     }
     
     // Other billing fields search across all fields
     ['billingFirstName', 'billingLastName', 'billingPhone', 'billingEmail'].forEach((id) => {
       const el = document.getElementById(id);
-      if (el) {
-        console.log(`✅ [SETUP] Found ${id} input, attaching listeners`);
-        el.addEventListener('input', async (e) => {
-          console.log(`⌨️ [INPUT] ${id} input event:`, e.target.value);
-          await this.searchAccounts(e.target.value);
-        });
-        el.addEventListener('blur', () => {
-          const suggestions = document.getElementById('accountSuggestions');
-          if (!suggestions) return;
-          setTimeout(() => suggestions.classList.remove('active'), 200);
-        });
-      } else {
-        console.error(`❌ [SETUP] ${id} input NOT FOUND!`);
-      }
+      if (!el) return;
+      el.addEventListener('input', (e) => {
+        this.searchAccounts(e.target.value);
+      });
+      el.addEventListener('blur', () => {
+        const suggestions = document.getElementById('accountSuggestions');
+        if (!suggestions) return;
+        setTimeout(() => suggestions.classList.remove('active'), 200);
+      });
     });
+
+    // Passenger + Booking Agent autofill (3+ chars)
+    this.setupPassengerDbAutocomplete();
+    this.setupBookingAgentDbAutocomplete();
 
     // Setup address autocomplete for initial stops
     try {
@@ -1253,32 +1216,6 @@ class ReservationForm {
     if (copyBillingToBookingBtn) {
       copyBillingToBookingBtn.addEventListener('click', () => {
         this.copyBillingToBooking();
-      });
-    }
-    
-    // Confirmation number validation
-    const confNumberField = document.getElementById('confirmationNumber');
-    if (confNumberField) {
-      let validationTimeout;
-      confNumberField.addEventListener('blur', async () => {
-        const confNumber = confNumberField.value.trim();
-        if (confNumber && confNumber !== this.lastGeneratedConfNumber) {
-          // User manually entered a confirmation number - validate it
-          clearTimeout(validationTimeout);
-          validationTimeout = setTimeout(async () => {
-            await this.validateConfirmationNumber(confNumber);
-          }, 300);
-        }
-      });
-      
-      confNumberField.addEventListener('input', () => {
-        // Clear validation styling when user is typing
-        confNumberField.style.borderColor = '';
-        confNumberField.style.backgroundColor = '';
-        const validationMsg = document.getElementById('confirmationValidationMsg');
-        if (validationMsg) {
-          validationMsg.remove();
-        }
       });
     }
     
@@ -1895,8 +1832,13 @@ class ReservationForm {
 
     // Check if we should verify the address
     if (address1 && address1.length > 3) {
-      // Search for similar addresses
-      const suggestions = await this.mapboxService.geocodeAddress(address1);
+      // Search for similar addresses (Google Places, biased to local city/state)
+      const biasCoords = await this.ensureLocalBiasCoords();
+      const effectiveQuery = this.localCityState ? `${address1} ${this.localCityState}` : address1;
+      const suggestions = await this.googleMapsService.searchAddresses(effectiveQuery, {
+        country: 'US',
+        locationBias: biasCoords
+      });
       
       if (suggestions && suggestions.length > 0) {
         // Show confirmation modal
@@ -1992,8 +1934,8 @@ class ReservationForm {
         <label class="address-option-item">
           <input type="radio" name="addressChoice" value="${index}" />
           <div class="address-option-content">
-            <strong>${suggestion.name}</strong>
-            <div class="address-details">${suggestion.address}</div>
+            <strong>${suggestion.description || suggestion.name}</strong>
+            <div class="address-details">${suggestion.address || suggestion.description}</div>
           </div>
         </label>
       `).join('');
@@ -2153,21 +2095,11 @@ class ReservationForm {
   }
 
   useAccountForPassenger(account) {
-    console.log('👤 useAccountForPassenger called with:', account);
-    
-    // Handle both snake_case (from DB) and camelCase field names
-    const firstName = account.first_name || account.firstName || '';
-    const lastName = account.last_name || account.lastName || '';
-    const phone = account.phone || account.cellPhone || account.cell_phone || '';
-    const email = account.email || '';
-    
     // Populate Passenger section with selected account
-    document.getElementById('passengerFirstName').value = firstName;
-    document.getElementById('passengerLastName').value = lastName;
-    document.getElementById('passengerPhone').value = phone;
-    document.getElementById('passengerEmail').value = email;
-    
-    console.log('✅ Passenger fields populated:', { firstName, lastName, phone, email });
+    document.getElementById('passengerFirstName').value = account.first_name || '';
+    document.getElementById('passengerLastName').value = account.last_name || '';
+    document.getElementById('passengerPhone').value = account.phone || account.cell_phone || '';
+    document.getElementById('passengerEmail').value = account.email || '';
 
     // Cross-fill billing fields ONLY if account is marked as billing client
     if (account.is_billing_client) {
@@ -2312,6 +2244,34 @@ class ReservationForm {
         }
       }, 300);
     }, 5000);
+  }
+
+  showSaveNotification(message) {
+    let toast = document.getElementById('reservationSaveNotification');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'reservationSaveNotification';
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #2b7a0b;
+        color: #fff;
+        padding: 12px 16px;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+        font-size: 14px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message || 'Saved';
+    toast.style.opacity = '1';
+    setTimeout(() => {
+      toast.style.opacity = '0';
+    }, 2000);
   }
 
   async createNewAccount(passengerInfo) {
@@ -2901,220 +2861,65 @@ class ReservationForm {
     }
   }
 
-  async searchPassengers(query) {
-    console.log('🔍 [PASSENGER] searchPassengers called with query:', query);
-    
-    const container = document.getElementById('passengerSuggestions');
-    if (!container) {
-      console.error('❌ [PASSENGER] passengerSuggestions container not found!');
-      return;
-    }
-    
-    if (!query || query.length < 3) {
-      console.log('🔧 [PASSENGER] Query too short, hiding suggestions');
-      container.classList.remove('active');
-      return;
-    }
-
-    console.log('🔍 [PASSENGER] Searching passengers for:', query);
-    
-    try {
-      // Search using supabase db - use searchAccounts like billing does
-      const results = await db.searchAccounts(query);
-      console.log('✅ [PASSENGER] Search results:', results);
-      
-      if (!results || results.length === 0) {
-        console.log('⚠️ [PASSENGER] No results found, hiding suggestions');
-        container.classList.remove('active');
-        return;
-      }
-
-      console.log('✅ [PASSENGER] Displaying', results.length, 'suggestions');
-      container.innerHTML = results.map(account => {
-        const firstName = account.first_name || account.firstName || '';
-        const lastName = account.last_name || account.lastName || '';
-        const email = account.email || '';
-        const phone = account.phone || account.cell_phone || account.cellPhone || '';
-        return `
-          <div class="suggestion-item" data-account-id="${account.id}">
-            ${firstName} ${lastName} ${phone ? `(${phone})` : ''} ${email ? `(${email})` : ''}
-          </div>
-        `;
-      }).join('');
-
-      container.classList.add('active');
-      console.log('✅ [PASSENGER] Suggestions container activated');
-
-      // Add mousedown to prevent blur from hiding dropdown before click completes
-      container.querySelectorAll('.suggestion-item').forEach(item => {
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // Prevent blur from firing
-        });
-        
-        item.addEventListener('click', async () => {
-          const accountId = item.dataset.accountId;
-          console.log('👆 [PASSENGER] Account clicked:', accountId);
-          const account = await db.getAccountById(accountId);
-          if (account) {
-            console.log('✅ [PASSENGER] Using account:', account.first_name, account.last_name);
-            this.useAccountForPassenger(account);
-            container.classList.remove('active');
-          } else {
-            console.error('❌ [PASSENGER] Failed to get account by ID:', accountId);
-          }
-        });
-      });
-    } catch (error) {
-      console.error('❌ [PASSENGER] Error searching passengers:', error);
-      container.classList.remove('active');
-    }
-  }
-
-  async searchBookingAgents(query) {
-    console.log('🔍 [BOOKING AGENT] searchBookingAgents called with query:', query);
-    
-    const container = document.getElementById('bookingAgentSuggestions');
-    if (!container) {
-      console.error('❌ [BOOKING AGENT] bookingAgentSuggestions container not found!');
-      return;
-    }
-    
-    if (!query || query.length < 3) {
-      console.log('🔧 [BOOKING AGENT] Query too short, hiding suggestions');
-      container.classList.remove('active');
-      return;
-    }
-
-    console.log('🔍 [BOOKING AGENT] Searching booking agents for:', query);
-    
-    try {
-      // Search using supabase db - use searchAccounts like billing does
-      const results = await db.searchAccounts(query);
-      console.log('✅ [BOOKING AGENT] Search results:', results);
-      
-      if (!results || results.length === 0) {
-        console.log('⚠️ [BOOKING AGENT] No results found, hiding suggestions');
-        container.classList.remove('active');
-        return;
-      }
-
-      console.log('✅ [BOOKING AGENT] Displaying', results.length, 'suggestions');
-      container.innerHTML = results.map(account => {
-        const firstName = account.first_name || account.firstName || '';
-        const lastName = account.last_name || account.lastName || '';
-        const email = account.email || '';
-        const phone = account.phone || account.cell_phone || account.cellPhone || '';
-        return `
-          <div class="suggestion-item" data-account-id="${account.id}">
-            ${firstName} ${lastName} ${phone ? `(${phone})` : ''} ${email ? `(${email})` : ''}
-          </div>
-        `;
-      }).join('');
-
-      container.classList.add('active');
-      console.log('✅ [BOOKING AGENT] Suggestions container activated');
-
-      // Add mousedown to prevent blur from hiding dropdown before click completes
-      container.querySelectorAll('.suggestion-item').forEach(item => {
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // Prevent blur from firing
-        });
-        
-        item.addEventListener('click', async () => {
-          const accountId = item.dataset.accountId;
-          console.log('👆 [BOOKING AGENT] Account clicked:', accountId);
-          const account = await db.getAccountById(accountId);
-          if (account) {
-            console.log('✅ [BOOKING AGENT] Using account:', account.first_name, account.last_name);
-            this.useAccountForBookingAgent(account);
-            container.classList.remove('active');
-          } else {
-            console.error('❌ [BOOKING AGENT] Failed to get account by ID:', accountId);
-          }
-        });
-      });
-    } catch (error) {
-      console.error('❌ [BOOKING AGENT] Error searching booking agents:', error);
-      container.classList.remove('active');
-    }
-  }
-
   async searchAccounts(query) {
-    console.log('🔍 [BILLING] searchAccounts called with query:', query);
-    
     const container = document.getElementById('accountSuggestions');
-    if (!container) {
-      console.error('❌ [BILLING] accountSuggestions container not found!');
-      return;
-    }
-    
-    if (!query || query.length < 3) {
-      console.log('🔧 [BILLING] Query too short, hiding suggestions');
+    if (!container) return;
+    if (!query || query.length < 2) {
       container.classList.remove('active');
       return;
     }
 
-    console.log('🔍 [BILLING] Searching accounts for:', query);
-    
     try {
-      // Search using supabase db
       const results = await db.searchAccounts(query);
-      console.log('✅ [BILLING] Search results:', results);
-      
       if (!results || results.length === 0) {
-        console.log('⚠️ [BILLING] No results found, hiding suggestions');
         container.classList.remove('active');
         return;
       }
 
-      console.log('✅ [BILLING] Displaying', results.length, 'suggestions');
       container.innerHTML = results.map(account => `
         <div class="suggestion-item" data-account-id="${account.id}">
-          ${account.account_number || account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+          ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
         </div>
       `).join('');
 
       container.classList.add('active');
-      console.log('✅ [BILLING] Suggestions container activated');
 
-      // Add mousedown to prevent blur from hiding dropdown before click completes
       container.querySelectorAll('.suggestion-item').forEach(item => {
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // Prevent blur from firing
-        });
-        
         item.addEventListener('click', async () => {
           const accountId = item.dataset.accountId;
-          console.log('👆 [BILLING] Account clicked:', accountId);
-          const account = await db.getAccountById(accountId);
+          let account = results.find(r => String(r.id) === String(accountId));
+          if (!account) {
+            account = await db.getAccountById(accountId);
+          }
           if (account) {
-            console.log('✅ [BILLING] Using account:', account.first_name, account.last_name);
             this.useExistingAccount(account);
             container.classList.remove('active');
-          } else {
-            console.error('❌ [BILLING] Failed to get account by ID:', accountId);
           }
         });
       });
     } catch (error) {
-      console.error('❌ [BILLING] Error searching accounts:', error);
+      console.error('❌ searchAccounts failed:', error);
       container.classList.remove('active');
     }
   }
 
   async searchAccountsForPassenger(query, sourceField = null) {
-    if (!query || query.length < 3) {
-      document.getElementById('passengerSuggestions').classList.remove('active');
+    const container = document.getElementById('passengerSuggestions');
+    if (!container) return;
+    if (!query || query.length < 2) {
+      container.classList.remove('active');
       return;
     }
 
-    console.log('🔍 Searching passenger accounts for:', query);
-    
     try {
-      // Search using db for passengers
-      const results = await db.searchPassengers(query);
-      const container = document.getElementById('passengerSuggestions');
-      
+      // Track hover to prevent flicker on blur
+      if (!container.dataset.hoverBound) {
+        container.addEventListener('mouseenter', () => { container.dataset.hovering = '1'; });
+        container.addEventListener('mouseleave', () => { delete container.dataset.hovering; });
+        container.dataset.hoverBound = '1';
+      }
+
+      const results = await db.searchAccounts(query);
       if (!results || results.length === 0) {
         container.classList.remove('active');
         return;
@@ -3122,21 +2927,19 @@ class ReservationForm {
 
       container.innerHTML = results.map(account => `
         <div class="suggestion-item" data-account-id="${account.id}">
-          ${account.account_number || account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+          ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
         </div>
       `).join('');
 
       container.classList.add('active');
 
-      // Add mousedown to prevent blur from hiding dropdown before click completes
       container.querySelectorAll('.suggestion-item').forEach(item => {
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // Prevent blur from firing
-        });
-        
         item.addEventListener('click', async () => {
           const accountId = item.dataset.accountId;
-          const account = await db.getAccountById(accountId);
+          let account = results.find(r => String(r.id) === String(accountId));
+          if (!account) {
+            account = await db.getAccountById(accountId);
+          }
           if (account) {
             this.useAccountForPassenger(account);
             container.classList.remove('active');
@@ -3144,24 +2947,21 @@ class ReservationForm {
         });
       });
     } catch (error) {
-      console.error('❌ Error searching passenger accounts:', error);
-      document.getElementById('passengerSuggestions').classList.remove('active');
+      console.error('❌ searchAccountsForPassenger failed:', error);
+      container.classList.remove('active');
     }
   }
 
   async searchAccountsForBookingAgent(query, sourceField = null) {
-    if (!query || query.length < 3) {
-      document.getElementById('bookingAgentSuggestions').classList.remove('active');
+    const container = document.getElementById('bookingAgentSuggestions');
+    if (!container) return;
+    if (!query || query.length < 2) {
+      container.classList.remove('active');
       return;
     }
 
-    console.log('🔍 Searching booking agent accounts for:', query);
-    
     try {
-      // Search using db for booking agents
-      const results = await db.searchBookingAgents(query);
-      const container = document.getElementById('bookingAgentSuggestions');
-      
+      const results = await db.searchAccounts(query);
       if (!results || results.length === 0) {
         container.classList.remove('active');
         return;
@@ -3169,21 +2969,19 @@ class ReservationForm {
 
       container.innerHTML = results.map(account => `
         <div class="suggestion-item" data-account-id="${account.id}">
-          ${account.account_number || account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+          ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
         </div>
       `).join('');
 
       container.classList.add('active');
 
-      // Add mousedown to prevent blur from hiding dropdown before click completes
       container.querySelectorAll('.suggestion-item').forEach(item => {
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // Prevent blur from firing
-        });
-        
         item.addEventListener('click', async () => {
           const accountId = item.dataset.accountId;
-          const account = await db.getAccountById(accountId);
+          let account = results.find(r => String(r.id) === String(accountId));
+          if (!account) {
+            account = await db.getAccountById(accountId);
+          }
           if (account) {
             this.useAccountForBookingAgent(account);
             container.classList.remove('active');
@@ -3191,27 +2989,17 @@ class ReservationForm {
         });
       });
     } catch (error) {
-      console.error('❌ Error searching booking agent accounts:', error);
-      document.getElementById('bookingAgentSuggestions').classList.remove('active');
+      console.error('❌ searchAccountsForBookingAgent failed:', error);
+      container.classList.remove('active');
     }
   }
 
   useAccountForBookingAgent(account) {
-    console.log('👤 useAccountForBookingAgent called with:', account);
-    
-    // Handle both snake_case (from DB) and camelCase field names
-    const firstName = account.first_name || account.firstName || '';
-    const lastName = account.last_name || account.lastName || '';
-    const phone = account.phone || account.cellPhone || account.cell_phone || '';
-    const email = account.email || '';
-    
     // Populate Booking Agent section with selected account
-    document.getElementById('bookedByFirstName').value = firstName;
-    document.getElementById('bookedByLastName').value = lastName;
-    document.getElementById('bookedByPhone').value = phone;
-    document.getElementById('bookedByEmail').value = email;
-    
-    console.log('✅ Booking agent fields populated:', { firstName, lastName, phone, email });
+    document.getElementById('bookedByFirstName').value = account.first_name || '';
+    document.getElementById('bookedByLastName').value = account.last_name || '';
+    document.getElementById('bookedByPhone').value = account.phone || account.cell_phone || '';
+    document.getElementById('bookedByEmail').value = account.email || '';
 
     // Cross-fill billing fields ONLY if account is marked as billing client
     if (account.is_billing_client) {
@@ -3295,18 +3083,15 @@ class ReservationForm {
   }
 
   async searchAccountsByCompany(query) {
-    if (!query || query.length < 3) {
-      document.getElementById('accountSuggestions').classList.remove('active');
+    const container = document.getElementById('accountSuggestions');
+    if (!container) return;
+    if (!query || query.length < 2) {
+      container.classList.remove('active');
       return;
     }
 
-    console.log('🔍 Searching company accounts for:', query);
-    
     try {
-      // Search company names only
       const results = await db.searchAccountsByCompany(query);
-      const container = document.getElementById('accountSuggestions');
-      
       if (!results || results.length === 0) {
         container.classList.remove('active');
         return;
@@ -3320,7 +3105,6 @@ class ReservationForm {
 
       container.classList.add('active');
 
-      // Add click listeners to suggestions
       container.querySelectorAll('.suggestion-item').forEach(item => {
         item.addEventListener('click', async () => {
           const accountId = item.dataset.accountId;
@@ -3332,65 +3116,55 @@ class ReservationForm {
         });
       });
     } catch (error) {
-      console.error('❌ Error searching company accounts:', error);
-      document.getElementById('accountSuggestions').classList.remove('active');
+      console.error('❌ searchAccountsByCompany failed:', error);
+      container.classList.remove('active');
     }
   }
 
   setupPassengerDbAutocomplete() {
-    console.log('🔍 Setting up passenger autocomplete...');
     this.setupDbAutocomplete({
       fieldIds: ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail'],
       containerId: 'passengerSuggestions',
       minChars: 3,
-      searchFn: async (query) => {
-        console.log('🔍 Passenger search triggered with query:', query);
-        const results = await db.searchPassengers(query);
-        console.log('📋 Passenger search results count:', results?.length || 0);
-        return (results || []).slice(0, 10);
-      },
+      searchFn: (query) => (db.searchPassengers(query) || []).slice(0, 10),
       renderItem: (p) => {
         const firstName = p.firstName || p.first_name || '';
         const lastName = p.lastName || p.last_name || '';
         const email = p.email || '';
-        const phone = p.phone || p.cell_phone || p.cellPhone || '';
+        const phone = p.phone || '';
         const label = `${firstName} ${lastName}`.trim() || '(Unnamed)';
         const meta = [email, phone].filter(Boolean).join(' • ');
         return `${label}${meta ? ` <span style="color:#666;font-size:12px;">${meta}</span>` : ''}`;
       },
       onSelect: (p) => {
-        console.log('✅ Passenger selected:', p);
-        // Use the full method that includes cross-fill logic for billing/booking
-        this.useAccountForPassenger(p);
+        document.getElementById('passengerFirstName').value = p.firstName || p.first_name || '';
+        document.getElementById('passengerLastName').value = p.lastName || p.last_name || '';
+        document.getElementById('passengerPhone').value = p.phone || '';
+        document.getElementById('passengerEmail').value = p.email || '';
       }
     });
   }
 
   setupBookingAgentDbAutocomplete() {
-    console.log('🔍 Setting up booking agent autocomplete...');
     this.setupDbAutocomplete({
       fieldIds: ['bookedByFirstName', 'bookedByLastName', 'bookedByPhone', 'bookedByEmail'],
       containerId: 'bookingAgentSuggestions',
       minChars: 3,
-      searchFn: async (query) => {
-        console.log('🔍 Booking agent search triggered with query:', query);
-        const results = await db.searchBookingAgents(query);
-        console.log('📋 Booking agent search results count:', results?.length || 0);
-        return (results || []).slice(0, 10);
-      },
+      searchFn: (query) => (db.searchBookingAgents(query) || []).slice(0, 10),
       renderItem: (a) => {
         const firstName = a.firstName || a.first_name || '';
         const lastName = a.lastName || a.last_name || '';
         const email = a.email || '';
-        const phone = a.phone || a.cell_phone || a.cellPhone || '';
+        const phone = a.phone || '';
         const label = `${firstName} ${lastName}`.trim() || '(Unnamed)';
         const meta = [email, phone].filter(Boolean).join(' • ');
         return `${label}${meta ? ` <span style="color:#666;font-size:12px;">${meta}</span>` : ''}`;
       },
       onSelect: (a) => {
-        console.log('✅ Booking agent selected:', a);
-        // Use the full method that includes cross-fill logic for billing/passenger
-        this.useAccountForBookingAgent(a);
+        document.getElementById('bookedByFirstName').value = a.firstName || a.first_name || '';
+        document.getElementById('bookedByLastName').value = a.lastName || a.last_name || '';
+        document.getElementById('bookedByPhone').value = a.phone || '';
+        document.getElementById('bookedByEmail').value = a.email || '';
       }
     });
   }
@@ -3418,11 +3192,6 @@ class ReservationForm {
       container.classList.add('active');
 
       container.querySelectorAll('.suggestion-item').forEach(el => {
-        // Add mousedown to prevent blur from hiding dropdown before click completes
-        el.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // Prevent blur from firing
-        });
-        
         el.addEventListener('click', () => {
           const idx = parseInt(el.dataset.index, 10);
           const picked = results[idx];
@@ -3433,7 +3202,7 @@ class ReservationForm {
       });
     };
 
-    const handleInput = async (value) => {
+    const handleInput = (value) => {
       const query = (value || '').toString().trim();
       if (query.length < minChars) {
         hide();
@@ -3441,10 +3210,9 @@ class ReservationForm {
       }
 
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
+      debounceTimer = setTimeout(() => {
         try {
-          const results = await searchFn(query);
-          showResults(results);
+          showResults(searchFn(query));
         } catch (e) {
           console.warn('⚠️ Autocomplete search failed:', e);
           hide();
@@ -3456,7 +3224,7 @@ class ReservationForm {
       const el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('input', (e) => handleInput(e.target.value));
-      el.addEventListener('blur', () => setTimeout(hide, 300)); // Increased delay to allow click
+      el.addEventListener('blur', () => setTimeout(hide, 200));
       el.addEventListener('focus', (e) => handleInput(e.target.value));
     });
   }
@@ -3598,8 +3366,49 @@ class ReservationForm {
 
   async searchAddress(inputElement, query) {
     try {
-      const results = await this.mapboxService.geocodeAddress(query);
-      this.showAddressSuggestions(inputElement, results);
+      const biasCoords = await this.ensureLocalBiasCoords();
+      const effectiveQuery = this.localCityState ? `${query} ${this.localCityState}` : query;
+      const googleResults = await this.googleMapsService.searchAddresses(effectiveQuery, {
+        country: 'US',
+        locationBias: biasCoords,
+        includeBusinessesAndLandmarks: true
+      });
+
+      let results = googleResults || [];
+
+      // If no address hits, try landmarks/POI to catch business names and venues
+      if (!results.length && this.googleMapsService.searchLandmarks) {
+        const landmarkResults = await this.googleMapsService.searchLandmarks(effectiveQuery, {
+          location: biasCoords,
+          radius: 8000
+        });
+        results = landmarkResults || [];
+      }
+
+      // Prefer results matching the company state/city
+      if (results.length && this.localCityState) {
+        const parts = this.localCityState.split(',').map(p => p.trim()).filter(Boolean);
+        const cityHint = (parts[0] || '').toUpperCase();
+        const stateHint = (parts[1] || '').toUpperCase();
+        const score = (r) => {
+          const text = (r.description || r.mainText || '').toUpperCase();
+          let s = 0;
+          if (stateHint && text.includes(stateHint)) s += 2;
+          if (cityHint && text.includes(cityHint)) s += 1;
+          return s;
+        };
+        results = results.slice().sort((a, b) => score(b) - score(a));
+      }
+
+      // Normalize Google results to match existing UI expectations
+      const normalized = (results || []).map(result => ({
+        name: result.description || result.mainText || '',
+        address: result.description || '',
+        context: {},
+        placeId: result.placeId
+      }));
+
+      this.showAddressSuggestions(inputElement, normalized);
     } catch (error) {
       console.error('Address search error:', error);
     }
@@ -3615,7 +3424,7 @@ class ReservationForm {
 
     suggestionsContainer.innerHTML = results.map((result, index) => `
       <div class="address-suggestion-item" data-index="${index}">
-        <div class="suggestion-main">${result.name}</div>
+        <div class="suggestion-main">${result.name || result.address}</div>
         <div class="suggestion-secondary">${result.address}</div>
       </div>
     `).join('');
@@ -3637,15 +3446,38 @@ class ReservationForm {
     }
   }
 
-  selectAddress(inputElement, addressData) {
+  async selectAddress(inputElement, addressData) {
     // Fill in the address field - use the street address only
-    const streetAddress = addressData.address.split(',')[0].trim();
+    const streetAddress = (addressData.address || '').split(',')[0].trim();
     inputElement.value = streetAddress;
     
     // Fill in location name with full address for clarity
     const locationNameInput = document.getElementById('locationName');
     if (locationNameInput) {
       locationNameInput.value = addressData.name || addressData.address;
+    }
+
+    // If we have a placeId from Google, fetch details to populate context
+    if (!addressData.context && addressData.placeId && this.googleMapsService?.getPlaceDetails) {
+      try {
+        const details = await this.googleMapsService.getPlaceDetails(addressData.placeId);
+        if (details?.addressComponents) {
+          addressData.context = {
+            city: details.addressComponents.city,
+            state: details.addressComponents.state,
+            zipcode: details.addressComponents.postalCode,
+            country: details.addressComponents.country
+          };
+        }
+        if (details?.name && !addressData.name) {
+          addressData.name = details.name;
+        }
+        if (details?.address && !addressData.address) {
+          addressData.address = details.address;
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to fetch Google place details:', e);
+      }
     }
 
     // Fill in city, state, zip if available
@@ -3881,17 +3713,6 @@ class ReservationForm {
       return;
     }
 
-    // Validate confirmation number for duplicates
-    const confirmationNumber = document.getElementById('confirmationNumber')?.value?.trim();
-    if (confirmationNumber && confirmationNumber !== this.lastGeneratedConfNumber) {
-      console.log('🔍 Validating confirmation number before save:', confirmationNumber);
-      const isValid = await this.validateConfirmationNumber(confirmationNumber);
-      if (!isValid) {
-        alert('⚠️ DUPLICATE CONFIRMATION NUMBER\n\nThe confirmation number you entered already exists. Please use a different number or leave it blank to auto-generate a unique number.');
-        return;
-      }
-    }
-
     const getValue = (id) => document.getElementById(id)?.value ?? '';
     const getText = (id) => document.getElementById(id)?.textContent ?? '';
 
@@ -3925,7 +3746,6 @@ class ReservationForm {
       const spotTime = getValue('spotTime');
       const garOutTime = getValue('garOutTime');
       const garInTime = getValue('garInTime');
-      const driverArriveTime = getValue('driverArriveTime');
 
       const farmOptionValue = document.querySelector('input[name="farmOption"]:checked')?.value || 'in-house';
       const eFarmStatusInput = document.getElementById('eFarmStatus') || document.getElementById('efarmStatus');
@@ -3975,7 +3795,6 @@ class ReservationForm {
           spotTime,
           garOutTime,
           garInTime,
-          driverArriveTime,
           farmOption: farmOptionValue,
           efarmStatus: eFarmStatusValue,
           eFarmStatus: eFarmStatusValue,
@@ -3991,14 +3810,16 @@ class ReservationForm {
       };
 
       // Get current confirmation number - assign real number if this is a new reservation
-      let currentConfNumber = document.getElementById("confNumber")?.value;
-      if (!currentConfNumber || currentConfNumber === 'NEW') {
-        console.log('🔢 Assigning new confirmation number on save...');
-        currentConfNumber = await db.getNextConfirmationNumber();
-        // Update the field with the real number
-        const confField = document.getElementById('confNumber');
+      const confField = document.getElementById('confNumber') || document.getElementById('confirmation-number');
+      let currentConfNumber = confField?.value;
+      if (!currentConfNumber || currentConfNumber === 'NEW' || currentConfNumber === 'Loading...') {
+        console.log('🔢 Assigning confirmation number from settings...');
+        currentConfNumber = await this.computeNextConfirmationNumber();
         if (confField) confField.value = currentConfNumber;
         console.log('🔢 Confirmation number assigned:', currentConfNumber);
+      }
+      if (confField) {
+        confField.setAttribute('readonly', 'true');
       }
       const pickupAt = puDate ? (puTime ? `${puDate}T${puTime}` : puDate) : null;
 
@@ -4031,6 +3852,9 @@ class ReservationForm {
       // NO localStorage save for reservations - Supabase is the source of truth
       // (localStorage save removed to prevent ghost data issues)
       console.log('📋 Reservation data prepared, will save to Supabase only');
+
+      // Mark form as clean after we capture the outgoing payload
+      this.dirty = false;
       
       // Save passenger to passengers database (with Supabase sync)
       if (reservationData.passenger.firstName || reservationData.passenger.lastName) {
@@ -4173,28 +3997,11 @@ class ReservationForm {
           // Success - various valid formats
           supabaseSaveSuccess = true;
           console.log('✅ Reservation saved successfully:', supabaseResult);
-          
-          // The success notification will be shown by supabase-db.js
-          // Optionally prompt to clear form
-          setTimeout(() => {
-            if (confirm('Reservation saved successfully! Would you like to clear the form for a new reservation?')) {
-              document.getElementById('reservation-form').reset();
-              // Reset the state
-              window.editingReservation = null;
-              document.getElementById('confirmation-number').value = '';
-              
-              // Clear account searches
-              document.getElementById('passenger-search-results').innerHTML = '';
-              document.getElementById('billing-search-results').innerHTML = '';
-              document.getElementById('booking-search-results').innerHTML = '';
-              
-              // Reset status to Open if it was just created
-              const statusSelect = document.getElementById('reservationStatus');
-              if (statusSelect && !window.editingReservation) {
-                statusSelect.value = 'Open';
-              }
-            }
-          }, 500); // Small delay to let success notification show first
+          if (isNewReservation) {
+            this.updateLastUsedConfirmationNumber(currentConfNumber);
+          }
+          // Keep form open for further editing; just show a toast/notification
+          this.showSaveNotification('Reservation saved');
         } else {
           throw new Error('Save operation returned unexpected format: ' + JSON.stringify(supabaseResult));
         }
@@ -4226,30 +4033,14 @@ class ReservationForm {
         btn.style.color = 'white';
       });
       
-      // Wait and redirect to reservations list
+      // Keep user on form; reset buttons after short delay
       setTimeout(() => {
-        if (confirm('Reservation saved! View reservations list?')) {
-          // Use parent messaging if in iframe, otherwise direct navigation
-          if (window.self !== window.top && window.parent) {
-            // In an iframe - tell parent to switch sections
-            console.log('📤 Sending switchSection message to parent');
-            window.parent.postMessage({ action: 'switchSection', section: 'reservations' }, '*');
-          } else {
-            // Not in iframe - direct navigation
-            window.location.href = 'reservations-list.html';
-          }
-        } else {
-          // Reset button and initialize new confirmation number for next reservation
-          if (!this.isEditMode) {
-            this.initializeConfirmationNumber();
-          }
-          originalButtonState.forEach(s => {
-            s.btn.disabled = s.disabled;
-            s.btn.textContent = s.text;
-            s.btn.style.background = s.background;
-            s.btn.style.color = s.color;
-          });
-        }
+        originalButtonState.forEach(s => {
+          s.btn.disabled = s.disabled;
+          s.btn.textContent = s.text;
+          s.btn.style.background = s.background;
+          s.btn.style.color = s.color;
+        });
       }, 1500);
     } catch (error) {
       const message = error?.message || (typeof error === 'string' ? error : 'Unknown error');
@@ -4485,7 +4276,6 @@ class ReservationForm {
         this.safeSetValue('spotTime', record.spot_time || '');
         this.safeSetValue('garOutTime', record.gar_out_time || '');
         this.safeSetValue('garInTime', record.gar_in_time || '');
-        this.safeSetValue('driverArriveTime', record.driver_arrive_time || '');
         this.safeSetValue('resStatus', record.status || '');
         this.safeSetValue('eFarmStatus', record.efarm_status || '');
         this.safeSetValue('eFarmOut', record.efarm_out_selection || '');
@@ -4568,7 +4358,6 @@ class ReservationForm {
         spotTime: document.getElementById('spotTime')?.value || '',
         garOutTime: document.getElementById('garOutTime')?.value || '',
         garInTime: document.getElementById('garInTime')?.value || '',
-        driverArriveTime: document.getElementById('driverArriveTime')?.value || '',
         numPax: document.getElementById('numPax')?.value || '',
         luggage: document.getElementById('luggage')?.value || '',
         accessible: document.getElementById('accessible')?.checked || false,
@@ -4622,7 +4411,6 @@ class ReservationForm {
     this.safeSetValue('spotTime', snapshot.details?.spotTime || '');
     this.safeSetValue('garOutTime', snapshot.details?.garOutTime || '');
     this.safeSetValue('garInTime', snapshot.details?.garInTime || '');
-    this.safeSetValue('driverArriveTime', snapshot.details?.driverArriveTime || '');
     this.safeSetValue('numPax', snapshot.details?.numPax || '');
     this.safeSetValue('luggage', snapshot.details?.luggage || '');
     this.safeSetValue('resStatus', snapshot.details?.resStatus || '');

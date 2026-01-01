@@ -1,7 +1,7 @@
 // Supabase Client - REST API (Buildless Compatible)
 // Pure fetch-based REST API client - no SDK dependency
 
-import { getSupabaseCredentials } from './supabase-config.js';
+import { getSupabaseCredentials, getSupabaseAuthUrl } from './supabase-config.js';
 
 // Lazy-loaded credentials (resolved on first use, after env.js loads)
 let _supabaseUrl = null;
@@ -172,6 +172,17 @@ function persistSession(session) {
   notifySessionChange();
 }
 
+function clearStoredSession() {
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem('supabase_access_token');
+    localStorage.removeItem(SDK_SESSION_KEY);
+  } catch (e) {
+    console.warn('⚠️ Failed to clear stored session:', e);
+  }
+  notifySessionChange();
+}
+
 function sessionNeedsRefresh(session, thresholdMs = 60_000) {
   if (!session) return false;
 
@@ -195,7 +206,7 @@ async function performTokenRefresh(currentSession) {
   }
 
   try {
-    const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=refresh_token`, {
+    const response = await fetch(`${getSupabaseAuthUrl()}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -207,6 +218,13 @@ async function performTokenRefresh(currentSession) {
     if (!response.ok) {
       const details = await response.text().catch(() => null);
       const message = `Token refresh failed (${response.status})`;
+
+      // If refresh is invalid/expired, clear session so we stop looping and force sign-in
+      if (response.status === 400 || response.status === 401) {
+        clearStoredSession();
+        return { success: false, error: 'refresh-invalid', details };
+      }
+
       return { success: false, error: message, details };
     }
 
@@ -583,7 +601,7 @@ export async function getCurrentSession() {
 // Sign in with email/password via REST API
 export async function signInWithEmail(email, password) {
   try {
-    const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=password`, {
+    const response = await fetch(`${getSupabaseAuthUrl()}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: {
         'apikey': getSupabaseAnonKey(),

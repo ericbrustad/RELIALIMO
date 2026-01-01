@@ -1,5 +1,5 @@
 <script type="module">
-import { getSupabaseClient, setupAPI, deleteAllAccountsSupabase, deleteAllReservationsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase } from './api-service.js';
+import { getSupabaseClient, setupAPI } from './api-service.js';
 async function fetchUserPermissions() {
   await setupAPI();
   const client = getSupabaseClient();
@@ -112,6 +112,7 @@ enforceSectionAccess();
     <li><a class="btn" href="schema-ops-test.html" target="_top" style="background:#00897b;">Schema Ops Test</a></li>
     <li><a class="btn" href="test-supabase-integration.html" target="_top">Supabase Integration Test</a></li>
     <li><a class="btn" href="magic-link.html" target="_top" style="background:#7b1fa2;">Magic Link</a></li>
+    <li><a class="btn" href="layout-toggle.html" target="_top" style="background:#4a5568;">Header Layout Toggle</a></li>
     <li><a class="btn" href="import-export-accounts.html" target="_top" style="background:#0288d1;">📊 Import/Export Accounts</a></li>
     <li><a class="btn" href="import-export-affiliates.html" target="_top" style="background:#7b1fa2;">🤝 Import/Export Affiliates</a></li>
     <li><a class="btn" href="import-export-drivers.html" target="_top" style="background:#7b1fa2;">👥 Import/Export Drivers</a></li>
@@ -123,6 +124,7 @@ enforceSectionAccess();
     <li><button id="migrateAddressFieldsBtn" class="btn" style="background:#2196f3;" onclick="migrateAddressFields()">📋 Migrate Address Fields</button></li>
     <li><button id="deleteAllAffiliatesBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Affiliates</button></li>
     <li><button id="deleteAllReservationsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Reservations (Supabase)</button></li>
+    <li><button id="deleteLocalReservationsBtn" class="btn" style="background:#ef6c00;">Delete Local Reservations</button></li>
     <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Accounts (Supabase)</button></li>
     <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Drivers (Supabase)</button></li>
     <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Rate Data (Supabase)</button></li>
@@ -162,7 +164,7 @@ enforceSectionAccess();
 <script type="module">
 console.log('=== UTILITIES MODULE LOADING ===');
 
-import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient, deleteAllAccountsSupabase, deleteAllReservationsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase } from './api-service.js';
+import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient } from './api-service.js';
 import * as driverFieldConfig from './driver-field-config.js';
 // Show login/profile info in top right
 async function showProfileBox() {
@@ -228,38 +230,134 @@ window.driverFieldConfig = driverFieldConfig;
 ensureSupabaseReady();
 
 
+async function getCurrentOrgId() {
+  try {
+    const client = getSupabaseClient();
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await client
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.warn('Could not fetch organization for user', error);
+      return null;
+    }
+
+    return data?.organization_id || null;
+  } catch (err) {
+    console.warn('Failed to resolve organization id', err);
+    return null;
+  }
+}
+
+async function deleteAllReservationsForOrg() {
+  const client = getSupabaseClient();
+  const orgId = await getCurrentOrgId();
+
+  if (!orgId) {
+    throw new Error('Unable to determine your organization.');
+  }
+
+  const { error, count } = await client
+    .from('reservations')
+    .delete({ count: 'exact' })
+    .eq('organization_id', orgId);
+
+  if (error) {
+    throw error;
+  }
+
+  return typeof count === 'number' ? count : null;
+}
+
+const deleteAllReservationsBtn = document.getElementById('deleteAllReservationsSupabaseBtn');
+if (deleteAllReservationsBtn) {
+  deleteAllReservationsBtn.disabled = false;
+
+  deleteAllReservationsBtn.addEventListener('click', async () => {
+    const ready = await ensureSupabaseReady();
+    if (!ready) {
+      alert('Please log in before deleting reservations.');
+      return;
+    }
+
+    const primaryConfirm = confirm('Are you sure you want to permanently delete ALL reservations for this organization? This cannot be undone.');
+    if (!primaryConfirm) return;
+
+    const secondConfirm = prompt('Type DELETE to confirm removing all reservations.');
+    if (secondConfirm !== 'DELETE') {
+      alert('Deletion cancelled.');
+      return;
+    }
+
+    deleteAllReservationsBtn.disabled = true;
+    deleteAllReservationsBtn.textContent = 'Deleting...';
+
+    try {
+      const deletedCount = await deleteAllReservationsForOrg();
+      const message = deletedCount === null
+        ? 'All reservations deleted.'
+        : `Deleted ${deletedCount} reservation${deletedCount === 1 ? '' : 's'}.`;
+      alert(message);
+    } catch (err) {
+      console.error('Failed to delete reservations:', err);
+      alert('Failed to delete reservations: ' + (err?.message || err));
+    } finally {
+      deleteAllReservationsBtn.disabled = false;
+      deleteAllReservationsBtn.textContent = 'Delete ALL Reservations (Supabase)';
+    }
+  });
+}
+
+// Clear local cached reservations (no auth required)
+const deleteLocalReservationsBtn = document.getElementById('deleteLocalReservationsBtn');
+if (deleteLocalReservationsBtn) {
+  deleteLocalReservationsBtn.disabled = false;
+
+  deleteLocalReservationsBtn.addEventListener('click', () => {
+    const confirmDelete = confirm('Delete all locally stored reservations (offline cache)?');
+    if (!confirmDelete) return;
+
+    const cached = JSON.parse(localStorage.getItem('local_reservations') || '[]');
+    const removedCount = Array.isArray(cached) ? cached.length : 0;
+    localStorage.removeItem('local_reservations');
+    alert(`Cleared ${removedCount} local reservation${removedCount === 1 ? '' : 's'}.`);
+  });
+}
+
+
 function setupDeleteButton(btnId, fn, label) {
   const btn = document.getElementById(btnId);
   if (btn) {
     btn.onclick = async function() {
       await ensureSupabaseReady();
-      if (confirm(`Are you sure you want to permanently delete ALL ${label}? This cannot be undone.`)) {
+      if (confirm(`Are you sure you want to permanently delete ALL ${label} from Supabase? This cannot be undone.`)) {
         btn.disabled = true;
         btn.textContent = 'Deleting...';
-        try {
-          const result = await fn();
-          console.log(`Delete ${label} result:`, result);
-          if (result && result.success) {
-            alert(`Deleted ${result.deleted || 0} ${label}.`);
-          } else {
-            alert(`Failed to delete ${label}: ${result?.error || 'Unknown error'}. Check console for details.`);
-          }
-        } catch (err) {
-          console.error(`Error deleting ${label}:`, err);
-          alert(`Error deleting ${label}: ${err.message}`);
+        const result = await fn();
+        if (result) {
+          alert(`All ${label} deleted from Supabase.`);
+        } else {
+          alert(`Failed to delete ${label}. Check console for details.`);
         }
         btn.disabled = false;
-        btn.textContent = `Delete ALL ${label}`;
+        btn.textContent = `Delete ALL ${label} (Supabase)`;
       }
     };
   }
 }
 
-// Note: These delete functions are now available in api-service.js
-setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
-setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
-setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
-setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+// Note: These delete functions don't exist yet in api-service.js
+// Uncomment when available:
+// setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
+// setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
+// setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
+// setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
 
 // Remove Duplicate Affiliates button
 const removeDupBtn = document.getElementById('removeDuplicateAffiliatesBtn');

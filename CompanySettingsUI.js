@@ -133,7 +133,7 @@ class CompanySettingsUI {
   /**
    * Collect form data and save to manager
    */
-  saveSettings() {
+  async saveSettings() {
     const formData = {};
     const inputs = document.querySelectorAll('[id^="setting-"]');
     
@@ -145,11 +145,16 @@ class CompanySettingsUI {
 
     try {
       this.settingsManager.updateSettings(formData);
+      const supabaseResult = await this.settingsManager.saveSettingsToSupabase();
       this.currentSettings = this.settingsManager.getAllSettings();
       this.populateForm();
       
-      // Show success message
-      this.showNotification('Settings saved successfully!', 'success');
+      // Show success message reflecting remote/local status
+      if (supabaseResult?.success) {
+        this.showNotification('Settings saved locally and synced to cloud.', 'success');
+      } else {
+        this.showNotification('Settings saved locally. Cloud sync failed; try re-auth or retry.', 'warning');
+      }
       this.formDirty = false;
       this.updateSaveButtonState();
     } catch (error) {

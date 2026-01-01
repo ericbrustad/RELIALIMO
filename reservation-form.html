@@ -6,14 +6,19 @@
     <title>New Reservation - RELIA🐂LIMO™</title>
     <link rel="icon" href="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" />
     <link rel="stylesheet" href="reservation-form.css" />
+    <style>
+      /* Prevent header flash when embedded; activated once html.embedded is set */
+      html.embedded body { padding-top: 0 !important; }
+      html.embedded .header, html.embedded header { display: none !important; }
+    </style>
     <script>
-      // Hide main navigation if in iframe
+      // Hide the page header entirely when embedded (index.html already provides its own header)
       if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+        document.documentElement.classList.add('embedded');
         document.addEventListener('DOMContentLoaded', function() {
-          const headerContent = document.querySelector('.header-content');
-          if (headerContent) {
-            headerContent.style.display = 'none';
-          }
+          const header = document.querySelector('.header');
+          if (header) header.style.display = 'none';
         });
       }
     </script>
@@ -31,9 +36,9 @@
           <div style="display: flex; gap: 10px;">
             <button onclick="createNewReservation()" style="padding: 8px 16px; background: rgba(255,255,255,0.3); color: white; border: 1px solid rgba(255,255,255,0.5); border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">➕ New Reservation</button>
             <button onclick="goBackToReservations()" id="closeFormBtn" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px; display: none;">❌ Close</button>
-            <button onclick="goBackToReservations()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
-            <button onclick="navigateToSection('dashboard', 'index.html')" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
-            <button onclick="navigateToSection('accounts', 'accounts.html')" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
+            <button onclick="window.location.href='reservations-list.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
+            <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
+            <button onclick="window.location.href='accounts.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
           </div>
         </div>
       </header>
@@ -374,17 +379,6 @@
                     <label>Gar-In Time</label>
                     <input type="time" id="garInTime" class="form-control" />
                   </div>
-                </div>
-
-                <div class="form-group">
-                  <label>Driver Should Arrive</label>
-                  <select id="driverArriveTime" class="form-control">
-                    <option value="">When your flight arrives</option>
-                    <option value="5min">5 minutes before</option>
-                    <option value="10min">10 minutes before</option>
-                    <option value="15min">15 minutes before</option>
-                    <option value="30min">30 minutes before</option>
-                  </select>
                 </div>
 
                 <div class="subsection-title" style="margin-top: 20px;">Address</div>
@@ -2553,10 +2547,6 @@
     </script>
     <script src="env.js"></script>
     <script type="module" src="auth-guard.js"></script>
-    <script type="module">
-      import { initDevModeBanner } from './dev-mode-banner.js';
-      initDevModeBanner();
-    </script>
     <script type="module" src="reservation-form.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ChatManager.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js"></script>

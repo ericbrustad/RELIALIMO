@@ -13,6 +13,17 @@ export class MapboxService {
     }
   }
 
+  getLocalRegion() {
+    try {
+      const settings = JSON.parse(localStorage.getItem('relia_company_settings') || '{}');
+      const raw = (settings.tickerSearchCity || '').toString();
+      return raw.trim();
+    } catch (e) {
+      console.warn('⚠️ Failed to read tickerSearchCity for geocode bias:', e);
+      return '';
+    }
+  }
+
   async geocodeAddress(query) {
     // Check if token is set
     if (this.accessToken === 'YOUR_MAPBOX_TOKEN_HERE') {
@@ -20,14 +31,19 @@ export class MapboxService {
       return [];
     }
 
+    // Bias queries to the configured local city/state
+    const localRegion = this.getLocalRegion();
+    const effectiveQuery = localRegion ? `${query} ${localRegion}` : query;
+
     // Check cache first
-    if (this.geocodeCache.has(query)) {
-      return this.geocodeCache.get(query);
+    const cacheKey = localRegion ? `${effectiveQuery}|local` : query;
+    if (this.geocodeCache.has(cacheKey)) {
+      return this.geocodeCache.get(cacheKey);
     }
 
     try {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${this.accessToken}&types=address,poi&limit=5`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(effectiveQuery)}.json?access_token=${this.accessToken}&types=address,poi&limit=5`
       );
 
       if (!response.ok) {
@@ -44,7 +60,7 @@ export class MapboxService {
       }));
 
       // Cache the result
-      this.geocodeCache.set(query, results);
+      this.geocodeCache.set(cacheKey, results);
 
       return results;
     } catch (error) {

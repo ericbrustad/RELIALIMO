@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getSupabaseCredentials } from './supabase-config.js';
+import { getSupabaseCredentials, getSupabaseAuthUrl } from './supabase-config.js';
 
 const msg = document.getElementById('msg');
 const roleParam = new URLSearchParams(window.location.search).get('role');
@@ -12,10 +12,6 @@ const magicLinkBadge = document.getElementById('magic-link-badge');
 const magicLinkRole = document.getElementById('magic-link-role');
 const forgotForm = document.getElementById('forgot-form');
 const forgotToggle = document.getElementById('forgot-toggle');
-
-// Session storage keys (must match supabase-client.js and auth-guard.js)
-const SESSION_STORAGE_KEY = 'supabase_session';
-const ACCESS_TOKEN_KEY = 'supabase_access_token';
 
 function setMessage(text, variant = '') {
   if (!msg) return;
@@ -84,38 +80,9 @@ function updateMagicLinkAvailability() {
 let supabase;
 
 try {
-  const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } = getSupabaseCredentials();
-  
-  // Create Supabase client with proper auth configuration
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      autoRefreshToken: true,        // Enable automatic token refresh
-      persistSession: true,          // Persist session to localStorage
-      detectSessionInUrl: true,      // Handle magic link/OAuth callbacks
-      storageKey: 'sb-siumiadylwcrkaqsfwkj-auth-token', // SDK storage key
-    }
-  });
-  
-  // Listen for auth state changes and sync tokens to our custom storage keys
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    console.log(`🔐 Auth state change (auth.js): ${event}`);
-    
-    if (session) {
-      // Sync session to our custom storage keys for REST client compatibility
-      try {
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-        if (session.access_token) {
-          localStorage.setItem(ACCESS_TOKEN_KEY, session.access_token);
-        }
-      } catch (e) {
-        console.warn('⚠️ Failed to sync session to storage:', e);
-      }
-    } else if (event === 'SIGNED_OUT') {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-    }
-  });
-  
+  const { anonKey: SUPABASE_ANON_KEY } = getSupabaseCredentials();
+  const SUPABASE_URL = getSupabaseAuthUrl(); // use direct project URL for auth endpoints
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 } catch (error) {
   console.error('Supabase configuration error', error);
   setMessage('Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.', 'error');

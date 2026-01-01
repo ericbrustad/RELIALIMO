@@ -24,7 +24,30 @@ export class ReservationAddressSearchModule {
   initializeAddressSearch(inputElement, suggestionsElement, options = {}) {
     this.searchInput = inputElement;
     this.suggestionsContainer = suggestionsElement;
-    this.options = options;
+    const localRegion = (() => {
+      if (window.LOCAL_CITY_STATE && (window.LOCAL_CITY_STATE.city || window.LOCAL_CITY_STATE.state)) {
+        return window.LOCAL_CITY_STATE;
+      }
+      try {
+        const settings = JSON.parse(localStorage.getItem('relia_company_settings') || '{}');
+        const parts = (settings.tickerSearchCity || '').toString().split(',').map(p => p.trim()).filter(Boolean);
+        return { city: parts[0] || '', state: parts[1] || '' };
+      } catch (e) {
+        console.warn('⚠️ Unable to read tickerSearchCity for address bias:', e);
+        return { city: '', state: '' };
+      }
+    })();
+
+    const locationBias = options.locationBias
+      || [localRegion.city, localRegion.state].filter(Boolean).join(', ')
+      || undefined;
+
+    this.localRegion = localRegion;
+    this.options = {
+      country: options.country || 'US',
+      locationBias,
+      ...options
+    };
 
     // Add event listeners
     this.searchInput.addEventListener('input', (e) => this.handleAddressInput(e));
@@ -95,10 +118,48 @@ export class ReservationAddressSearchModule {
       this.showLoading();
 
       // Search for addresses using Google Maps
-      const results = await this.googleMapsService.searchAddresses(query, {
+      let results = await this.googleMapsService.searchAddresses(query, {
         country: this.options.country || 'US',
         locationBias: this.options.locationBias,
+        includeBusinessesAndLandmarks: true
       });
+
+      // Fall back to landmark search if no hits (business/POI names)
+      if ((!results || results.length === 0) && this.googleMapsService.searchLandmarks) {
+        const landmarkResults = await this.googleMapsService.searchLandmarks(query, {
+          location: this.options.locationBias,
+          radius: 8000
+        });
+        results = landmarkResults || [];
+      }
+
+      // Prefer in-state/in-city results based on company settings bias
+      if (results && results.length && this.localRegion) {
+        const cityHint = (this.localRegion.city || '').toUpperCase();
+        const stateHint = (this.localRegion.state || '').toUpperCase();
+
+        // First, drop out-of-state if we have a state configured and at least one match in-state
+        if (stateHint) {
+          const filtered = results.filter(r => {
+            const text = (r.description || r.mainText || '').toUpperCase();
+            const secondary = (r.secondaryText || '').toUpperCase();
+            return text.includes(stateHint) || secondary.includes(stateHint);
+          });
+          if (filtered.length) {
+            results = filtered;
+          }
+        }
+
+        const score = (r) => {
+          const text = (r.description || r.mainText || '').toUpperCase();
+          const secondary = (r.secondaryText || '').toUpperCase();
+          let s = 0;
+          if (stateHint && (text.includes(stateHint) || secondary.includes(stateHint))) s += 2;
+          if (cityHint && (text.includes(cityHint) || secondary.includes(cityHint))) s += 1;
+          return s;
+        };
+        results = results.slice().sort((a, b) => score(b) - score(a));
+      }
 
       if (results.length === 0) {
         this.showNoResults();

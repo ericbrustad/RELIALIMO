@@ -47,11 +47,13 @@ export class GoogleMapsService {
   async searchAddresses(input, options = {}) {
     if (!input || input.trim().length < 2) return [];
     
-    // Check cache first
+    const includePlaces = options.includeBusinessesAndLandmarks !== false;
     const cacheKey = `address_${input}_${JSON.stringify(options)}`;
     if (this.geocodingCache.has(cacheKey)) {
       return this.geocodingCache.get(cacheKey);
     }
+
+    const results = [];
 
     try {
       const params = new URLSearchParams({
@@ -59,12 +61,15 @@ export class GoogleMapsService {
         key: this.apiKey,
         sessionToken: this.sessionToken,
         components: options.country ? `country:${options.country}` : '',
-        types: 'geocode,establishment',
+        // Hint the API to return addresses but allow establishments (business/landmark) too
+        types: 'address',
       });
 
-      // Add location bias if provided (restricts results to area)
       if (options.locationBias) {
-        params.append('locationbias', `point:${options.locationBias.latitude},${options.locationBias.longitude}`);
+        const bias = typeof options.locationBias === 'string'
+          ? options.locationBias
+          : `point:${options.locationBias.latitude},${options.locationBias.longitude}`;
+        params.append('locationbias', bias);
       }
 
       const response = await fetch(
@@ -81,23 +86,83 @@ export class GoogleMapsService {
         throw new Error(`Google Places API error: ${data.status} - ${data.error_message || ''}`);
       }
 
-      const results = (data.predictions || []).map(prediction => ({
-        placeId: prediction.place_id,
-        description: prediction.description,
-        mainText: prediction.main_text,
-        secondaryText: prediction.secondary_text,
-        types: prediction.types,
-        matchedSubstrings: prediction.matched_substrings,
-      }));
-
-      // Cache the results
-      this.geocodingCache.set(cacheKey, results);
-
-      return results;
+      results.push(
+        ...(data.predictions || []).map(prediction => ({
+          placeId: prediction.place_id,
+          description: prediction.description,
+          mainText: prediction.structured_formatting?.main_text || prediction.description,
+          secondaryText: prediction.structured_formatting?.secondary_text || '',
+          types: prediction.types,
+          matchedSubstrings: prediction.matched_substrings,
+          source: 'autocomplete'
+        }))
+      );
     } catch (error) {
-      console.error('Address search error:', error);
-      return [];
+      console.error('Address search error (autocomplete):', error);
     }
+
+    // Fallback: use Find Place (text) which works well for businesses/landmarks and fuzzy address text
+    if (includePlaces && results.length === 0) {
+      try {
+        const placeResults = await this.findPlaceByText(input, {
+          locationBias: options.locationBias,
+          types: options.types || ['point_of_interest', 'establishment', 'premise']
+        });
+        results.push(...placeResults.map(place => this.mapPlaceToSuggestion(place, 'findplace')));
+      } catch (error) {
+        console.error('Address search fallback error (find place):', error);
+      }
+    }
+
+    this.geocodingCache.set(cacheKey, results);
+    return results;
+  }
+
+  async findPlaceByText(query, options = {}) {
+    const params = new URLSearchParams({
+      input: query,
+      inputtype: 'textquery',
+      fields: 'formatted_address,name,geometry,place_id,types',
+      key: this.apiKey,
+    });
+
+    if (options.types && Array.isArray(options.types)) {
+      params.append('types', options.types.join(','));
+    }
+
+    if (options.locationBias) {
+      const bias = typeof options.locationBias === 'string'
+        ? options.locationBias
+        : `point:${options.locationBias.latitude},${options.locationBias.longitude}`;
+      params.append('locationbias', bias);
+    }
+
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?${params}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Google Find Place request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      throw new Error(`Google Places API error: ${data.status} - ${data.error_message || ''}`);
+    }
+
+    return data.candidates || [];
+  }
+
+  mapPlaceToSuggestion(place, source = 'text') {
+    return {
+      placeId: place.place_id,
+      description: place.formatted_address || place.name,
+      mainText: place.name || place.formatted_address,
+      secondaryText: place.formatted_address || place.vicinity || '',
+      types: place.types,
+      location: place.geometry?.location,
+      source,
+    };
   }
 
   /**
@@ -169,6 +234,53 @@ export class GoogleMapsService {
       return results;
     } catch (error) {
       console.error('Business search error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Search for landmarks (points of interest, attractions)
+   */
+  async searchLandmarks(query, options = {}) {
+    if (!query || query.trim().length < 2) return [];
+
+    const cacheKey = `landmark_${query}_${JSON.stringify(options)}`;
+    if (this.placeCache.has(cacheKey)) {
+      return this.placeCache.get(cacheKey);
+    }
+
+    try {
+      const params = new URLSearchParams({
+        query,
+        key: this.apiKey,
+        type: 'point_of_interest'
+      });
+
+      if (options.location) {
+        params.append('location', `${options.location.latitude},${options.location.longitude}`);
+      }
+      if (options.radius) {
+        params.append('radius', options.radius);
+      }
+
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Google Places request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        throw new Error(`Google Places API error: ${data.status}`);
+      }
+
+      const results = (data.results || []).map(place => this.mapPlaceToSuggestion(place, 'landmark'));
+      this.placeCache.set(cacheKey, results);
+      return results;
+    } catch (error) {
+      console.error('Landmark search error:', error);
       return [];
     }
   }

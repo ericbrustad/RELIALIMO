@@ -55,8 +55,14 @@ class ReservationsList {
     
     // Clear existing rows
     tableBody.innerHTML = '';
+
+    // Drop settled trips from the visible list
+    const filtered = (reservations || []).filter(res => {
+      const status = (res.status || '').toString().toLowerCase();
+      return status !== 'settled';
+    });
     
-    if (reservations.length === 0) {
+    if (filtered.length === 0) {
       // Show empty state message
       const emptyRow = document.createElement('tr');
       emptyRow.innerHTML = `
@@ -74,39 +80,25 @@ class ReservationsList {
     }
     
     // Add new rows for each reservation
-    reservations.forEach(res => {
-      // Handle both Supabase format and localStorage format
-      const pickupDateTime = res.pickup_at || res.pickup_datetime || res.pickupDateTime || '';
-      const passengerName = res.passenger_name || 
-                           (res.passenger_first_name && res.passenger_last_name ? 
-                            `${res.passenger_first_name} ${res.passenger_last_name}` : '') ||
-                           res.passengerName || '';
-      const companyName = res.company_name || res.companyName || '';
-      const vehicleType = res.vehicle_type || res.vehicleType || '';
-      const grandTotal = res.grand_total || res.rate_amount || res.grandTotal || 0;
-      const paymentType = res.payment_type || res.paymentType || '';
-      const confirmationNumber = res.confirmation_number || res.confirmationNumber || '';
-      const status = res.status || 'pending';
-      const groupName = res.group_name || res.groupName || '';
-      
+    filtered.forEach(res => {
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td><a href="#" class="conf-link" data-conf="${confirmationNumber}">${confirmationNumber || 'N/A'}</a></td>
-        <td>${this.formatDate(pickupDateTime)}</td>
-        <td>${this.formatTime(pickupDateTime)}</td>
-        <td>${passengerName}</td>
-        <td>${companyName}</td>
-        <td>${vehicleType}</td>
-        <td>$${(Number(grandTotal) || 0).toFixed(2)}</td>
-        <td>${paymentType}</td>
-        <td>${status}</td>
-        <td>${groupName}</td>
+        <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
+        <td>${this.formatDate(res.pickup_at)}</td>
+        <td>${this.formatTime(res.pickup_at)}</td>
+        <td>${res.passenger_name || res.passenger_first_name + ' ' + res.passenger_last_name || ''}</td>
+        <td>${res.company_name || ''}</td>
+        <td>${res.vehicle_type || ''}</td>
+        <td>$${(res.grand_total || 0).toFixed(2)}</td>
+        <td>${res.payment_type || ''}</td>
+        <td>${res.status || 'confirmed'}</td>
+        <td>${res.group_name || ''}</td>
         <td><a href="#" class="select-link">Select >></a></td>
       `;
       tableBody.appendChild(row);
     });
     
-    console.log(`✅ Displayed ${reservations.length} reservations`);
+    console.log(`✅ Displayed ${filtered.length} reservations (settled hidden)`);
     
     // Re-attach event listeners to new elements
     this.attachRowListeners();

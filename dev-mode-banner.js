@@ -27,6 +27,17 @@ export function initDevModeBanner() {
   attachEventListeners();
 }
 
+// Auto-initialize when script is loaded in the browser
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    try {
+      initDevModeBanner();
+    } catch (e) {
+      console.warn('Dev mode banner init failed:', e);
+    }
+  });
+}
+
 /**
  * Create the banner HTML and inject into page
  */

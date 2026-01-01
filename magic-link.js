@@ -40,8 +40,9 @@ async function sendMagicLink(email) {
     }
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const { getSupabaseCredentials } = await import('./supabase-config.js');
-    const { url, anonKey } = getSupabaseCredentials();
+    const { getSupabaseCredentials, getSupabaseAuthUrl } = await import('./supabase-config.js');
+    const { anonKey } = getSupabaseCredentials();
+    const url = getSupabaseAuthUrl(); // use direct Supabase URL for auth
     const supabase = createClient(url, anonKey);
 
     const redirectTo = `${window.location.origin}/index.html`;

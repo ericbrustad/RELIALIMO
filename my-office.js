@@ -10,6 +10,7 @@ class MyOffice {
     this.currentAffiliate = null;
     this.currentSystemSettingsPage = 'service-types';
     this.currentResource = 'drivers';
+    this.companySettingsManager = new CompanySettingsManager();
     this.drivers = [];
     this.affiliates = [];
     this.vehicleTypeSeeds = this.buildVehicleTypeSeeds();
@@ -61,6 +62,7 @@ class MyOffice {
     this.setupAffiliatesForm();
     this.setupSystemUsers();
     this.setupCompanyInfoForm();
+    this.setupAccountsCalendarPrefs();
     this.setupVehicleTypeSelection();
     this.checkURLParameters();
     // Initialize API
@@ -231,6 +233,14 @@ class MyOffice {
           console.log('Navigating to resource:', resource);
           this.navigateToResource(resource);
         }
+      });
+    }
+
+    const updateAccountsCalendarPrefsBtn = document.getElementById('updateAccountsCalendarPrefsBtn');
+    if (updateAccountsCalendarPrefsBtn) {
+      updateAccountsCalendarPrefsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.saveAccountsCalendarPrefs();
       });
     }
 
@@ -873,44 +883,54 @@ class MyOffice {
     try {
       const apiModule = await import('./api-service.js');
       const supabase = await apiModule.setupAPI();
+      if (!supabase) throw new Error('Supabase client unavailable');
 
-      if (supabase) {
-        const { data: existingRows, error: fetchError } = await supabase
-          .from('organizations')
-          .select('id')
-          .limit(1);
-
-        if (fetchError) throw fetchError;
-
-        const existing = Array.isArray(existingRows) ? existingRows[0] : null;
-
-        if (existing?.id) {
-          const { error } = await supabase
-            .from('organizations')
-            .update(info)
-            .eq('id', existing.id);
-
-          if (error) throw error;
-          console.log('✅ Company info updated in Supabase');
-        } else {
-          const { error } = await supabase
-            .from('organizations')
-            .insert([{ ...info, created_at: new Date().toISOString() }]);
-
-          if (error) throw error;
-          console.log('✅ Company info created in Supabase');
+      if (typeof apiModule.ensureValidToken === 'function') {
+        const tokenOk = await apiModule.ensureValidToken(supabase);
+        if (!tokenOk) {
+          alert('⚠️ Session expired. Saved locally. Please sign in again, then retry to sync.');
+          return;
         }
-
-        alert('✅ Company information saved successfully!');
-        return;
       }
+
+      const { data: existingRows, error: fetchError } = await supabase
+        .from('organizations')
+        .select('id')
+        .limit(1);
+
+      if (fetchError) throw fetchError;
+
+      const existing = Array.isArray(existingRows) ? existingRows[0] : null;
+
+      if (existing?.id) {
+        const { error } = await supabase
+          .from('organizations')
+          .update(info)
+          .eq('id', existing.id);
+
+        if (error) throw error;
+        console.log('✅ Company info updated in Supabase');
+      } else {
+        const { error } = await supabase
+          .from('organizations')
+          .insert([{ ...info, created_at: new Date().toISOString() }]);
+
+        if (error) throw error;
+        console.log('✅ Company info created in Supabase');
+      }
+
+      alert('✅ Company information saved locally and synced to cloud.');
+      return;
     } catch (e) {
       console.error('Error saving to Supabase:', e);
-      alert('⚠️ Saved locally. Could not sync to cloud: ' + e.message);
+      const needsLogin = /jwt expired/i.test(e?.message || '') || /expired/i.test(e?.message || '');
+      if (needsLogin) {
+        alert('⚠️ Saved locally. Session expired—please sign in again, then click save to sync.');
+      } else {
+        alert('⚠️ Saved locally. Could not sync to cloud: ' + (e?.message || e));
+      }
       return;
     }
-
-    alert('✅ Company information saved locally.');
   }
 
   setupSystemUsers() {
@@ -1204,6 +1224,64 @@ class MyOffice {
     if (contentElement) {
       contentElement.classList.add('active');
       this.currentPrefTab = prefTab;
+    }
+  }
+
+  setupAccountsCalendarPrefs() {
+    this.loadAccountsCalendarPrefs();
+  }
+
+  loadAccountsCalendarPrefs() {
+    try {
+      const settings = this.companySettingsManager?.getAllSettings?.() || {};
+      const startInput = document.getElementById('confirmationNumberStart');
+      const defaultStart = 100000;
+      const storedStart = parseInt(settings.confirmationStartNumber, 10);
+      const startValue = !isNaN(storedStart) && storedStart > 0 ? storedStart : defaultStart;
+
+      if (startInput) {
+        startInput.value = startValue;
+        startInput.placeholder = startValue.toString();
+      }
+
+      const tickerCityInput = document.getElementById('tickerSearchCity');
+      if (tickerCityInput) {
+        tickerCityInput.value = settings.tickerSearchCity || '';
+      }
+    } catch (error) {
+      console.error('Failed to load accounts/calendar prefs:', error);
+    }
+  }
+
+  saveAccountsCalendarPrefs() {
+    try {
+      const startInput = document.getElementById('confirmationNumberStart');
+      const rawStart = startInput?.value?.trim();
+      let startValue = parseInt(rawStart, 10);
+      const defaultStart = 100000;
+      if (isNaN(startValue) || startValue <= 0) {
+        startValue = defaultStart;
+      }
+
+      const existingSettings = this.companySettingsManager?.getAllSettings?.() || {};
+      const existingLastUsedRaw = existingSettings.lastUsedConfirmationNumber;
+      const existingLastUsed = parseInt(existingLastUsedRaw, 10);
+      const normalizedLastUsed = isNaN(existingLastUsed) ? null : existingLastUsed;
+      const adjustedLastUsed = Math.max(normalizedLastUsed ?? (startValue - 1), startValue - 1);
+
+      const tickerCityInput = document.getElementById('tickerSearchCity');
+      const tickerCity = tickerCityInput?.value?.trim() || '';
+
+      this.companySettingsManager?.updateSettings({
+        confirmationStartNumber: startValue,
+        lastUsedConfirmationNumber: adjustedLastUsed,
+        tickerSearchCity: tickerCity
+      });
+
+      alert('Company preferences updated.');
+    } catch (error) {
+      console.error('Failed to save accounts/calendar prefs:', error);
+      alert('Could not save preferences. Please try again.');
     }
   }
 

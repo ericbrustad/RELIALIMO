@@ -779,26 +779,16 @@ class Calendar {
     const now = new Date();
     const horizon = new Date(now);
     horizon.setDate(horizon.getDate() + 120);
-
-    const events = [
-      ...(showFederal ? this.getUSHolidays(now.getFullYear()) : []),
-      ...(showMajor ? this.getMajorObservances(now.getFullYear()) : []),
-      ...(showFederal ? this.getUSHolidays(now.getFullYear() + 1) : []),
-      ...(showMajor ? this.getMajorObservances(now.getFullYear() + 1) : [])
-    ]
-      .filter(e => e?.date instanceof Date && !isNaN(e.date.getTime()))
-      .filter(e => e.date >= this.startOfDay(now) && e.date <= horizon)
-      .sort((a, b) => a.date - b.date);
+    const events = this.buildTickerItems({ showFederal, showMajor, now, horizon });
 
     if (events.length === 0) {
-      track.textContent = 'No upcoming holidays/observances';
+      track.textContent = 'No upcoming items';
       return;
     }
 
-    const label = (d) => d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
     const html = events
       .map(e => {
-        const text = `${label(e.date)} — ${e.name}`;
+        const text = `${this.formatTickerDateTime(e.date)} — ${e.name}`;
         return `<span class="holiday-ticker-item"><span class="holiday-ticker-dot"></span>${this.escapeHtml(text)}</span>`;
       })
       .join('');
@@ -809,6 +799,86 @@ class Calendar {
 
   startOfDay(d) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  addDays(date, days, hours = 19, minutes = 30) {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    d.setHours(hours, minutes, 0, 0);
+    return d;
+  }
+
+  formatTickerDateTime(d) {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+    const datePart = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+    const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `${datePart} ${timePart}`;
+  }
+
+  buildTickerItems({ showFederal, showMajor, now, horizon }) {
+    const baseEvents = [
+      ...(showFederal ? this.getUSHolidays(now.getFullYear()) : []),
+      ...(showMajor ? this.getMajorObservances(now.getFullYear()) : []),
+      ...(showFederal ? this.getUSHolidays(now.getFullYear() + 1) : []),
+      ...(showMajor ? this.getMajorObservances(now.getFullYear() + 1) : [])
+    ];
+
+    const entertainmentAndSports = this.getEntertainmentAndSportsEvents(now);
+
+    return [...baseEvents, ...entertainmentAndSports]
+      .filter(e => e?.date instanceof Date && !isNaN(e.date.getTime()))
+      .filter(e => e.date >= this.startOfDay(now) && e.date <= horizon)
+      .sort((a, b) => a.date - b.date);
+  }
+
+  getEntertainmentAndSportsEvents(now) {
+    const base = this.startOfDay(now);
+    const items = [];
+
+    const companyInfo = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('companyInfo') || '{}');
+      } catch {
+        return {};
+      }
+    })();
+
+    const settings = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('relia_company_settings') || '{}');
+      } catch {
+        return {};
+      }
+    })();
+
+    const manualLocation = (settings.tickerSearchCity || '').trim();
+    const city = (companyInfo.city || companyInfo.companyCity || '').trim();
+    const state = (companyInfo.state || companyInfo.companyState || '').trim();
+    const cityState = manualLocation || [city, state].filter(Boolean).join(', ') || 'Local';
+
+    const wrap = (label) => `${label} — ${cityState}`;
+
+    const templates = [
+      { label: 'Concert: Indie Night at Riverside Hall', offset: 3, hour: 19, minute: 30 },
+      { label: 'Concert: Jazz Fest at Downtown Theater', offset: 9, hour: 18, minute: 0 },
+      { label: 'Concert: Rock Block at City Arena', offset: 15, hour: 20, minute: 0 },
+      { label: 'Concert: Acoustic Sessions at Garden Stage', offset: 28, hour: 19, minute: 0 },
+      { label: 'NBA: Home Team vs. Conference Rival', offset: 5, hour: 19, minute: 0 },
+      { label: 'NBA: Home Team vs. Divisional Opponent', offset: 12, hour: 19, minute: 30 },
+      { label: 'NBA: Home Team vs. Interconference Matchup', offset: 26, hour: 19, minute: 0 },
+      { label: 'NFL: Home Team vs. Conference Foe', offset: 7, hour: 13, minute: 0 },
+      { label: 'NFL: Home Team vs. Divisional Rival', offset: 20, hour: 19, minute: 20 },
+      { label: 'NHL: Home Team vs. Central Division', offset: 10, hour: 18, minute: 30 },
+      { label: 'NHL: Home Team vs. Coastal Division', offset: 18, hour: 19, minute: 0 },
+      { label: 'NSL: Home Club vs. West Division', offset: 14, hour: 17, minute: 30 },
+      { label: 'NSL: Home Club vs. East Division', offset: 25, hour: 19, minute: 15 }
+    ];
+
+    templates.forEach(t => {
+      items.push({ name: wrap(t.label), date: this.addDays(base, t.offset, t.hour, t.minute) });
+    });
+
+    return items;
   }
 
   async getReservationsForMonth(year, monthIndex) {

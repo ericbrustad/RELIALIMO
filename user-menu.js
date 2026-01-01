@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getSupabaseCredentials } from './supabase-config.js';
+import { getSupabaseCredentials, getSupabaseAuthUrl } from './supabase-config.js';
 
 let supabase = null;
 
@@ -191,7 +191,8 @@ async function init() {
   renderSkeleton(container);
 
   try {
-    const { url, anonKey } = getSupabaseCredentials();
+    const { anonKey } = getSupabaseCredentials();
+    const url = getSupabaseAuthUrl(); // use direct Supabase URL for auth client
     supabase = createClient(url, anonKey);
   } catch {
     supabase = null;

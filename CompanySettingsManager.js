@@ -41,6 +41,7 @@ class CompanySettingsManager {
       acceptCash: true,
       acceptCheck: false,
       acceptOnlinePayment: true,
+      tickerSearchCity: '',
       
       // Vehicle Settings
       defaultVehicleType: 'Sedan',
@@ -54,6 +55,8 @@ class CompanySettingsManager {
       cancellationPolicyHours: 2,
       noShowFeePercent: 50,
       maxPassengersPerVehicle: 6,
+      confirmationStartNumber: 100000,
+      lastUsedConfirmationNumber: null,
       
       // Communication Settings
       sendConfirmationEmail: true,
@@ -157,6 +160,25 @@ class CompanySettingsManager {
     } catch (error) {
       console.error('[CompanySettingsManager] ❌ Error saving settings:', error);
       return false;
+    }
+  }
+
+  async saveSettingsToSupabase() {
+    try {
+      const apiModule = await import('./api-service.js');
+      if (typeof apiModule.saveCompanySettings !== 'function') {
+        console.warn('[CompanySettingsManager] Supabase save unavailable');
+        return { success: false, error: 'Supabase save unavailable' };
+      }
+
+      const result = await apiModule.saveCompanySettings(this.settings);
+      if (!result?.success) {
+        console.warn('[CompanySettingsManager] Supabase save failed:', result?.error?.message || result?.error);
+      }
+      return result;
+    } catch (error) {
+      console.warn('[CompanySettingsManager] Supabase save threw:', error?.message || error);
+      return { success: false, error };
     }
   }
 

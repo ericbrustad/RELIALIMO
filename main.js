@@ -544,10 +544,7 @@ class LimoReservationSystem {
     // One-time purge of ghost reservations from other organizations
     this.purgeGhostReservations();
 
-    // Check for startup page setting and navigate if needed
-    if (this.shouldNavigateToStartupPage()) {
-      return; // Page navigation will happen, don't continue init
-    }
+    // Skip startup page redirect to keep users on the current page
 
     // Initialize UI
     this.uiManager.init();

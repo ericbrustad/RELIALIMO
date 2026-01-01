@@ -37,7 +37,8 @@ export function navigateToSection(section) {
 
   const currentPath = (window.location.pathname || '').toLowerCase();
   if (currentPath.endsWith(`/${route}`.toLowerCase()) || currentPath.endsWith(`\\${route}`.toLowerCase())) {
-    return true; // already here
+    window.location.reload();
+    return true;
   }
 
   window.location.href = route;

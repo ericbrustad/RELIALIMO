@@ -1,90 +1,63 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getSupabaseCredentials } from './supabase-config.js';
+import { getSupabaseCredentials, getSupabaseAuthUrl } from './supabase-config.js';
 
-let supabase;
+const { anonKey: SUPABASE_ANON_KEY } = getSupabaseCredentials();
+const SUPABASE_URL = getSupabaseAuthUrl();
 
-// Session storage keys (must match supabase-client.js)
-const SESSION_STORAGE_KEY = 'supabase_session';
-const ACCESS_TOKEN_KEY = 'supabase_access_token';
-
-try {
-  const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } = getSupabaseCredentials();
-  
-  // Create Supabase client with proper auth configuration
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      autoRefreshToken: true,        // Enable automatic token refresh (default but explicit)
-      persistSession: true,          // Persist session to localStorage
-      detectSessionInUrl: true,      // Handle magic link/OAuth callbacks
-      storageKey: 'sb-siumiadylwcrkaqsfwkj-auth-token', // SDK storage key
-    }
-  });
-  
-  // Listen for auth state changes and sync tokens to our custom storage keys
-  // This ensures the REST client (supabase-client.js) always has the latest token
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    console.log(`🔐 Auth state change: ${event}`);
-    
-    if (session) {
-      // Sync session to our custom storage keys for REST client compatibility
-      try {
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-        if (session.access_token) {
-          localStorage.setItem(ACCESS_TOKEN_KEY, session.access_token);
-        }
-        console.log('✅ Session synced to storage');
-      } catch (e) {
-        console.warn('⚠️ Failed to sync session to storage:', e);
-      }
-    } else if (event === 'SIGNED_OUT') {
-      // Clear custom storage on sign out
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      console.log('🔓 Session cleared from storage');
-    }
-    
-    // Dispatch custom event for other parts of the app
-    window.dispatchEvent(new CustomEvent('supabase-session-change', { detail: session }));
-  });
-  
-  console.log('✅ Supabase client initialized with auto-refresh enabled');
-  
-} catch (error) {
-  console.error('Supabase configuration error', error);
-  throw error;
-}
-
-export class AuthGuard {
-  static async checkAuth() {
-    const { data } = await supabase.auth.getSession();
-    return Boolean(data?.session);
-  }
-
-  static async protectPage() {
-    const hasSession = await this.checkAuth();
-
-    if (!hasSession) {
-      window.location.href = '/auth.html';
-      return false;
-    }
-
-    return true;
-  }
-
-  static async setupAuthListener(callback) {
-    return supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        window.location.href = '/auth.html';
-      }
-      if (typeof callback === 'function') {
-        callback(_event, session);
-      }
-    });
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  AuthGuard.protectPage().catch((error) => console.error('Failed to enforce auth guard', error));
+// Create Supabase client with proper auth configuration
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
 });
 
-export default AuthGuard;
+// --- AUTH LOGIC ---
+
+// Function to handle redirection
+const handleAuth = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const isAuthPage = window.location.pathname.endsWith('/auth.html');
+
+  if (!session && !isAuthPage) {
+    console.log('AuthGuard: No session, redirecting to login.');
+    window.location.replace('/auth.html');
+  } else if (session && isAuthPage) {
+    console.log('AuthGuard: Session found on auth page, redirecting to app.');
+    window.location.replace('/');
+  } else {
+    console.log('AuthGuard: Auth check passed.');
+  }
+};
+
+// Listen for auth state changes
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log(`AuthGuard: Auth state changed. Event: ${event}`);
+  const isAuthPage = window.location.pathname.endsWith('/auth.html');
+
+  if (event === 'SIGNED_OUT') {
+    if (!isAuthPage) {
+      window.location.replace('/auth.html');
+    }
+  } else if (event === 'SIGNED_IN' && isAuthPage) {
+    window.location.replace('/');
+  }
+  
+  // Sync session to localStorage for other parts of the app
+  if (session) {
+    localStorage.setItem('supabase_session', JSON.stringify(session));
+    if (session.access_token) {
+      localStorage.setItem('supabase_access_token', session.access_token);
+    }
+  } else {
+    localStorage.removeItem('supabase_session');
+    localStorage.removeItem('supabase_access_token');
+  }
+});
+
+// Initial auth check on page load
+handleAuth();
+
+export { supabase };
+

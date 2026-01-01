@@ -3,12 +3,39 @@ import { wireMainNav, navigateToSection } from './navigation.js';
 class Accounts {
   constructor() {
     this.currentTab = 'accounts';
+    this.localRegion = this.getLocalRegionFromSettings();
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => this.init());
     } else {
       this.init();
     }
+  }
+
+  getLocalRegionFromSettings() {
+    try {
+      const settings = JSON.parse(localStorage.getItem('relia_company_settings') || '{}');
+      const raw = (settings.tickerSearchCity || '').toString();
+      const parts = raw.split(',').map(p => p.trim()).filter(Boolean);
+      return {
+        city: parts[0] || '',
+        state: parts[1] || ''
+      };
+    } catch (e) {
+      console.warn('⚠️ Failed to read tickerSearchCity setting:', e);
+      return { city: '', state: '' };
+    }
+  }
+
+  applyLocalRegionDefaults() {
+    const { city, state } = this.localRegion || {};
+    if (!city && !state) return;
+
+    const cityEl = document.getElementById('acctCity');
+    const stateEl = document.getElementById('acctState');
+
+    if (cityEl && !cityEl.value) cityEl.value = city;
+    if (stateEl && !stateEl.value) stateEl.value = state;
   }
 
   clearDres4LoginFields() {
@@ -240,6 +267,9 @@ class Accounts {
       
       // Load accounts list
       await this.loadAccountsList();
+
+      // Apply local region defaults on initial load if fields are empty
+      this.applyLocalRegionDefaults();
       
       // Check URL parameters for mode and account
       const params = new URLSearchParams(window.location.search);
@@ -1186,6 +1216,9 @@ class Accounts {
       const el = document.getElementById(id);
       if (el) el.value = defaultVal;
     });
+
+    // Apply local region defaults after clearing
+    this.applyLocalRegionDefaults();
     
     // Reset checkboxes
     const checkboxDefaults = {

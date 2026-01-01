@@ -9,6 +9,7 @@ body {
   background: #e8e8e8;
   color: #333;
   overflow-x: hidden;
+  font-size: 12px;
 }
 
 /* Header */
@@ -192,6 +193,7 @@ body {
   display: flex;
   gap: 8px;
 }
+
 
 .action-btn {
   padding: 6px 14px;
@@ -642,6 +644,138 @@ textarea.form-control {
 
 .stop-type {
   width: 100%;
+}
+
+/* Compact layout to fit more above the fold */
+.header-content {
+  padding: 6px 12px;
+}
+
+.window-tabs-bar {
+  padding: 6px 12px;
+}
+
+.action-buttons-bar {
+  padding: 8px 12px;
+}
+
+.panel {
+  padding: 8px;
+}
+
+.panel-header {
+  padding: 6px 10px;
+}
+
+.form-section {
+  padding: 8px;
+}
+
+.form-group {
+  margin-bottom: 6px;
+}
+
+.form-row-2,
+.form-row-3,
+.form-row-4 {
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.subsection-title {
+  margin: 8px 0 6px 0;
+}
+
+/* Ultra-compact overrides for tighter vertical spacing */
+.main-content {
+  padding: 4px;
+}
+
+.reservation-grid {
+  gap: 6px;
+}
+
+.left-column,
+.middle-column,
+.right-column {
+  gap: 6px;
+}
+
+.panel {
+  border-radius: 2px;
+  padding: 6px;
+}
+
+.attention-warning {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.action-buttons {
+  gap: 6px;
+}
+
+.action-btn,
+.btn-copy,
+.btn-small {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.form-section {
+  padding: 4px;
+}
+
+.form-group {
+  margin-bottom: 3px;
+}
+
+.form-group label,
+.form-group-inline label {
+  margin-bottom: 1px;
+  font-size: 9px;
+}
+
+.form-control,
+.payment-control,
+.payment-control-inline {
+  padding: 3px 5px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.form-row-2,
+.form-row-3,
+.form-row-4 {
+  gap: 3px;
+  margin-bottom: 5px;
+}
+
+.payment-form-group,
+.payment-form-group-inline {
+  margin-bottom: 5px;
+}
+
+.payment-form-row-2 {
+  gap: 5px;
+}
+
+.stop-row {
+  gap: 3px;
+  padding: 5px;
+}
+
+.cost-row {
+  grid-template-columns: 1fr 60px 60px 60px;
+}
+
+.cost-cell {
+  padding: 3px 4px;
+}
+
+.cost-input {
+  padding: 2px 4px;
+  font-size: 9px;
 }
 
 /* Cost Breakdown */
