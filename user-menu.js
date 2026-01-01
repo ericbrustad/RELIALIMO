@@ -40,7 +40,7 @@ function renderSkeleton(container) {
     <div class="user-menu-wrapper">
       <button type="button" class="user-menu-toggle" aria-expanded="false" id="userMenuToggle">
         <span class="user-avatar" id="userMenuAvatar">?</span>
-        <span class="user-email" id="userMenuEmail">Logged in as: ...</span>
+        <span class="user-email" id="userMenuEmail">...</span>
         <span class="menu-icon" aria-hidden="true">▼</span>
       </button>
 
@@ -72,7 +72,7 @@ function renderSkeleton(container) {
 }
 
 function setMenuState({ email, role, signedIn }) {
-  const emailText = signedIn ? `Logged in as: ${email}` : 'Not signed in';
+  const emailText = signedIn ? email : 'Not signed in';
 
   const avatar = document.getElementById('userMenuAvatar');
   const avatarBig = document.getElementById('userMenuAvatarBig');

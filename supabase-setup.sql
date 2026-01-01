@@ -14,6 +14,9 @@ create index if not exists idx_reservations_booked_by
 create index if not exists idx_reservations_org_id
   on public.reservations(organization_id);
 
+create index if not exists idx_vehicle_types_org_id
+  on public.vehicle_types(organization_id);
+
 create index if not exists idx_reservation_events_reservation_id
   on public.reservation_events(reservation_id);
 
@@ -89,6 +92,28 @@ for each row execute function public.tg_set_audit_user();
 grant execute on function public.get_user_role_in_org(uuid) to authenticated;
 grant execute on function public.tg_set_audit_user() to authenticated;
 grant execute on function public.tg_reservations_set_conf() to authenticated;
+
+-- Vehicle Types policies
+drop policy if exists "vehicle_types_select" on public.vehicle_types;
+create policy "vehicle_types_select"
+on public.vehicle_types for select to authenticated
+using (organization_id in (select organization_id from public.organization_members where user_id = auth.uid()));
+
+drop policy if exists "vehicle_types_insert" on public.vehicle_types;
+create policy "vehicle_types_insert"
+on public.vehicle_types for insert to authenticated
+with check (organization_id in (select organization_id from public.organization_members where user_id = auth.uid()));
+
+drop policy if exists "vehicle_types_update" on public.vehicle_types;
+create policy "vehicle_types_update"
+on public.vehicle_types for update to authenticated
+using (organization_id in (select organization_id from public.organization_members where user_id = auth.uid()))
+with check (organization_id in (select organization_id from public.organization_members where user_id = auth.uid()));
+
+drop policy if exists "vehicle_types_delete" on public.vehicle_types;
+create policy "vehicle_types_delete"
+on public.vehicle_types for delete to authenticated
+using (organization_id in (select organization_id from public.organization_members where user_id = auth.uid()));
 
 -- 6. RESERVATION EVENTS INSERT POLICY (Allow drivers/customers to add notes)
 -- ===================================

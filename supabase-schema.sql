@@ -270,9 +270,33 @@ create table if not exists public.drivers (
 
 alter table public.drivers enable row level security;
 
--- ===================================
--- 8. VEHICLES TABLE
--- ===================================
+
+-- Vehicle Types (lookup used by vehicles/reservations)
+create table if not exists public.vehicle_types (
+  id uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  code text,
+  status text default 'ACTIVE' check (status in ('ACTIVE','INACTIVE')),
+  pricing_basis text default 'HOURS',
+  passenger_capacity integer,
+  luggage_capacity integer,
+  color_hex text,
+  service_type_tags jsonb default '[]'::jsonb,
+  accessible boolean default false,
+  hide_from_online boolean default false,
+  description text,
+  sort_order integer default 0,
+  metadata jsonb default '{}'::jsonb,
+  created_by uuid references auth.users(id) on delete set null,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  unique(organization_id, name)
+);
+
+alter table public.vehicle_types enable row level security;
+
 
 create table if not exists public.vehicles (
   id uuid primary key default uuid_generate_v4(),

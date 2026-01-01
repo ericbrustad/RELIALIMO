@@ -51,7 +51,7 @@
     <link rel="stylesheet" href="user-menu.css" />
     <style>
       :root {
-        --sidebar-width: 220px;
+        --sidebar-width: 175px;
       }
 
       /* Main section visibility control */
@@ -110,8 +110,8 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 12px;
-        padding: 16px;
+        gap: 6px;
+        padding: 8px;
         height: 100%;
         box-sizing: border-box;
       }
@@ -119,7 +119,7 @@
       html[data-layout="vertical"] #app > header.header .main-nav {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 4px;
         flex: 1;
       }
 
@@ -128,14 +128,14 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 12px;
+        padding: 6px 8px;
         border: 1px solid rgba(255,255,255,0.1);
         background: rgba(255,255,255,0.05);
         color: white;
         cursor: pointer;
-        font-size: 13px;
+        font-size: 11px;
         font-weight: 600;
-        border-radius: 6px;
+        border-radius: 5px;
         transition: background 0.15s ease, transform 0.05s ease;
       }
 
@@ -150,13 +150,18 @@
       }
 
       html[data-layout="vertical"] #app > header.header .logo {
-        font-size: 16px;
+        font-size: 12px;
         font-weight: 800;
         color: white;
         display: flex;
         align-items: center;
         gap: 6px;
         margin: 0;
+      }
+
+      /* Shrink icon sizes in vertical menu */
+      html[data-layout="vertical"] #app > header.header .nav-btn span:last-child {
+        font-size: 18px !important;
       }
 
       html[data-layout="vertical"] .app-main-section {
@@ -198,7 +203,10 @@
         flex-direction: row;
         gap: 6px;
         flex: 1;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        white-space: nowrap;
       }
 
       html[data-layout="horizontal"] #app > header.header .nav-btn {
@@ -236,43 +244,14 @@
         height: calc(100vh - 120px) !important;
       }
 
-      /* Layout switcher */
-      .layout-toggle {
-        position: fixed;
-        top: 12px;
-        right: 12px;
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-        width: 160px;
-        z-index: 2001;
-      }
-
-      .layout-toggle button {
-        padding: 6px 8px;
-        font-size: 12px;
-        font-weight: 700;
-        border-radius: 6px;
-        border: 1px solid #ccc;
-        cursor: pointer;
-        min-width: 0;
-        width: calc(50% - 3px);
-      }
-
-      .layout-toggle button.active {
-        background: #667eea;
-        color: white;
-        border-color: #667eea;
-      }
-
       /* FINAL GUARD: force sidebar width regardless of late styles */
       html[data-layout="vertical"] body {
-        padding-left: 220px !important;
+        padding-left: var(--sidebar-width) !important;
       }
       html[data-layout="vertical"] #app > header.header {
-        width: 220px !important;
-        min-width: 220px !important;
-        max-width: 220px !important;
+        width: var(--sidebar-width) !important;
+        min-width: var(--sidebar-width) !important;
+        max-width: var(--sidebar-width) !important;
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
@@ -303,14 +282,24 @@
       }
       #app > header.header .nav-btn span { display: inline-block; max-width: 100%; }
 
-      /* Keep user menu visible in vertical layout */
+      /* Position user menu top-right in horizontal; keep visible in vertical */
+      #userMenuContainer {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: flex;
+        justify-content: flex-end;
+        width: auto;
+        z-index: 1200;
+      }
       html[data-layout="vertical"] #userMenuContainer {
-        margin-left: 0;
-        width: 100%;
-        padding: 8px 0 4px;
-        justify-content: flex-start;
-        position: sticky;
-        bottom: 8px;
+        position: static;
+        align-self: flex-end;
+        margin-left: auto;
+        padding: 4px 0;
+      }
+      html[data-layout="vertical"] #app > header.header .header-content {
+        padding-top: 16px;
       }
     </style>
     <script>
@@ -365,12 +354,12 @@
             headerEl.style.setProperty('top', '0', 'important');
             headerEl.style.setProperty('left', '0', 'important');
             headerEl.style.setProperty('bottom', '0', 'important');
-            headerEl.style.setProperty('width', '220px', 'important');
-            headerEl.style.setProperty('min-width', '220px', 'important');
-            headerEl.style.setProperty('max-width', '220px', 'important');
+            headerEl.style.setProperty('width', 'var(--sidebar-width)', 'important');
+            headerEl.style.setProperty('min-width', 'var(--sidebar-width)', 'important');
+            headerEl.style.setProperty('max-width', 'var(--sidebar-width)', 'important');
             headerEl.style.setProperty('box-sizing', 'border-box', 'important');
           }
-          document.body.style.setProperty('padding-left', '220px', 'important');
+          document.body.style.setProperty('padding-left', 'var(--sidebar-width)', 'important');
         } else {
           if (headerEl) {
             headerEl.style.removeProperty('min-width');
@@ -393,10 +382,6 @@
     </script>
   </head>
   <body>
-    <div class="layout-toggle" aria-label="Header layout selector">
-      <button id="layoutVertical">Vertical</button>
-      <button id="layoutHorizontal">Horizontal</button>
-    </div>
     <div id="app">
       <!-- UNIFIED HEADER -->
       <header class="header">

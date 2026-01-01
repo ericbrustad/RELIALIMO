@@ -6,6 +6,7 @@
   <title>Import/Export Drivers</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="./env.js"></script>
+  <script type="module" src="./auth-guard.js"></script>
   <style>
     .frozen-header { position: fixed; top: 0; left: 0; right: 0; height: 50px; background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     .frozen-header .logo { color: #fff; font-size: 18px; font-weight: bold; display: flex; align-items: center; gap: 4px; }
@@ -404,25 +405,37 @@ function updateMappingStatus(forceHide = false) {
 async function ensureValidSession() {
   await setupAPI();
   supabaseClient = getSupabaseClient();
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user) {
-    const email = window.ENV?.SUPABASE_EMAIL; const password = window.ENV?.SUPABASE_PASSWORD;
-    if (!email || !password) throw new Error('Missing credentials in env.js');
-    const result = await signInWithEmail(email, password);
-    if (!result.success) throw new Error(result.error || 'Auth failed');
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session || !session.user) {
+    // Redirect to login if not authenticated; preserve return path
+    const redirect = encodeURIComponent(window.location.pathname);
+    window.location.href = `/auth.html?redirect=${redirect}`;
+    throw new Error('Authentication required');
   }
 }
 
 async function getOrgContext() {
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) throw new Error('User not authenticated');
+  // Primary: org membership lookup
   const { data, error } = await supabaseClient
     .from('organization_members')
     .select('organization_id')
     .eq('user_id', user.id)
     .single();
+  if (data && data.organization_id) return data.organization_id;
+
+  // Secondary: env override
+  const envOrg = window.ENV?.DEFAULT_ORG_ID || window.ENV?.SUPABASE_ORG_ID;
+  if (envOrg) return envOrg;
+
+  // Tertiary: first org in table
+  const { data: orgs, error: orgErr } = await supabaseClient.from('organizations').select('id').limit(1);
+  if (orgs && orgs[0] && orgs[0].id) return orgs[0].id;
+
+  // Surface the original membership error if present, otherwise a generic
   if (error) throw error;
-  return data.organization_id;
+  throw new Error('No organization context found');
 }
 
 async function checkDriverSchema() {
@@ -571,7 +584,7 @@ function mapRowToDriver(row, orgId) {
   const rawType = (row['Type'] || '').toString().trim();
   const normalizedType = rawType ? 'Driver' : 'Driver';
   return {
-    organization_id: orgId,
+    organization_id: orgId || null,
     first_name: row['FName'] || null,
     last_name: row['LName'] || null,
     driver_level: row['Level'] ? String(row['Level']).replace(/[^0-9]/g,'') : null,
@@ -622,6 +635,7 @@ function mapRowToDriver(row, orgId) {
 }
 
 function mapRowToPayRates(row, driverId, orgId) {
+  if (!driverId || !orgId) return null;
   return {
     driver_id: driverId,
     organization_id: orgId,
@@ -632,6 +646,7 @@ function mapRowToPayRates(row, driverId, orgId) {
 }
 
 function mapRowToSchedules(row, driverId, orgId) {
+  if (!driverId || !orgId) return [];
   const toTime = (v) => { if (!v) return null; try { const m = String(v).trim(); if (!m) return null; // Expect HH:MM
     const parts = m.split(':'); if (parts.length < 2) return null; const hh = parts[0].padStart(2,'0'); const mm = parts[1].padStart(2,'0'); return `${hh}:${mm}:00`; } catch{ return null; } };
   const days = [
@@ -740,6 +755,7 @@ async function importDrivers() {
   try {
     await ensureValidSession();
     const orgId = await getOrgContext();
+    if (!orgId) return setStatus('importStatus','error','Missing organization context; cannot import.');
     if (!importData || importData.length === 0) return setStatus('importStatus','error','No data to import');
 
     let inserted = 0; let updated = 0; let failed = 0; let firstError = null;
@@ -747,6 +763,7 @@ async function importDrivers() {
 
     for (const row of importData) {
       const driverRowRaw = mapRowToDriver(row, orgId);
+      if (!driverRowRaw.organization_id) return setStatus('importStatus','error','Organization id missing; aborting import.');
       const driverRow = filterToDriverColumns(driverRowRaw, colSet);
 
       // Try to find existing driver by email or license
@@ -786,7 +803,10 @@ async function importDrivers() {
         inserted++;
         const driverId = ins && ins[0] && ins[0].id;
         if (driverId) {
-          try { await supabaseClient.from('driver_pay_rates').insert([mapRowToPayRates(row, driverId, orgId)]); } catch {}
+          try {
+            const rates = mapRowToPayRates(row, driverId, orgId);
+            if (rates) await supabaseClient.from('driver_pay_rates').insert([rates]);
+          } catch {}
           try {
             const schedRows = mapRowToSchedules(row, driverId, orgId);
             if (schedRows.length) await supabaseClient.from('driver_schedules').insert(schedRows);

@@ -157,41 +157,77 @@ body {
   font-size: 14px;
 }
 
-/* Action Buttons Bar */
-.action-buttons-bar {
-  background: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-  padding: 10px 20px;
+/* Content layout with side actions */
+
+.content-with-actions {
+  position: relative;
+  padding: 0 10px 10px 10px;
+  box-sizing: border-box;
+}
+
+.content-with-actions .main-content { min-width: 0; }
+
+
+.action-buttons-vertical {
+  position: sticky;
+  top: 0;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  padding: 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  z-index: 900;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+  .content-with-actions { padding-right: 10px; }
+  .action-buttons-vertical {
+    position: sticky;
+    top: 0;
+    justify-content: flex-start;
+  }
 }
 
 .conf-number-section {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #2c5aa0;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
 }
 
-.conf-number-section label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
+.conf-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2c5aa0;
 }
 
 .conf-input {
-  padding: 6px 12px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 5px 10px;
+  border: 1px solid #2c5aa0;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
   width: 100px;
-  background: white;
+  background: #f7fbff;
+  color: #2c5aa0;
+  text-align: center;
 }
 
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 
@@ -483,7 +519,8 @@ body {
 
 /* Main Content */
 .main-content {
-  max-width: 1800px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 12px;
 }
@@ -491,8 +528,9 @@ body {
 /* Reservation Grid */
 .reservation-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  width: 100%;
 }
 
 /* Columns */
@@ -501,14 +539,47 @@ body {
 .right-column {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   align-items: stretch;
+}
+
+.middle-column,
+.right-column {
+  gap: 6px;
+}
+
+.middle-column .panel,
+.right-column .panel {
+  padding: 4px;
+}
+
+.middle-column .form-section,
+.right-column .form-section {
+  padding: 3px;
 }
 
 .middle-column .panel,
 .right-column .panel {
   height: fit-content;
 }
+
+/* Compact the trip-details column spacing */
+.middle-column .time-grid { gap: 2px; margin-bottom: 2px; }
+.middle-column .form-row,
+.middle-column .form-row-2,
+.middle-column .form-row-3,
+.middle-column .form-row-4 { gap: 2px; margin-bottom: 2px; }
+.middle-column .location-types { gap: 4px; margin: 4px 0; }
+.middle-column .location-dropdown { margin: 4px 0; padding: 6px; }
+.middle-column .form-group { margin-bottom: 1px; }
+
+/* Compact the reservation-details column spacing */
+.right-column .form-row { gap: 2px; margin-bottom: 2px; }
+.right-column .form-row-2,
+.right-column .form-row-3,
+.right-column .form-row-4 { gap: 2px; margin-bottom: 2px; }
+.right-column .form-group { margin-bottom: 2px; }
+.right-column .form-divider { margin: 6px 0; }
 
 /* Panels */
 .panel {
@@ -532,6 +603,12 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.trip-details-header {
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .panel-title {
@@ -739,7 +816,7 @@ textarea.form-control {
 .form-control,
 .payment-control,
 .payment-control-inline {
-  padding: 3px 5px;
+  padding: 2px 4px;
   font-size: 10px;
   line-height: 1.2;
 }
@@ -747,8 +824,8 @@ textarea.form-control {
 .form-row-2,
 .form-row-3,
 .form-row-4 {
-  gap: 3px;
-  margin-bottom: 5px;
+  gap: 2px;
+  margin-bottom: 3px;
 }
 
 .payment-form-group,
@@ -766,7 +843,7 @@ textarea.form-control {
 }
 
 .cost-row {
-  grid-template-columns: 1fr 60px 60px 60px;
+  grid-template-columns: 1fr 80px 80px 80px;
 }
 
 .cost-cell {
@@ -779,17 +856,20 @@ textarea.form-control {
 }
 
 /* Cost Breakdown */
+
+/* Cost layout: single area with 4 fixed columns */
 .cost-table {
   border: 1px solid #ccc;
   border-radius: 3px;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .cost-row {
   display: grid;
-  grid-template-columns: 1fr 60px 60px 60px;
+  grid-template-columns: 1fr 80px 80px 80px;
   border-bottom: 1px solid #e0e0e0;
+  background: #fff;
 }
 
 .cost-row:last-child {
@@ -800,6 +880,13 @@ textarea.form-control {
   background: #f8f9fa;
   font-weight: 600;
   font-size: 11px;
+  border-color: #dcdfe3;
+}
+
+.cost-row.summary {
+  background: #f6f7f9;
+  font-weight: 700;
+  border-top: 1px solid #dcdfe3;
 }
 
 .cost-cell {
@@ -808,6 +895,12 @@ textarea.form-control {
   font-size: 11px;
   display: flex;
   align-items: center;
+}
+
+/* Give the first column extra breathing room vertically */
+.cost-row .cost-cell:first-child {
+  padding-top: 9px;
+  padding-bottom: 9px;
 }
 
 .cost-cell:last-child {
@@ -1828,12 +1921,14 @@ body.view-mode .address-entry-card {
 /* Stop Type Selector */
 .stop-type-selector {
   display: flex;
-  gap: 20px;
+  gap: 12px;
   margin: 15px 0;
-  padding: 15px;
+  padding: 12px;
   background: white;
   border: 1px solid #e0e0e0;
   border-radius: 3px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .radio-option {
@@ -1861,6 +1956,13 @@ body.view-mode .address-entry-card {
   border: 1px solid #ccc;
   font-weight: 600;
   margin-top: 10px;
+}
+
+.stop-type-selector .btn-create-inline {
+  width: auto;
+  padding: 8px 14px;
+  margin-left: auto;
+  margin-top: 0;
 }
 
 .btn-create:hover {
@@ -2105,7 +2207,7 @@ body.view-mode .address-entry-card {
 
 .cost-tab-content {
   display: none;
-  padding: 15px 0;
+  padding: 8px 0 0 0;
 }
 
 .cost-tab-content.active {
@@ -2265,7 +2367,7 @@ body.view-mode .address-entry-card {
 /* Responsive */
 @media (max-width: 1400px) {
   .reservation-grid {
-    grid-template-columns: 300px 1fr 350px;
+    grid-template-columns: 1fr 1fr 1fr;
   }
 }
 

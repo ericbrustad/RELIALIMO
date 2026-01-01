@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate } from './api-service.js';
+import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 
 class MyOffice {
@@ -64,6 +64,7 @@ class MyOffice {
     this.setupCompanyInfoForm();
     this.setupAccountsCalendarPrefs();
     this.setupVehicleTypeSelection();
+    this.setupVehicleTypeSave();
     this.checkURLParameters();
     // Initialize API
     this.initializeAPI();
@@ -75,6 +76,7 @@ class MyOffice {
       this.apiReady = true;
       console.log('API initialized successfully');
       await this.loadDriversList();
+      await this.loadVehicleTypesList();
     } catch (error) {
       console.error('Failed to initialize API:', error);
     }
@@ -1060,6 +1062,12 @@ class MyOffice {
       sec.style.display = 'none';
     });
 
+    // Reset rate-manager layout padding when leaving that view
+    const contentArea = document.querySelector('.content-area');
+    if (contentArea) {
+      contentArea.classList.remove('rate-manager-active');
+    }
+
     const sectionElement = document.getElementById(`${section}-section`);
     if (sectionElement) {
       sectionElement.classList.add('active');
@@ -1149,7 +1157,6 @@ class MyOffice {
     const customFormsSection = document.getElementById('custom-forms-section');
     const sidebarGroups = {
       'company-settings': document.getElementById('companySettingsGroup'),
-      'company-resources': document.getElementById('companyResourcesGroup'),
       'rate-management': document.getElementById('rateManagementGroup'),
       'list-management': document.getElementById('listManagementGroup'),
       'custom-forms': document.getElementById('customFormsGroup'),
@@ -1171,7 +1178,6 @@ class MyOffice {
         break;
       case 'company-resources':
         if (resourcesContainer) resourcesContainer.style.display = 'block';
-        if (sidebarGroups['company-resources']) sidebarGroups['company-resources'].style.display = 'block';
         this.navigateToResource(this.currentResource || 'drivers');
         break;
       case 'rate-management':
@@ -1917,6 +1923,32 @@ class MyOffice {
     }
   }
 
+  setupVehicleTypeSave() {
+    const saveBtn = document.getElementById('vehicleTypeSaveBtn');
+    if (!saveBtn) return;
+    saveBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const vehicleId = this.activeVehicleTypeId;
+      if (!vehicleId) return;
+      const draft = this.captureVehicleTypeForm(vehicleId);
+      this.persistVehicleTypeDraft(vehicleId, draft);
+
+      try {
+        if (!this.apiReady) throw new Error('API not ready');
+        const saved = await upsertVehicleType(draft);
+        if (saved?.id) {
+          this.vehicleTypeSeeds[saved.id] = saved;
+          this.vehicleTypeDrafts[saved.id] = saved;
+          this.refreshVehicleTypeList(saved.id, saved.name);
+        }
+        alert('Vehicle Type saved to Supabase.');
+      } catch (error) {
+        console.error('Vehicle Type save failed, kept locally:', error);
+        alert('Saved locally. Supabase save failed.');
+      }
+    });
+  }
+
   populateVehicleTypeForm(vehicleId) {
     const container = document.getElementById('editVehicleTypeContent');
     if (!container) {
@@ -2012,7 +2044,7 @@ class MyOffice {
 
   captureVehicleTypeForm(vehicleId) {
     if (!vehicleId) {
-      return;
+      return {};
     }
 
     const container = document.getElementById('editVehicleTypeContent');
@@ -2068,6 +2100,73 @@ class MyOffice {
     }
 
     this.vehicleTypeDrafts[vehicleId] = draft;
+    this.persistVehicleTypeDraft(vehicleId, draft);
+    return draft;
+  }
+
+  persistVehicleTypeDraft(vehicleId, draft) {
+    try {
+      const stored = { ...this.vehicleTypeDrafts, [vehicleId]: draft };
+      localStorage.setItem('vehicleTypeDrafts', JSON.stringify(stored));
+    } catch (err) {
+      console.warn('Unable to persist vehicle type draft locally', err);
+    }
+  }
+
+  loadVehicleTypeDrafts() {
+    try {
+      const stored = localStorage.getItem('vehicleTypeDrafts');
+      if (stored) {
+        this.vehicleTypeDrafts = JSON.parse(stored) || {};
+      }
+    } catch (err) {
+      console.warn('Unable to load vehicle type drafts from localStorage', err);
+    }
+  }
+
+  async loadVehicleTypesList() {
+    const list = document.querySelector('#vehicleTypeList');
+    if (!list) return;
+
+    this.loadVehicleTypeDrafts();
+    let records = Object.values(this.vehicleTypeSeeds);
+
+    if (this.apiReady) {
+      const remote = await fetchVehicleTypes();
+      if (Array.isArray(remote) && remote.length) {
+        records = remote;
+        remote.forEach((v) => { this.vehicleTypeSeeds[v.id] = v; });
+      }
+    }
+
+    list.innerHTML = '';
+    records.forEach((v) => {
+      const div = document.createElement('div');
+      div.className = 'vehicle-type-item';
+      div.dataset.vehicleId = v.id || v.code || crypto.randomUUID();
+      div.textContent = v.name || 'Untitled Vehicle Type';
+      list.appendChild(div);
+    });
+
+    // Re-init selection bindings
+    this.vehicleTypeSelectionInitialized = false;
+    this.setupVehicleTypeSelection();
+  }
+
+  refreshVehicleTypeList(vehicleId, name) {
+    const list = document.querySelector('#vehicleTypeList');
+    if (!list) return;
+    let item = list.querySelector(`.vehicle-type-item[data-vehicle-id="${vehicleId}"]`);
+    if (!item) {
+      item = document.createElement('div');
+      item.className = 'vehicle-type-item';
+      item.dataset.vehicleId = vehicleId;
+      list.appendChild(item);
+    }
+    item.textContent = name || 'Untitled Vehicle Type';
+    list.querySelectorAll('.vehicle-type-item').forEach(el => el.classList.remove('active'));
+    item.classList.add('active');
+    this.populateVehicleTypeForm(vehicleId);
   }
 
   setupFleetItemSelection() {
@@ -2196,11 +2295,29 @@ class MyOffice {
       }
     });
 
+    // Update horizontal rate tabs active state
+    const topTabs = document.querySelectorAll('.rate-top-tab');
+    topTabs.forEach(tab => {
+      tab.classList.remove('active');
+      if (tab.dataset.rateSection === section) {
+        tab.classList.add('active');
+      }
+    });
+
     // Hide all office sections
     document.querySelectorAll('.office-section').forEach(section => {
       section.classList.remove('active');
       section.style.display = 'none';
     });
+
+    const contentArea = document.querySelector('.content-area');
+    if (contentArea) {
+      if (section === 'system-rate-manager') {
+        contentArea.classList.add('rate-manager-active');
+      } else {
+        contentArea.classList.remove('rate-manager-active');
+      }
+    }
 
     // Show the appropriate rate section
     let sectionId = '';

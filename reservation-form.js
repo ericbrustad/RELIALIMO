@@ -4,6 +4,7 @@ import { MapboxService } from './MapboxService.js';
 import { googleMapsService } from './GoogleMapsService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
+import { fetchDrivers, fetchVehicleTypes, setupAPI } from './api-service.js';
 import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
@@ -172,7 +173,28 @@ class ReservationForm {
 
     this.isEditMode = false;
     this.editConfNumber = null;
+    this.createdDateTime = null;
+    this.dateTimeInterval = null;
+    this.dateTimeFrozen = false;
+    this.cachedUserEmail = null;
     
+
+  getCachedUserEmail() {
+    if (this.cachedUserEmail) return this.cachedUserEmail;
+    try {
+      const cached = localStorage.getItem('supabase_session');
+      if (!cached) return null;
+      const parsed = JSON.parse(cached);
+      const email = parsed?.user?.email;
+      if (email) {
+        this.cachedUserEmail = email;
+        return email;
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to read cached user email:', e);
+    }
+    return null;
+  }
     this.init();
   }
 
@@ -420,9 +442,8 @@ class ReservationForm {
       await this.checkAuthenticationStatus();
       console.log('✅ Authentication check complete');
       
-      // Load drivers from Supabase
-      this.loadDrivers();
-      console.log('✅ loadDrivers initiated');
+      await this.loadReferenceData();
+      console.log('✅ Driver/vehicle reference data loaded');
       
       this.setupEventListeners();
       console.log('✅ setupEventListeners complete');
@@ -560,32 +581,95 @@ class ReservationForm {
     this.setBillingAccountNumberDisplay(candidate);
   }
   
+  async loadReferenceData() {
+    await this.loadDrivers();
+    await this.loadVehicleTypes();
+  }
+
   async loadDrivers() {
+    const primary = document.getElementById('driverSelect');
+    const secondary = document.getElementById('secondaryDriverSelect');
     try {
-      const apiModule = await import('./api-service.js');
-      await apiModule.setupAPI();
-      const drivers = await apiModule.fetchDrivers();
-      
-      const driverSelect = document.getElementById('driverSelect');
-      if (driverSelect && drivers && drivers.length > 0) {
-        driverSelect.innerHTML = '<option value="">-- Select Driver --</option>' +
-          drivers.map(driver => {
-            const driverName = `${driver.first_name} ${driver.last_name}`;
-            return `<option value="${driver.id}">${driverName}</option>`;
-          }).join('');
-        console.log(`✅ Loaded ${drivers.length} drivers from Supabase`);
-      } else {
-        if (driverSelect) {
-          driverSelect.innerHTML = '<option value="">-- No drivers found --</option>';
+      await setupAPI();
+      const drivers = await fetchDrivers();
+      const options = Array.isArray(drivers) && drivers.length
+        ? drivers.map(d => {
+            const name = [d.first_name, d.last_name].filter(Boolean).join(' ').trim() || 'Unnamed Driver';
+            return { value: d.id || name, label: name };
+          })
+        : [];
+
+      const render = (el) => {
+        if (!el) return;
+        if (!options.length) {
+          el.innerHTML = '<option value="">-- No drivers found --</option>';
+          return;
         }
-        console.warn('⚠️ No drivers found in database');
-      }
+        el.innerHTML = '<option value="">-- Select Driver --</option>' + options
+          .map(o => `<option value="${o.value}">${o.label}</option>`)
+          .join('');
+      };
+
+      render(primary);
+      render(secondary);
+
+      console.log(`✅ Loaded ${options.length} drivers`);
     } catch (error) {
       console.error('❌ Error loading drivers:', error);
-      const driverSelect = document.getElementById('driverSelect');
-      if (driverSelect) {
-        driverSelect.innerHTML = '<option value="">-- Error loading drivers --</option>';
+      if (primary) primary.innerHTML = '<option value="">-- Error loading drivers --</option>';
+      if (secondary) secondary.innerHTML = '<option value="">-- Error loading drivers --</option>';
+    }
+  }
+
+  async loadVehicleTypes() {
+    const primaryCar = document.getElementById('carSelect');
+    const secondaryCar = document.getElementById('secondaryCarSelect');
+
+    const render = (el, options) => {
+      if (!el) return;
+      if (!options.length) {
+        el.innerHTML = '<option value="">-- No vehicle types found --</option>';
+        return;
       }
+      el.innerHTML = '<option value="">-- Select Vehicle Type --</option>' + options
+        .map(o => `<option value="${o.value}">${o.label}</option>`)
+        .join('');
+    };
+
+    const fallbackFromLocal = () => {
+      try {
+        const stored = localStorage.getItem('vehicleTypeDrafts');
+        if (!stored) return [];
+        const parsed = JSON.parse(stored) || {};
+        return Object.values(parsed);
+      } catch {
+        return [];
+      }
+    };
+
+    try {
+      await setupAPI();
+      let vtypes = await fetchVehicleTypes();
+      if (!Array.isArray(vtypes) || !vtypes.length) {
+        vtypes = fallbackFromLocal();
+      }
+
+      const options = Array.isArray(vtypes) && vtypes.length
+        ? vtypes.map(v => {
+            const label = v.name || v.code || 'Untitled Vehicle Type';
+            const value = v.id || v.code || label;
+            return { value, label };
+          })
+        : [];
+
+      render(primaryCar, options);
+      render(secondaryCar, options);
+
+      console.log(`✅ Loaded ${options.length} vehicle types`);
+    } catch (error) {
+      console.error('❌ Error loading vehicle types:', error);
+      if (primaryCar) primaryCar.innerHTML = '<option value="">-- Error loading vehicle types --</option>';
+      if (secondaryCar) secondaryCar.innerHTML = '<option value="">-- Error loading vehicle types --</option>';
     }
   }
 
@@ -657,6 +741,10 @@ class ReservationForm {
       confNumberField.value = finalNumber;
       confNumberField.style.color = '#333';
       console.log('🔢 Confirmation number set successfully:', finalNumber);
+    } else {
+      // If the field is missing, still compute and stash pending value so save flow can assign
+      const nextConfNumber = await this.computeNextConfirmationNumber();
+      this.pendingConfirmationNumber = Number.isFinite(nextConfNumber) && nextConfNumber > 0 ? nextConfNumber : 100000;
     }
   }
 
@@ -672,9 +760,25 @@ class ReservationForm {
       const client = getSupabaseClient();
       
       if (client) {
+        // First try current session
+        const { data: sessionData } = await client.auth.getSession();
+        const existingUser = sessionData?.session?.user;
+
+        // If no user in session, attempt silent refresh
+        let refreshedUser = null;
+        if (!existingUser) {
+          try {
+            const { data: refreshed } = await client.auth.refreshSession();
+            refreshedUser = refreshed?.session?.user || null;
+          } catch (refreshErr) {
+            console.warn('⚠️ Silent refresh failed:', refreshErr?.message || refreshErr);
+          }
+        }
+
         const { data: { user }, error: userError } = await client.auth.getUser();
+        const authUser = existingUser || refreshedUser || user;
         
-        if (userError) {
+        if (userError && !authUser) {
           console.warn('⚠️ Authentication error:', userError.message);
           
           // Check if it's a permission error we can bypass for development
@@ -688,7 +792,7 @@ class ReservationForm {
           return false;
         }
         
-        if (!user) {
+        if (!authUser) {
           console.warn('⚠️ User not authenticated');
           
           // Development bypass: Allow saving without authentication for localhost
@@ -696,18 +800,25 @@ class ReservationForm {
             console.log('🔧 Development bypass: allowing reservation creation on localhost without authentication');
             return true;
           }
+
+          // If embedded within the same origin as the main app, trust the parent session
+          if (this.isEmbeddedSameOrigin()) {
+            console.log('🔧 Embedded same-origin: trusting parent auth session for reservation form');
+            return true;
+          }
           
           this.showAuthWarning('You are not logged in. Please log in to save reservations.');
           return false;
         }
         
-        console.log('✅ User authenticated:', user.email || user.id);
+        this.applyReservationMeta(authUser);
+        console.log('✅ User authenticated:', authUser.email || authUser.id);
         
         // Check organization membership
         const { data: membership, error: membershipError } = await client
           .from('organization_members')
           .select('organization_id')
-          .eq('user_id', user.id)
+          .eq('user_id', authUser.id)
           .single();
           
         if (membershipError || !membership?.organization_id) {
@@ -733,6 +844,29 @@ class ReservationForm {
     }
   }
 
+  applyReservationMeta(authUser) {
+    try {
+      if (!authUser) return;
+      const resBy = document.getElementById('resBy');
+      const email = authUser.email || this.getCachedUserEmail();
+      if (resBy && email) {
+        resBy.value = email;
+      }
+      // Date/Time is already initialized to now in initializeDateTime()
+    } catch (e) {
+      console.warn('⚠️ Failed to apply reservation meta:', e);
+    }
+  }
+
+  isEmbeddedSameOrigin() {
+    try {
+      if (window.top === window) return false;
+      return window.top.location.origin === window.location.origin;
+    } catch (e) {
+      return false;
+    }
+  }
+
   showAuthWarning(message) {
     // Create or update warning message in the form
     let warningDiv = document.getElementById('authWarning');
@@ -740,16 +874,17 @@ class ReservationForm {
       warningDiv = document.createElement('div');
       warningDiv.id = 'authWarning';
       warningDiv.style.cssText = `
-        background: #fff3cd;
-        border: 1px solid #ffeaa7;
-        color: #856404;
-        padding: 12px;
+        background: #fffaf0;
+        border: 1px solid #ffe4b5;
+        color: #8a6d3b;
+        padding: 6px 8px;
         border-radius: 4px;
-        margin: 10px 0;
-        font-size: 14px;
-        display: flex;
+        margin: 6px 0 10px;
+        font-size: 12px;
+        line-height: 1.3;
+        display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
       `;
       
       // Insert at top of form
@@ -766,17 +901,38 @@ class ReservationForm {
   }
 
   initializeDateTime() {
-    // Set current date and time
-    const now = new Date();
-    const dateTimeString = now.toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-    document.getElementById('resDateTime').value = dateTimeString;
+    const field = document.getElementById('resDateTime');
+    if (!field) return;
+
+    // If already populated (loaded record), freeze and stop any timer
+    if (field.value && field.value.trim()) {
+      this.createdDateTime = field.value.trim();
+      this.dateTimeFrozen = true;
+      if (this.dateTimeInterval) {
+        clearInterval(this.dateTimeInterval);
+        this.dateTimeInterval = null;
+      }
+      return;
+    }
+
+    // Live-update until saved; then freeze
+    const updateNow = () => {
+      if (this.dateTimeFrozen) return;
+      const now = new Date();
+      const dateTimeString = now.toLocaleString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      this.createdDateTime = dateTimeString;
+      field.value = dateTimeString;
+    };
+
+    updateNow();
+    this.dateTimeInterval = setInterval(updateNow, 30000);
   }
 
   setupTabSwitching() {
@@ -1186,6 +1342,12 @@ class ReservationForm {
         }
       });
     }
+
+    // Keep passenger → billing in sync while opt-in is checked
+    this.setupPassengerToBillingSync();
+
+    // Keep billing synced from passenger when opt-in is checked
+    this.setupPassengerToBillingSync();
 
     // Clear Passenger button
     const clearPassengerBtn = document.getElementById('clearPassengerBtn');
@@ -2570,6 +2732,38 @@ class ReservationForm {
     }
   }
 
+  setupPassengerToBillingSync() {
+    const copyPassengerCheckbox = document.getElementById('copyPassengerInfoCheckbox');
+    if (!copyPassengerCheckbox) return;
+
+    const passengerFields = ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail'];
+    passengerFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        if (copyPassengerCheckbox.checked) {
+          this.copyPassengerToBilling();
+        }
+      });
+    });
+  }
+
+  setupPassengerToBillingSync() {
+    const copyPassengerCheckbox = document.getElementById('copyPassengerInfoCheckbox');
+    if (!copyPassengerCheckbox) return;
+
+    const passengerFields = ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail'];
+    passengerFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        if (copyPassengerCheckbox.checked) {
+          this.copyPassengerToBilling();
+        }
+      });
+    });
+  }
+
   setupMatchDetection() {
     // Watch for changes in billing, passenger, and booking fields
     const billingFields = ['billingFirstName', 'billingLastName', 'billingEmail'];
@@ -3734,6 +3928,36 @@ class ReservationForm {
     });
 
     try {
+      // Ensure Res. By is populated from cache if still empty
+      const resByField = document.getElementById('resBy');
+      if (resByField && !resByField.value) {
+        const cachedEmail = this.cachedUserEmail || this.getCachedUserEmail();
+        if (cachedEmail) resByField.value = cachedEmail;
+      }
+
+      // Freeze created timestamp at save time if not already frozen
+      const createdField = document.getElementById('resDateTime');
+      if (!this.dateTimeFrozen) {
+        const now = new Date();
+        const dateTimeString = now.toLocaleString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+        this.createdDateTime = dateTimeString;
+        if (createdField) {
+          createdField.value = dateTimeString;
+        }
+        this.dateTimeFrozen = true;
+        if (this.dateTimeInterval) {
+          clearInterval(this.dateTimeInterval);
+          this.dateTimeInterval = null;
+        }
+      }
+
       const statusSelect = document.getElementById('resStatus');
       const statusValue = statusSelect?.value || 'unassigned';
       const statusLabel = (statusSelect && statusSelect.selectedIndex >= 0)
@@ -3789,6 +4013,8 @@ class ReservationForm {
         details: {
           status: statusValue,
           statusLabel,
+          createdAt: this.createdDateTime || getValue('resDateTime'),
+          created_at: this.createdDateTime || getValue('resDateTime'),
           puDate,
           puTime,
           doTime,
@@ -3978,6 +4204,8 @@ class ReservationForm {
           ...reservationData,
           confirmationNumber: currentConfNumber,
           confirmation_number: currentConfNumber,
+          createdAt: this.createdDateTime || reservationData.details.createdAt,
+          created_at: this.createdDateTime || reservationData.details.created_at,
           accountId: accountId,
           account_id: accountId,
           status: statusValue,
@@ -4186,6 +4414,46 @@ class ReservationForm {
       return false;
     }
 
+    // Normalize/validate phone numbers (US +1)
+    const phoneFields = [
+      'billingPhone',
+      'bookedByPhone',
+      'passengerPhone',
+      'altContactPhone'
+    ];
+    for (const id of phoneFields) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const raw = (el.value || '').trim();
+      if (!raw) continue;
+      const normalized = this.normalizeUsPhone(raw);
+      if (!normalized) {
+        alert('Please enter a valid US phone number with area code for field: ' + id + '.');
+        el.focus();
+        return false;
+      }
+      el.value = normalized;
+    }
+
+    // Validate emails
+    const emailFields = [
+      'billingEmail',
+      'bookedByEmail',
+      'passengerEmail'
+    ];
+    for (const id of emailFields) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const raw = (el.value || '').trim();
+      if (!raw) continue;
+      if (!this.isValidEmail(raw)) {
+        alert('Please enter a valid email address for field: ' + id + '.');
+        el.focus();
+        return false;
+      }
+      el.value = raw;
+    }
+
     // Check if at least one stop is defined
     const stops = this.getStops();
     if (stops.length === 0) {
@@ -4194,6 +4462,19 @@ class ReservationForm {
     }
 
     return true;
+  }
+
+  normalizeUsPhone(input) {
+    const digits = (input || '').replace(/\D+/g, '');
+    if (digits.length === 10) return '+1' + digits;
+    if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+    return null;
+  }
+
+  isValidEmail(input) {
+    const email = (input || '').trim();
+    // Basic RFC5322-ish email check
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
   getConfFromUrl() {

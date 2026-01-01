@@ -60,18 +60,6 @@
               </div>
             </div>
 
-            <!-- Company Resources Tab Items (hidden by default) -->
-            <div class="sidebar-group" id="companyResourcesGroup" style="display: none;">
-              <button class="sidebar-btn active" data-resource="drivers">Drivers</button>
-              <button class="sidebar-btn" data-resource="affiliates">Affiliates</button>
-              <button class="sidebar-btn" data-resource="agents">Agents</button>
-              <button class="sidebar-btn" data-resource="vehicle-types">Vehicle Types</button>
-              <button class="sidebar-btn" data-resource="fleet">Fleet</button>
-              <button class="sidebar-btn" data-resource="airports">Airports</button>
-              <button class="sidebar-btn" data-resource="airlines">Airlines</button>
-              <button class="sidebar-btn" data-resource="fbo">Private Airlines (FBO)</button>
-            </div>
-
             <!-- Rate Management Tab Items (hidden by default) -->
             <div class="sidebar-group" id="rateManagementGroup" style="display: none;">
               <button class="sidebar-btn active" data-rate-section="system-rate-manager">System Rate Manager</button>
@@ -5996,6 +5984,12 @@ further assistance.</textarea>
 
         <!-- System Rate Manager Section -->
         <section id="system-rate-manager-section" class="office-section" style="display: none;">
+          <div class="rate-top-tabs">
+            <button class="rate-top-tab active" data-rate-section="system-rate-manager" onclick="window.myOffice.navigateToRateSection('system-rate-manager')">System Rate Manager</button>
+            <button class="rate-top-tab" data-rate-section="fixed-rates-zones" onclick="window.myOffice.navigateToRateSection('fixed-rates-zones')">Fixed Rates & Zones Setup</button>
+            <button class="rate-top-tab" data-rate-section="special-promotion" onclick="window.myOffice.navigateToRateSection('special-promotion')">Special Promotion Setup</button>
+            <button class="rate-top-tab" data-rate-section="miscellaneous-fees" onclick="window.myOffice.navigateToRateSection('miscellaneous-fees')">Miscellaneous Fees</button>
+          </div>
           <div class="rate-management-layout">
             <!-- Left Panel: Stored Rates -->
             <div class="stored-rates-panel">
@@ -6227,6 +6221,12 @@ further assistance.</textarea>
 
         <!-- Fixed Rates & Zones Setup Section -->
         <section id="fixed-rates-zones-section" class="office-section" style="display: none;">
+          <div class="rate-top-tabs">
+            <button class="rate-top-tab" data-rate-section="system-rate-manager" onclick="window.myOffice.navigateToRateSection('system-rate-manager')">System Rate Manager</button>
+            <button class="rate-top-tab active" data-rate-section="fixed-rates-zones" onclick="window.myOffice.navigateToRateSection('fixed-rates-zones')">Fixed Rates & Zones Setup</button>
+            <button class="rate-top-tab" data-rate-section="special-promotion" onclick="window.myOffice.navigateToRateSection('special-promotion')">Special Promotion Setup</button>
+            <button class="rate-top-tab" data-rate-section="miscellaneous-fees" onclick="window.myOffice.navigateToRateSection('miscellaneous-fees')">Miscellaneous Fees</button>
+          </div>
           <div class="rate-matrix-layout">
             <div class="rate-matrix-panel">
               <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 25px; color: #2c3e50;">Select Rate Matrix</h2>
@@ -6286,6 +6286,12 @@ further assistance.</textarea>
 
         <!-- Special Promotion Setup Section -->
         <section id="special-promotion-section" class="office-section" style="display: none;">
+          <div class="rate-top-tabs">
+            <button class="rate-top-tab" data-rate-section="system-rate-manager" onclick="window.myOffice.navigateToRateSection('system-rate-manager')">System Rate Manager</button>
+            <button class="rate-top-tab" data-rate-section="fixed-rates-zones" onclick="window.myOffice.navigateToRateSection('fixed-rates-zones')">Fixed Rates & Zones Setup</button>
+            <button class="rate-top-tab active" data-rate-section="special-promotion" onclick="window.myOffice.navigateToRateSection('special-promotion')">Special Promotion Setup</button>
+            <button class="rate-top-tab" data-rate-section="miscellaneous-fees" onclick="window.myOffice.navigateToRateSection('miscellaneous-fees')">Miscellaneous Fees</button>
+          </div>
           <div class="promo-layout">
             <!-- Promo Tabs -->
             <div class="promo-tabs">
@@ -6458,6 +6464,12 @@ further assistance.</textarea>
 
         <!-- Miscellaneous Fees Section -->
         <section id="miscellaneous-fees-section" class="office-section" style="display: none;">
+          <div class="rate-top-tabs">
+            <button class="rate-top-tab" data-rate-section="system-rate-manager" onclick="window.myOffice.navigateToRateSection('system-rate-manager')">System Rate Manager</button>
+            <button class="rate-top-tab" data-rate-section="fixed-rates-zones" onclick="window.myOffice.navigateToRateSection('fixed-rates-zones')">Fixed Rates & Zones Setup</button>
+            <button class="rate-top-tab" data-rate-section="special-promotion" onclick="window.myOffice.navigateToRateSection('special-promotion')">Special Promotion Setup</button>
+            <button class="rate-top-tab active" data-rate-section="miscellaneous-fees" onclick="window.myOffice.navigateToRateSection('miscellaneous-fees')">Miscellaneous Fees</button>
+          </div>
           <div class="misc-fees-layout">
             <!-- Left: Stored Fees -->
             <div class="misc-fees-list-panel">

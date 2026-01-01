@@ -15,7 +15,8 @@ window.ENV = {
   athropic_claude_api: "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",
   gemini_api: "AIzaSyBe-",
   GOOGLE_MAPS_API_KEY: "AIzaSyDVrwMGUaT5_VLgnFauhP7v1EAvIqPJAZA",
-  SUPABASE_PROXY_URL: "http://localhost:8787"
+  // Use direct Supabase URL unless a local proxy is running
+  SUPABASE_PROXY_URL: "https://siumiadylwcrkaqsfwkj.supabase.co"
   };
 
 // When a page is embedded (inside index.html iframes), hide its own header to prevent double headers/flashing
