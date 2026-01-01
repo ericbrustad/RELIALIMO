@@ -1,10 +1,9 @@
 import { AccountManager } from './AccountManager.js';
 import { CostCalculator } from './CostCalculator.js';
-import { MapboxService } from './MapboxService.js';
 import { googleMapsService } from './GoogleMapsService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
-import { fetchDrivers, fetchVehicleTypes, setupAPI } from './api-service.js';
+import { fetchDrivers, fetchActiveVehicles, setupAPI } from './api-service.js';
 import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
@@ -148,7 +147,6 @@ class ReservationForm {
   constructor() {
     this.accountManager = new AccountManager();
     this.costCalculator = new CostCalculator();
-    this.mapboxService = new MapboxService();
     this.googleMapsService = googleMapsService;
     this.localCityState = this.getLocalCityStateString();
     this.localBiasCoords = null;
@@ -204,6 +202,22 @@ class ReservationForm {
     } catch (e) {
       console.warn('⚠️ Failed to read local city/state from settings:', e);
       return '';
+    }
+  }
+
+  refreshLocalBiasFromSettings() {
+    try {
+      // Re-read company city/state/zip so address bias follows latest settings
+      const updated = this.getLocalCityStateString();
+      this.localCityState = updated;
+      this.localBiasCoords = null; // force re-geocode on next lookup
+
+      if (updated) {
+        // Warm the bias lookup in the background; ignore failures
+        this.ensureLocalBiasCoords().catch(() => {});
+      }
+    } catch (e) {
+      console.warn('⚠️ [ReservationForm] Failed to refresh local bias from settings:', e);
     }
   }
 
@@ -426,6 +440,8 @@ class ReservationForm {
       
       await this.loadReferenceData();
       console.log('✅ Driver/vehicle reference data loaded');
+      // Refresh address bias using the latest company location
+      this.refreshLocalBiasFromSettings();
       
       this.setupEventListeners();
       console.log('✅ setupEventListeners complete');
@@ -446,6 +462,10 @@ class ReservationForm {
       
       this.setupTabSwitching();
       console.log('✅ setupTabSwitching complete');
+
+      // Ensure location label reflects latest copy even if HTML is cached
+      const locationLabel = document.querySelector('.address-entry label');
+      if (locationLabel) locationLabel.textContent = 'Location Description/ Name';
 
       this.updateEFarmStatus('unassigned');
       this.setFarmoutModeSelect('manual');
@@ -501,8 +521,10 @@ class ReservationForm {
   }
 
   applyCompanyStateDefault() {
-    if (this.isEditMode) return;
     try {
+      this.refreshLocalBiasFromSettings();
+      if (this.isEditMode) return;
+
       const stateSelect = document.getElementById('state');
       if (!stateSelect) return;
       const current = (stateSelect.value || '').trim();
@@ -610,48 +632,43 @@ class ReservationForm {
     const render = (el, options) => {
       if (!el) return;
       if (!options.length) {
-        el.innerHTML = '<option value="">-- No vehicle types found --</option>';
+        el.innerHTML = '<option value="">-- No vehicles found --</option>';
         return;
       }
-      el.innerHTML = '<option value="">-- Select Vehicle Type --</option>' + options
+      el.innerHTML = '<option value="">-- Select Vehicle --</option>' + options
         .map(o => `<option value="${o.value}">${o.label}</option>`)
         .join('');
     };
 
-    const fallbackFromLocal = () => {
-      try {
-        const stored = localStorage.getItem('vehicleTypeDrafts');
-        if (!stored) return [];
-        const parsed = JSON.parse(stored) || {};
-        return Object.values(parsed);
-      } catch {
-        return [];
-      }
-    };
-
     try {
       await setupAPI();
-      let vtypes = await fetchVehicleTypes();
-      if (!Array.isArray(vtypes) || !vtypes.length) {
-        vtypes = fallbackFromLocal();
-      }
+      const vehicles = await fetchActiveVehicles();
 
-      const options = Array.isArray(vtypes) && vtypes.length
-        ? vtypes.map(v => {
-            const label = v.name || v.code || 'Untitled Vehicle Type';
-            const value = v.id || v.code || label;
-            return { value, label };
-          })
+      // Filter to active only (defensive in case data is cached/legacy)
+      const isActive = (v) => {
+        const flag = (v?.veh_active || v?.status || '').toString().trim().toUpperCase();
+        if (!flag) return true; // treat empty as active
+        return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
+      };
+
+      const options = Array.isArray(vehicles) && vehicles.length
+        ? vehicles
+            .filter(isActive)
+            .map(v => {
+              const label = v.veh_disp_name || v.veh_title || v.veh_type || v.name || v.code || 'Vehicle';
+              const value = v.id || v.veh_disp_name || v.veh_title || v.veh_type || label;
+              return { value, label };
+            })
         : [];
 
       render(primaryCar, options);
       render(secondaryCar, options);
 
-      console.log(`✅ Loaded ${options.length} vehicle types`);
+      console.log(`✅ Loaded ${options.length} vehicles`);
     } catch (error) {
-      console.error('❌ Error loading vehicle types:', error);
-      if (primaryCar) primaryCar.innerHTML = '<option value="">-- Error loading vehicle types --</option>';
-      if (secondaryCar) secondaryCar.innerHTML = '<option value="">-- Error loading vehicle types --</option>';
+      console.error('❌ Error loading vehicles:', error);
+      if (primaryCar) primaryCar.innerHTML = '<option value="">-- Error loading vehicles --</option>';
+      if (secondaryCar) secondaryCar.innerHTML = '<option value="">-- Error loading vehicles --</option>';
     }
   }
 
@@ -716,13 +733,20 @@ class ReservationForm {
       confNumberField.value = 'Loading...';
       confNumberField.setAttribute('readonly', 'true');
       confNumberField.style.color = '#999';
-      
-      const nextConfNumber = await this.computeNextConfirmationNumber();
-      const fallbackNumber = 100000;
-      const finalNumber = Number.isFinite(nextConfNumber) && nextConfNumber > 0 ? nextConfNumber : fallbackNumber;
-      confNumberField.value = finalNumber;
-      confNumberField.style.color = '#333';
-      console.log('🔢 Confirmation number set successfully:', finalNumber);
+
+      try {
+        const nextConfNumber = await this.computeNextConfirmationNumber();
+        const fallbackNumber = 100000;
+        const finalNumber = Number.isFinite(nextConfNumber) && nextConfNumber > 0 ? nextConfNumber : fallbackNumber;
+        confNumberField.value = finalNumber;
+        confNumberField.style.color = '#333';
+        console.log('🔢 Confirmation number set successfully:', finalNumber);
+      } catch (e) {
+        const fallbackNumber = 100000;
+        confNumberField.value = fallbackNumber;
+        confNumberField.style.color = '#333';
+        console.warn('⚠️ Failed to compute next confirmation number, using fallback:', e);
+      }
     }
   }
 
@@ -3413,8 +3437,42 @@ class ReservationForm {
 
   async searchLocationPOI(query) {
     try {
-      const results = await this.mapboxService.searchPOI(query);
-      this.showLocationSuggestions(results);
+      const results = [];
+
+      // Google business search (biased to company location if available)
+      try {
+        const bias = await this.ensureLocalBiasCoords();
+        const googleHits = await this.googleMapsService.searchBusinesses(query, {
+          location: bias ? { latitude: bias.latitude, longitude: bias.longitude } : null,
+          radius: 25000, // 25km default local radius
+          type: 'establishment'
+        });
+        if (Array.isArray(googleHits)) {
+          results.push(...googleHits.map(hit => ({
+            name: hit.name,
+            address: hit.address,
+            category: (hit.types || [])[0] || 'Business',
+            context: {
+              city: hit.addressComponents?.city,
+              state: hit.addressComponents?.state,
+              zipcode: hit.addressComponents?.postalCode
+            }
+          })));
+        }
+      } catch (e) {
+        console.warn('⚠️ Google business search failed:', e);
+      }
+
+      // De-dupe by name+address
+      const seen = new Set();
+      const deduped = results.filter(r => {
+        const key = `${r.name}__${r.address}`.toUpperCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      this.showLocationSuggestions(deduped);
     } catch (error) {
       console.error('POI search error:', error);
     }
@@ -3665,10 +3723,8 @@ class ReservationForm {
     }
 
     try {
-      const coordinates = validStops.map(stop => stop.coordinates);
-      const route = await this.mapboxService.getRoute(coordinates);
-      
-      this.displayRouteInfo(route);
+      // Mapbox disabled for reservation form; skip route calculation
+      document.getElementById('routeInfo').style.display = 'none';
     } catch (error) {
       console.error('Route calculation error:', error);
     }
@@ -4102,6 +4158,14 @@ class ReservationForm {
         }
       }
 
+      // Normalize key summary fields for list views
+      const passengerFullName = `${reservationData.passenger.firstName || ''} ${reservationData.passenger.lastName || ''}`.trim();
+      const billingCompanyName = reservationData.billingAccount.company || '';
+      const vehicleTypeValue = document.getElementById('vehicleTypeRes')?.value || '';
+      const grandTotalValue = parseFloat(document.getElementById('grandTotal')?.textContent || '0') || 0;
+      const paymentTypeValue = (document.querySelector('#paymentTab .payment-control')?.value || '').toString();
+      const groupNameValue = document.getElementById('groupName')?.value || '';
+
       // SAVE TO SUPABASE (PRIMARY) - No localStorage for reservations
       let supabaseSaveSuccess = false;
       let supabaseError = null;
@@ -4145,8 +4209,15 @@ class ReservationForm {
           status: statusValue,
           pickupDateTime: pickupAt,
           pickup_datetime: pickupAt,
+          pickup_at: pickupAt,
+          passenger_name: passengerFullName,
+          company_name: billingCompanyName,
+          vehicle_type: vehicleTypeValue,
+          grand_total: grandTotalValue,
+          payment_type: paymentTypeValue,
+          group_name: groupNameValue,
           passengerCount: parseInt(document.getElementById("numPax")?.value || "1") || 1,
-          grandTotal: parseFloat(document.getElementById("grandTotal")?.textContent || "0") || 0
+          grandTotal: grandTotalValue
         });
         
         console.log('📤 Save result:', supabaseResult);
@@ -4345,6 +4416,22 @@ class ReservationForm {
 
     if (!passengerFirstName || !passengerLastName) {
       alert('Please enter passenger name.');
+      return false;
+    }
+
+    // Billing contact must include phone and email
+    const billingPhoneEl = document.getElementById('billingPhone');
+    const billingEmailEl = document.getElementById('billingEmail');
+    const billingPhoneRaw = (billingPhoneEl?.value || '').trim();
+    const billingEmailRaw = (billingEmailEl?.value || '').trim();
+    if (!billingPhoneRaw) {
+      alert('Please enter a billing phone number.');
+      billingPhoneEl?.focus();
+      return false;
+    }
+    if (!billingEmailRaw) {
+      alert('Please enter a billing email.');
+      billingEmailEl?.focus();
       return false;
     }
 

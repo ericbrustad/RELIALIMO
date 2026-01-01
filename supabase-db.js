@@ -223,6 +223,19 @@ export async function saveReservation(reservationData) {
 
 export async function getAllReservations() {
   try {
+    // Development mode: load from localStorage so localhost saves show in the list
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      try {
+        const devData = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+        if (Array.isArray(devData) && devData.length) {
+          console.log('🗄️ Loaded dev reservations from localStorage:', devData.length);
+          return devData;
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to read dev reservations from localStorage:', e);
+      }
+    }
+
     await setupAPI();
     const result = await fetchReservations();
     if (!result) return [];

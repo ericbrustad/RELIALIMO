@@ -57,8 +57,15 @@ function createBannerHTML() {
         <span class="dev-banner-text">
           Data Source: <strong id="devModeStatus">Supabase</strong>
         </span>
+        <span class="dev-op-indicator" id="devOpIndicator" title="Supabase operation status">●</span>
+        <span class="dev-op-label" id="devOpLabel">Idle</span>
       </div>
       <div class="dev-banner-right">
+        <div class="dev-auth" id="devAuthControls">
+          <span class="dev-auth-email" id="devAuthEmail">Not logged in</span>
+          <button class="dev-auth-btn" id="devAuthLogin">Login</button>
+          <button class="dev-auth-btn" id="devAuthLogout">Logout</button>
+        </div>
         <label class="dev-toggle-switch">
           <input type="checkbox" id="devModeToggle" />
           <span class="dev-toggle-slider"></span>
@@ -71,6 +78,8 @@ function createBannerHTML() {
 
   document.body.prepend(banner);
   injectBannerStyles();
+  installSupabaseFetchProbe();
+  wireDevAuthControls();
 }
 
 /**
@@ -113,6 +122,54 @@ function injectBannerStyles() {
       display: flex;
       align-items: center;
       gap: 12px;
+    }
+
+    .dev-auth {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 8px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    .dev-auth-email {
+      font-weight: 600;
+      font-size: 12px;
+      color: #fefefe;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dev-auth-btn {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4);
+      color: #fff;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .dev-op-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #999;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.6);
+    }
+
+    .dev-op-label {
+      font-weight: 600;
+      font-size: 12px;
+      color: #f5f5f5;
     }
 
     .dev-banner-icon {
@@ -222,6 +279,121 @@ function injectBannerStyles() {
   `;
 
   document.head.appendChild(style);
+}
+
+function installSupabaseFetchProbe() {
+  if (window._devModeFetchPatched) return;
+  const originalFetch = window.fetch;
+  if (typeof originalFetch !== 'function') return;
+
+  const supabaseHost = (() => {
+    try {
+      if (window.ENV?.SUPABASE_URL) return new URL(window.ENV.SUPABASE_URL).host;
+    } catch {}
+    return 'supabase.co';
+  })();
+
+  window.fetch = async function patchedFetch(resource, options = {}) {
+    const url = typeof resource === 'string' ? resource : (resource?.url || '');
+    const isSupabase = url.includes(supabaseHost);
+    const method = (options.method || (resource && resource.method) || 'GET').toUpperCase();
+    const opType = method === 'GET' ? 'read' : 'write';
+
+    if (isSupabase) {
+      setDevOpIndicator({ opType, status: 'pending' });
+    }
+
+    try {
+      const response = await originalFetch(resource, options);
+      if (isSupabase) {
+        const ok = response.ok;
+        setDevOpIndicator({ opType, status: ok ? 'success' : 'error' });
+      }
+      return response;
+    } catch (err) {
+      if (isSupabase) {
+        setDevOpIndicator({ opType, status: 'error' });
+      }
+      throw err;
+    }
+  };
+
+  window._devModeFetchPatched = true;
+}
+
+function wireDevAuthControls() {
+  const emailLabel = document.getElementById('devAuthEmail');
+  const loginBtn = document.getElementById('devAuthLogin');
+  const logoutBtn = document.getElementById('devAuthLogout');
+
+  const renderEmail = () => {
+    if (!emailLabel) return;
+    let text = 'Not logged in';
+    try {
+      const raw = localStorage.getItem('supabase_session');
+      if (raw) {
+        const session = JSON.parse(raw);
+        const email = session?.user?.email || session?.email;
+        if (email) {
+          text = `Signed in: ${email}`;
+        }
+      }
+    } catch (e) {
+      console.warn('Auth email render failed', e);
+    }
+    emailLabel.textContent = text;
+  };
+
+  renderEmail();
+
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'supabase_session') {
+      renderEmail();
+    }
+  });
+
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+      window.location.href = 'auth.html';
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      try {
+        localStorage.removeItem('supabase_session');
+        renderEmail();
+        alert('Logged out locally.');
+      } catch (e) {
+        console.warn('Local logout failed', e);
+      }
+    });
+  }
+}
+
+function setDevOpIndicator({ opType = 'read', status = 'pending' }) {
+  const dot = document.getElementById('devOpIndicator');
+  const label = document.getElementById('devOpLabel');
+  if (!dot || !label) return;
+
+  let color = '#999';
+  let text = 'Idle';
+
+  const isWrite = opType === 'write';
+
+  if (status === 'pending') {
+    color = '#f0ad4e';
+    text = isWrite ? 'Write...' : 'Read...';
+  } else if (status === 'success') {
+    color = isWrite ? '#2ecc71' : '#2c7be5';
+    text = isWrite ? 'Write OK' : 'Read OK';
+  } else if (status === 'error') {
+    color = '#e74c3c';
+    text = isWrite ? 'Write Error' : 'Read Error';
+  }
+
+  dot.style.background = color;
+  label.textContent = text;
 }
 
 /**

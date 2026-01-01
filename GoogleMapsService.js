@@ -10,8 +10,11 @@ export class GoogleMapsService {
     this.sessionToken = null;
     this.placesService = null;
     this.autocompleteService = null;
+    this.geocoder = null;
     this.geocodingCache = new Map();
     this.placeCache = new Map();
+    this.mapsScriptPromise = null;
+    this.placesReadyPromise = null;
     
     if (!this.apiKey) {
       console.warn('⚠️ Google Maps API key not configured. Add it to env.js as GOOGLE_MAPS_API_KEY');
@@ -30,7 +33,6 @@ export class GoogleMapsService {
 
   async initializeServices() {
     // Generate a new session token for each user session
-    // This groups autocomplete and selection requests for billing purposes
     this.sessionToken = this.generateSessionToken();
   }
 
@@ -48,46 +50,61 @@ export class GoogleMapsService {
     if (!input || input.trim().length < 2) return [];
     
     const includePlaces = options.includeBusinessesAndLandmarks !== false;
-    const cacheKey = `address_${input}_${JSON.stringify(options)}`;
+    const normalizedOptions = { ...options };
+    if (options.locationBias && typeof options.locationBias === 'object') {
+      normalizedOptions.locationBias = {
+        latitude: options.locationBias.latitude,
+        longitude: options.locationBias.longitude
+      };
+    }
+    const cacheKey = `address_${input}_${JSON.stringify(normalizedOptions)}`;
     if (this.geocodingCache.has(cacheKey)) {
       return this.geocodingCache.get(cacheKey);
+    }
+
+    if (!this.apiKey) {
+      console.warn('[GoogleMapsService] No API key set; address search skipped');
+      return [];
+    }
+
+    await this.ensurePlacesReady();
+    if (!this.autocompleteService) {
+      console.warn('[GoogleMapsService] Autocomplete service not ready');
+      return [];
     }
 
     const results = [];
 
     try {
-      const params = new URLSearchParams({
-        input: input,
-        key: this.apiKey,
+      const request = {
+        input,
         sessionToken: this.sessionToken,
-        components: options.country ? `country:${options.country}` : '',
-        // Hint the API to return addresses but allow establishments (business/landmark) too
-        types: 'address',
+      };
+
+      if (options.country) {
+        request.componentRestrictions = { country: options.country };
+      }
+
+       // Allow businesses/landmarks when requested; otherwise bias toward addresses
+      if (options.includeBusinessesAndLandmarks === false) {
+        request.types = ['address'];
+      }
+
+      if (options.locationBias?.latitude && options.locationBias?.longitude && window.google?.maps) {
+        request.locationBias = new google.maps.LatLng(options.locationBias.latitude, options.locationBias.longitude);
+      }
+
+      const predictions = await new Promise((resolve) => {
+        this.autocompleteService.getPlacePredictions(request, (preds, status) => {
+          if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            console.warn('[GoogleMapsService] Autocomplete status:', status);
+          }
+          resolve(preds || []);
+        });
       });
 
-      if (options.locationBias) {
-        const bias = typeof options.locationBias === 'string'
-          ? options.locationBias
-          : `point:${options.locationBias.latitude},${options.locationBias.longitude}`;
-        params.append('locationbias', bias);
-      }
-
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Google Places request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        throw new Error(`Google Places API error: ${data.status} - ${data.error_message || ''}`);
-      }
-
       results.push(
-        ...(data.predictions || []).map(prediction => ({
+        ...(predictions || []).map(prediction => ({
           placeId: prediction.place_id,
           description: prediction.description,
           mainText: prediction.structured_formatting?.main_text || prediction.description,
@@ -119,38 +136,30 @@ export class GoogleMapsService {
   }
 
   async findPlaceByText(query, options = {}) {
-    const params = new URLSearchParams({
-      input: query,
-      inputtype: 'textquery',
-      fields: 'formatted_address,name,geometry,place_id,types',
-      key: this.apiKey,
+    await this.ensurePlacesReady();
+    if (!this.placesService) return [];
+
+    const request = {
+      query,
+      fields: ['formatted_address', 'name', 'geometry', 'place_id', 'types']
+    };
+
+    if (options.locationBias?.latitude && options.locationBias?.longitude && window.google?.maps) {
+      request.locationBias = new google.maps.LatLng(options.locationBias.latitude, options.locationBias.longitude);
+    }
+
+    return await new Promise((resolve, reject) => {
+      this.placesService.findPlaceFromQuery(request, (places, status) => {
+        if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+          console.warn('[GoogleMapsService] findPlaceFromQuery status:', status);
+          if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            reject(new Error(`Places status: ${status}`));
+            return;
+          }
+        }
+        resolve(places || []);
+      });
     });
-
-    if (options.types && Array.isArray(options.types)) {
-      params.append('types', options.types.join(','));
-    }
-
-    if (options.locationBias) {
-      const bias = typeof options.locationBias === 'string'
-        ? options.locationBias
-        : `point:${options.locationBias.latitude},${options.locationBias.longitude}`;
-      params.append('locationbias', bias);
-    }
-
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?${params}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Google Find Place request failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-      throw new Error(`Google Places API error: ${data.status} - ${data.error_message || ''}`);
-    }
-
-    return data.candidates || [];
   }
 
   mapPlaceToSuggestion(place, source = 'text') {
@@ -174,64 +183,70 @@ export class GoogleMapsService {
   async searchBusinesses(query, options = {}) {
     if (!query || query.trim().length < 2) return [];
 
-    const cacheKey = `business_${query}_${JSON.stringify(options)}`;
+    const normalizedOptions = { ...options };
+    if (options.location) {
+      normalizedOptions.location = { latitude: options.location.latitude, longitude: options.location.longitude };
+    }
+    const cacheKey = `business_${query}_${JSON.stringify(normalizedOptions)}`;
     if (this.placeCache.has(cacheKey)) {
       return this.placeCache.get(cacheKey);
     }
 
     try {
-      // Use Nearby Search (requires location) or Text Search (works anywhere)
+      await this.ensurePlacesReady();
+      if (!this.placesService) return [];
+
       const useNearbySearch = options.location && options.radius;
 
-      let url, params;
+      const results = await new Promise((resolve, reject) => {
+        if (useNearbySearch && window.google?.maps) {
+          const request = {
+            location: new google.maps.LatLng(options.location.latitude, options.location.longitude),
+            radius: options.radius || 5000,
+            keyword: query,
+          };
+          if (options.type) request.type = options.type;
+          this.placesService.nearbySearch(request, (places, status) => {
+            if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+              console.warn('[GoogleMapsService] nearbySearch status:', status);
+              if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+                reject(new Error(`Places status: ${status}`));
+                return;
+              }
+            }
+            resolve(places || []);
+          });
+        } else {
+          const request = { query };
+          if (options.type) request.type = options.type;
+          this.placesService.textSearch(request, (places, status) => {
+            if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+              console.warn('[GoogleMapsService] textSearch status:', status);
+              if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+                reject(new Error(`Places status: ${status}`));
+                return;
+              }
+            }
+            resolve(places || []);
+          });
+        }
+      });
 
-      if (useNearbySearch) {
-        params = new URLSearchParams({
-          location: `${options.location.latitude},${options.location.longitude}`,
-          radius: options.radius || 5000, // Default 5km
-          keyword: query,
-          key: this.apiKey,
-        });
-        if (options.type) params.append('type', options.type);
-        url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params}`;
-      } else {
-        params = new URLSearchParams({
-          query: query,
-          key: this.apiKey,
-        });
-        if (options.type) params.append('type', options.type);
-        url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`;
-      }
-
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Google Places request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        throw new Error(`Google Places API error: ${data.status}`);
-      }
-
-      const results = (data.results || []).map(place => ({
+      const mapped = (results || []).map(place => ({
         placeId: place.place_id,
         name: place.name,
-        address: place.formatted_address,
+        address: place.formatted_address || place.vicinity,
         types: place.types,
-        location: place.geometry.location,
+        location: place.geometry?.location,
         rating: place.rating,
         userRatingsTotal: place.user_ratings_total,
-        openNow: place.opening_hours?.open_now,
+        openNow: place.opening_hours?.isOpen?.(),
         photoReference: place.photos?.[0]?.photo_reference,
         businessStatus: place.business_status,
       }));
 
-      // Cache the results
-      this.placeCache.set(cacheKey, results);
-
-      return results;
+      this.placeCache.set(cacheKey, mapped);
+      return mapped;
     } catch (error) {
       console.error('Business search error:', error);
       return [];
@@ -244,39 +259,41 @@ export class GoogleMapsService {
   async searchLandmarks(query, options = {}) {
     if (!query || query.trim().length < 2) return [];
 
-    const cacheKey = `landmark_${query}_${JSON.stringify(options)}`;
+    const normalizedOptions = { ...options };
+    if (options.location) {
+      normalizedOptions.location = { latitude: options.location.latitude, longitude: options.location.longitude };
+    }
+    const cacheKey = `landmark_${query}_${JSON.stringify(normalizedOptions)}`;
     if (this.placeCache.has(cacheKey)) {
       return this.placeCache.get(cacheKey);
     }
 
     try {
-      const params = new URLSearchParams({
-        query,
-        key: this.apiKey,
-        type: 'point_of_interest'
-      });
+      await this.ensurePlacesReady();
+      if (!this.placesService) return [];
 
-      if (options.location) {
-        params.append('location', `${options.location.latitude},${options.location.longitude}`);
+      const request = { query, type: 'point_of_interest' };
+      if (options.location && window.google?.maps) {
+        request.location = new google.maps.LatLng(options.location.latitude, options.location.longitude);
       }
       if (options.radius) {
-        params.append('radius', options.radius);
+        request.radius = options.radius;
       }
 
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`
-      );
+      const places = await new Promise((resolve, reject) => {
+        this.placesService.textSearch(request, (res, status) => {
+          if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            console.warn('[GoogleMapsService] Landmark textSearch status:', status);
+            if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+              reject(new Error(`Places status: ${status}`));
+              return;
+            }
+          }
+          resolve(res || []);
+        });
+      });
 
-      if (!response.ok) {
-        throw new Error(`Google Places request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        throw new Error(`Google Places API error: ${data.status}`);
-      }
-
-      const results = (data.results || []).map(place => this.mapPlaceToSuggestion(place, 'landmark'));
+      const results = (places || []).map(place => this.mapPlaceToSuggestion(place, 'landmark'));
       this.placeCache.set(cacheKey, results);
       return results;
     } catch (error) {
@@ -298,45 +315,37 @@ export class GoogleMapsService {
     }
 
     try {
-      const params = new URLSearchParams({
-        place_id: placeId,
-        fields: 'address_components,formatted_address,geometry,name,phone_number,website,url,business_status,opening_hours,photos',
-        key: this.apiKey,
-        sessionToken: this.sessionToken,
+      await this.ensurePlacesReady();
+      if (!this.placesService) return null;
+
+      const details = await new Promise((resolve, reject) => {
+        this.placesService.getDetails({
+          placeId,
+          fields: ['address_components', 'formatted_address', 'geometry', 'name', 'formatted_phone_number', 'website', 'url', 'business_status', 'opening_hours', 'photos']
+        }, (result, status) => {
+          if (status !== google.maps.places.PlacesServiceStatus.OK) {
+            reject(new Error(`Places status: ${status}`));
+            return;
+          }
+          resolve(result);
+        });
       });
 
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?${params}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Google Places details request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.status !== 'OK') {
-        throw new Error(`Google Places API error: ${data.status}`);
-      }
-
-      const result = data.result;
-      const details = {
-        placeId: result.place_id,
-        name: result.name,
-        address: result.formatted_address,
-        coordinates: result.geometry.location,
-        phone: result.phone_number,
-        website: result.website,
-        googleMapsUrl: result.url,
-        addressComponents: this.parseAddressComponents(result.address_components),
-        businessStatus: result.business_status,
-        openingHours: result.opening_hours,
+      const parsed = {
+        placeId: details.place_id,
+        name: details.name,
+        address: details.formatted_address,
+        coordinates: details.geometry?.location,
+        phone: details.formatted_phone_number,
+        website: details.website,
+        googleMapsUrl: details.url,
+        addressComponents: this.parseAddressComponents(details.address_components),
+        businessStatus: details.business_status,
+        openingHours: details.opening_hours,
       };
 
-      // Cache the result
-      this.placeCache.set(placeId, details);
-
-      return details;
+      this.placeCache.set(placeId, parsed);
+      return parsed;
     } catch (error) {
       console.error('Place details error:', error);
       return null;
@@ -387,50 +396,48 @@ export class GoogleMapsService {
   async geocodeAddress(address) {
     if (!address) return null;
 
+    if (!this.apiKey) {
+      console.warn('[GoogleMapsService] No API key set; geocode skipped');
+      return null;
+    }
+
     const cacheKey = `geocode_${address}`;
     if (this.geocodingCache.has(cacheKey)) {
       return this.geocodingCache.get(cacheKey);
     }
 
     try {
-      const params = new URLSearchParams({
-        address: address,
-        key: this.apiKey,
-      });
-
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?${params}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Geocoding request failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.status !== 'OK') {
-        throw new Error(`Geocoding error: ${data.status}`);
-      }
-
-      if (data.results.length === 0) {
+      await this.ensurePlacesReady();
+      if (!this.geocoder) {
+        console.warn('[GoogleMapsService] Geocoder not ready');
         return null;
       }
 
-      const result = data.results[0];
-      const coordinates = result.geometry.location;
-      const addressComponents = this.parseAddressComponents(result.address_components);
+      const result = await new Promise((resolve, reject) => {
+        this.geocoder.geocode({ address }, (res, status) => {
+          if (status !== google.maps.GeocoderStatus.OK) {
+            reject(new Error(`Geocoding error: ${status}`));
+            return;
+          }
+          resolve(res || []);
+        });
+      });
+
+      if (!result.length) return null;
+      const hit = result[0];
+      const coords = hit.geometry.location;
+      const addressComponents = this.parseAddressComponents(hit.address_components);
 
       const geocodeResult = {
-        address: result.formatted_address,
-        latitude: coordinates.lat,
-        longitude: coordinates.lng,
-        placeId: result.place_id,
-        addressComponents: addressComponents,
-        types: result.types,
+        address: hit.formatted_address,
+        latitude: coords.lat(),
+        longitude: coords.lng(),
+        placeId: hit.place_id,
+        addressComponents,
+        types: hit.types,
       };
 
       this.geocodingCache.set(cacheKey, geocodeResult);
-
       return geocodeResult;
     } catch (error) {
       console.error('Geocoding error:', error);
@@ -453,33 +460,70 @@ export class GoogleMapsService {
     }
 
     try {
-      const params = new URLSearchParams({
-        latlng: `${latitude},${longitude}`,
-        key: this.apiKey,
+      await this.ensurePlacesReady();
+      if (!this.geocoder) return null;
+
+      const address = await new Promise((resolve, reject) => {
+        this.geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (res, status) => {
+          if (status !== google.maps.GeocoderStatus.OK) {
+            reject(new Error(`Reverse geocoding error: ${status}`));
+            return;
+          }
+          resolve((res?.[0]?.formatted_address) || null);
+        });
       });
 
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?${params}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Reverse geocoding request failed: ${response.status}`);
+      if (address) {
+        this.geocodingCache.set(cacheKey, address);
       }
-
-      const data = await response.json();
-
-      if (data.status !== 'OK' || data.results.length === 0) {
-        return null;
-      }
-
-      const address = data.results[0].formatted_address;
-      this.geocodingCache.set(cacheKey, address);
 
       return address;
     } catch (error) {
       console.error('Reverse geocoding error:', error);
       return null;
     }
+  }
+
+  async ensurePlacesReady() {
+    if (!this.apiKey) {
+      console.warn('[GoogleMapsService] No API key set; cannot load Places');
+      return null;
+    }
+
+    if (this.placesService && this.autocompleteService && this.geocoder) {
+      return true;
+    }
+
+    if (!this.mapsScriptPromise) {
+      this.mapsScriptPromise = new Promise((resolve, reject) => {
+        if (window.google?.maps?.places && window.google.maps.Geocoder) {
+          resolve();
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${this.apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = (err) => reject(err);
+        document.head.appendChild(script);
+      });
+    }
+
+    if (!this.placesReadyPromise) {
+      this.placesReadyPromise = this.mapsScriptPromise.then(() => {
+        if (!window.google?.maps?.places) {
+          throw new Error('Google Maps Places library not available after load');
+        }
+        this.autocompleteService = new google.maps.places.AutocompleteService();
+        this.placesService = new google.maps.places.PlacesService(document.createElement('div'));
+        this.geocoder = new google.maps.Geocoder();
+        this.sessionToken = new google.maps.places.AutocompleteSessionToken();
+      });
+    }
+
+    return this.placesReadyPromise;
   }
 
   /**

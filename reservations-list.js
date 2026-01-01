@@ -86,10 +86,10 @@ class ReservationsList {
         <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
         <td>${this.formatDate(res.pickup_at)}</td>
         <td>${this.formatTime(res.pickup_at)}</td>
-        <td>${res.passenger_name || res.passenger_first_name + ' ' + res.passenger_last_name || ''}</td>
+        <td>${res.passenger_name || [res.passenger_first_name, res.passenger_last_name].filter(Boolean).join(' ') || ''}</td>
         <td>${res.company_name || ''}</td>
         <td>${res.vehicle_type || ''}</td>
-        <td>$${(res.grand_total || 0).toFixed(2)}</td>
+        <td>$${Number(res.grand_total || 0).toFixed(2)}</td>
         <td>${res.payment_type || ''}</td>
         <td>${res.status || 'confirmed'}</td>
         <td>${res.group_name || ''}</td>

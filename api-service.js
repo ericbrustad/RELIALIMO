@@ -1,6 +1,154 @@
 // API Service for RELIA🐂LIMO™
 import { getSupabaseConfig, initSupabase } from './config.js';
 
+// Minimal REST helper with safe session refresh
+const SESSION_KEY = 'supabase_session';
+let refreshPromise = null;
+
+const getSession = () => {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const setSession = (session) => {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    if (session?.access_token) {
+      localStorage.setItem('supabase_access_token', session.access_token);
+    }
+  } catch (e) {
+    console.warn('⚠️ Unable to persist session:', e);
+  }
+};
+
+const clearSession = () => {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem('supabase_access_token');
+  } catch (e) {
+    console.warn('⚠️ Unable to clear session:', e);
+  }
+};
+
+const isExpired = (session) => {
+  if (!session?.expires_at) return true;
+  const now = Math.floor(Date.now() / 1000);
+  return now >= (session.expires_at - 60); // 60s skew buffer
+};
+
+async function refreshToken() {
+  if (refreshPromise) return refreshPromise;
+
+  const session = getSession();
+  if (!session?.refresh_token) throw new Error('NO_REFRESH_TOKEN');
+
+  const { url, anonKey } = getSupabaseConfig();
+  const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: session.refresh_token });
+
+  const doFetch = async () => {
+    const response = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {
+        apikey: anonKey,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json'
+      },
+      body
+    });
+
+    if (response.status === 200) {
+      const data = await response.json();
+      const expires_at = Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600);
+      setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token ?? session.refresh_token,
+        expires_at,
+        user: data.user ?? session.user
+      });
+      return getSession();
+    }
+
+    if (response.status === 400) {
+      clearSession();
+      throw new Error('REFRESH_INVALID');
+    }
+
+    if (response.status === 429) {
+      throw new Error('RATE_LIMITED');
+    }
+
+    const text = await response.text().catch(() => '');
+    throw new Error(`REFRESH_FAILED_${response.status}:${text}`);
+  };
+
+  refreshPromise = doFetch().finally(() => {
+    setTimeout(() => { refreshPromise = null; }, 0);
+  });
+
+  return refreshPromise;
+}
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const jitter = (base) => base + Math.floor(Math.random() * base);
+
+export async function robustRefresh(maxTries = 3) {
+  let delay = 250;
+  for (let i = 0; i < maxTries; i += 1) {
+    try {
+      return await refreshToken();
+    } catch (e) {
+      if (e.message === 'RATE_LIMITED') {
+        await sleep(jitter(delay));
+        delay *= 2;
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error('REFRESH_RATE_LIMITED');
+}
+
+export async function apiFetch(path, { method = 'GET', headers = {}, body, retry = true } = {}) {
+  const session = getSession();
+  const { url, anonKey } = getSupabaseConfig();
+  const fullUrl = path.startsWith('http') ? path : `${url}${path}`;
+
+  const h = {
+    apikey: anonKey,
+    Accept: 'application/json',
+    ...headers
+  };
+
+  if (session?.access_token) {
+    h.Authorization = `Bearer ${session.access_token}`;
+  }
+
+  if (session && isExpired(session)) {
+    try {
+      const refreshed = await refreshToken();
+      if (refreshed?.access_token) {
+        h.Authorization = `Bearer ${refreshed.access_token}`;
+      }
+    } catch (e) {
+      if (e.message === 'REFRESH_INVALID') throw e;
+    }
+  }
+
+  const response = await fetch(fullUrl, { method, headers: h, body });
+
+  if ((response.status === 401 || response.status === 403) && retry) {
+    const refreshed = await refreshToken();
+    const h2 = { ...h, Authorization: refreshed?.access_token ? `Bearer ${refreshed.access_token}` : h.Authorization };
+    return fetch(fullUrl, { method, headers: h2, body });
+  }
+
+  return response;
+}
+
 // Local dev mode toggle used by dev-mode-banner.js
 const DEV_MODE_STORAGE_KEY = 'relia_local_dev_mode';
 
@@ -127,7 +275,7 @@ async function ensureValidToken(client) {
 /**
  * Refresh access token using refresh token
  */
-async function refreshAccessToken(client, refreshToken) {
+async function refreshAccessToken(client, providedRefreshToken) {
   try {
     // Development mode bypass
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -135,49 +283,22 @@ async function refreshAccessToken(client, refreshToken) {
       return { success: true, message: 'Development mode bypass' };
     }
     
-    if (!refreshToken) {
+    if (!providedRefreshToken) {
       console.warn('⚠️ No refresh token available');
       return { success: false, error: 'No refresh token' };
     }
-    
-    // Use the correct Supabase URL from config
-    const config = getSupabaseConfig();
-    const url = `${config.url}/auth/v1/token?grant_type=refresh_token`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': config.anonKey
-      },
-      body: JSON.stringify({
-        refresh_token: refreshToken
-      })
-    });
-    
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error('⚠️ Token refresh error response:', response.status, errorBody);
-      throw new Error(`Token refresh failed: ${response.status}`);
+
+    // Ensure the stored session has a refresh token before calling refreshToken()
+    const existing = getSession();
+    if (!existing?.refresh_token) {
+      setSession({
+        ...(existing || {}),
+        refresh_token: providedRefreshToken
+      });
     }
-    
-    const data = await response.json();
-    
-    if (!data.access_token) {
-      throw new Error('No access token in refresh response');
-    }
-    
-    // Save new tokens
-    const session = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token || refreshToken,
-      user: JSON.parse(localStorage.getItem('supabase_session') || '{}').user
-    };
-    
-    localStorage.setItem('supabase_session', JSON.stringify(session));
-    localStorage.setItem('supabase_access_token', data.access_token);
-    
-    return { success: true, session };
+
+    const refreshed = await refreshToken();
+    return { success: true, session: refreshed };
   } catch (error) {
     console.error('❌ Token refresh failed:', error);
     return { success: false, error };
@@ -361,27 +482,59 @@ export function getSupabaseClient() {
   return supabaseClient;
 }
 
+const DEV_DRIVERS_KEY = 'dev_drivers';
+const isDevHost = () => window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+const loadDevDrivers = () => {
+  if (!isDevHost()) return [];
+  try {
+    const raw = localStorage.getItem(DEV_DRIVERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn('⚠️ Failed to read dev drivers:', e);
+    return [];
+  }
+};
+
+const saveDevDrivers = (drivers) => {
+  if (!isDevHost()) return;
+  try {
+    localStorage.setItem(DEV_DRIVERS_KEY, JSON.stringify(drivers || []));
+  } catch (e) {
+    console.warn('⚠️ Failed to persist dev drivers:', e);
+  }
+};
+
+// Direct REST fetch for drivers using apiFetch with auto refresh/retry
+export async function listDrivers({ limit = 50, offset = 0 } = {}) {
+  const res = await apiFetch(`/rest/v1/drivers?select=*&order=updated_at.desc&limit=${limit}&offset=${offset}`);
+  if (!res.ok) throw new Error(`listDrivers failed: ${res.status}`);
+  return res.json();
+}
+
 /**
  * Example: Fetch all drivers
  */
 export async function fetchDrivers() {
-  const client = getSupabaseClient();
-  if (!client) return null;
-  
+  const devData = loadDevDrivers();
   try {
     lastApiError = null;
-    const { organizationId } = await getOrgContextOrThrow(client);
-
-    const { data, error } = await client
-      .from('drivers')
-      .select('*')
-      .eq('organization_id', organizationId);
-    
-    if (error) throw error;
+    const data = await listDrivers();
+    if (Array.isArray(data) && data.length) return data;
+    if (devData.length) {
+      console.warn('⚠️ Using dev drivers fallback (Supabase returned empty)');
+      return devData;
+    }
     return data;
   } catch (error) {
     console.error('Error fetching drivers:', error);
     lastApiError = error;
+    if (devData.length) {
+      console.warn('⚠️ Using dev drivers fallback (Supabase fetch failed)');
+      return devData;
+    }
     return null;
   }
 }
@@ -391,28 +544,41 @@ export async function fetchDrivers() {
  */
 export async function createDriver(driverData) {
   const client = getSupabaseClient();
-  if (!client) return null;
+  if (!client || isDevHost()) {
+    const existing = loadDevDrivers();
+    const now = new Date().toISOString();
+    const newDriver = {
+      id: driverData.id || `dev-driver-${Date.now()}`,
+      ...driverData,
+      organization_id: driverData.organization_id || resolveAdminOrgId(),
+      created_at: driverData.created_at || now,
+      updated_at: driverData.updated_at || now
+    };
+    const next = existing.filter(d => d.id !== newDriver.id).concat(newDriver);
+    saveDevDrivers(next);
+    return newDriver;
+  }
   
   try {
-    const { organizationId } = await getOrgContextOrThrow(client);
     const timestamp = new Date().toISOString();
     const payload = {
       ...driverData,
-      organization_id: driverData.organization_id || organizationId,
       created_at: driverData.created_at || timestamp,
-      updated_at: driverData.updated_at || timestamp,
+      updated_at: driverData.updated_at || timestamp
     };
 
-    const { data, error } = await client
-      .from('drivers')
-      .insert([payload])
-      .select()
-      .maybeSingle();
-    
-    if (error) throw error;
-    return data;
+    const res = await apiFetch('/rest/v1/drivers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(`createDriver failed: ${res.status}`);
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] || null : data;
   } catch (error) {
     console.error('Error creating driver:', error);
+    lastApiError = error;
     return null;
   }
 }
@@ -422,25 +588,37 @@ export async function createDriver(driverData) {
  */
 export async function updateDriver(driverId, driverData) {
   const client = getSupabaseClient();
-  if (!client) return null;
+  if (!client || isDevHost()) {
+    const existing = loadDevDrivers();
+    const now = new Date().toISOString();
+    const updated = {
+      ...driverData,
+      id: driverId,
+      updated_at: driverData.updated_at || now
+    };
+    const next = existing.map(d => d.id === driverId ? { ...d, ...updated } : d);
+    saveDevDrivers(next);
+    return updated;
+  }
   
   try {
     const payload = {
       ...driverData,
-      updated_at: driverData.updated_at || new Date().toISOString(),
+      updated_at: driverData.updated_at || new Date().toISOString()
     };
 
-    const { data, error } = await client
-      .from('drivers')
-      .update(payload)
-      .eq('id', driverId)
-      .select()
-      .maybeSingle();
-    
-    if (error) throw error;
-    return data;
+    const res = await apiFetch(`/rest/v1/drivers?id=eq.${encodeURIComponent(driverId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(`updateDriver failed: ${res.status}`);
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] || null : data;
   } catch (error) {
     console.error('Error updating driver:', error);
+    lastApiError = error;
     return null;
   }
 }
@@ -450,7 +628,11 @@ export async function updateDriver(driverId, driverData) {
  */
 export async function deleteDriver(driverId) {
   const client = getSupabaseClient();
-  if (!client) return null;
+  if (!client || isDevHost()) {
+    const existing = loadDevDrivers();
+    saveDevDrivers(existing.filter(d => d.id !== driverId));
+    return true;
+  }
   
   try {
     const { data, error } = await client
@@ -629,6 +811,83 @@ export async function fetchVehicleTypes() {
   } catch (error) {
     console.error('Error fetching vehicle types:', error);
     lastApiError = error;
+    return [];
+  }
+}
+
+// Fetch active vehicles from the "Company Resources > Vehicles" list
+// Filters to the current organization and only includes rows marked active
+export async function fetchActiveVehicles() {
+  const client = getSupabaseClient();
+  const isDevHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  const loadLocalFleet = () => {
+    if (!isDevHost) return [];
+    try {
+      const raw = localStorage.getItem('cr_fleet');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || !parsed.length) return [];
+
+      return parsed.map((v, idx) => ({
+        id: v.id || `local-fleet-${idx}`,
+        veh_disp_name: v.plate || v.name || v.type || 'Vehicle',
+        veh_title: v.type || v.name || v.plate,
+        veh_type: v.type || v.veh_type || v.name,
+        status: v.status || 'ACTIVE',
+        veh_active: v.veh_active ?? 'Y'
+      }));
+    } catch (e) {
+      console.warn('⚠️ Failed to load local fleet fallback:', e);
+      return [];
+    }
+  };
+
+  if (!client) {
+    const local = loadLocalFleet();
+    if (local.length) return local;
+    return [];
+  }
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    const { data, error } = await client
+      .from('vehicles')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('veh_disp_name', { ascending: true })
+      .order('veh_title', { ascending: true })
+      .order('veh_type', { ascending: true });
+
+    if (error) throw error;
+
+    const filtered = (data || []).filter(v => {
+      const flag = (v?.veh_active || v?.status || '').toString().trim().toUpperCase();
+      if (!flag) return true; // treat empty as active
+      return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
+    });
+
+    if (filtered.length) return filtered;
+
+    const local = loadLocalFleet();
+    if (local.length) {
+      console.warn('⚠️ Using local fleet fallback because Supabase returned 0 vehicles');
+      return local;
+    }
+
+    return filtered;
+  } catch (error) {
+    console.error('Error fetching active vehicles:', error);
+    lastApiError = error;
+
+    const local = loadLocalFleet();
+    if (local.length) {
+      console.warn('⚠️ Using local fleet fallback because Supabase fetch failed');
+      return local;
+    }
+
     return [];
   }
 }

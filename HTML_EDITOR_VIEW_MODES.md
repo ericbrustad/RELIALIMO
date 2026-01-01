@@ -1,4 +1,4 @@
-# 📝 HTML Editor View Modes
+# 📝 HTML Editor View Modes for eric
 
 ## Overview
 All HTML template editors in the RELIA🐂LIMO™ system now support **three view modes** that can be switched dynamically:

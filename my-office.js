@@ -17,6 +17,7 @@ class MyOffice {
     this.vehicleTypeDrafts = {};
     this.activeVehicleTypeId = null;
     this.vehicleTypeSelectionInitialized = false;
+    this.vehicleTabsLocked = true;
     this.apiReady = false;
     this.users = [
       {
@@ -65,6 +66,9 @@ class MyOffice {
     this.setupAccountsCalendarPrefs();
     this.setupVehicleTypeSelection();
     this.setupVehicleTypeSave();
+    this.setupVehicleRatesSave();
+    this.updateVehicleTypeTabLockState();
+    this.renderLoggedInEmail();
     this.checkURLParameters();
     // Initialize API
     this.initializeAPI();
@@ -261,18 +265,7 @@ class MyOffice {
     }
 
     // Rate Management navigation
-    const rateManagementGroup = document.getElementById('rateManagementGroup');
-    if (rateManagementGroup) {
-      rateManagementGroup.addEventListener('click', (e) => {
-        const target = e.target;
-        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
-        if (btn && btn.dataset.rateSection) {
-          const section = btn.dataset.rateSection;
-          console.log('Navigating to rate section:', section);
-          this.navigateToRateSection(section);
-        }
-      });
-    }
+    // Rate Management navigation removed (vertical tabs hidden)
 
     // Rate type tabs
     document.querySelectorAll('.rate-type-tab').forEach(tab => {
@@ -590,6 +583,45 @@ class MyOffice {
           this.switchVehicleTypeTab(tabName);
         }
       });
+    });
+
+    const vehicleTypeEditBtn = document.getElementById('vehicleTypeEditBtn');
+    if (vehicleTypeEditBtn) {
+      vehicleTypeEditBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.unlockVehicleTypeTabs();
+        this.switchVehicleTypeTab('edit');
+      });
+    }
+
+    const vehicleRatesSaveBtn = document.getElementById('vehicleRatesSaveBtn');
+    if (vehicleRatesSaveBtn) {
+      vehicleRatesSaveBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await this.saveVehicleRates();
+      });
+    }
+
+    const passengerRatesSaveBtn = document.getElementById('passengerRatesSaveBtn');
+    if (passengerRatesSaveBtn) {
+      passengerRatesSaveBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await this.saveVehicleRates();
+      });
+    }
+
+    const distanceRatesSaveBtn = document.getElementById('distanceRatesSaveBtn');
+    if (distanceRatesSaveBtn) {
+      distanceRatesSaveBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await this.saveVehicleRates();
+      });
+    }
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'supabase_session') {
+        this.renderLoggedInEmail();
+      }
     });
 
     // Rates Subtabs
@@ -1913,12 +1945,14 @@ class MyOffice {
       list.querySelectorAll('.vehicle-type-item').forEach(item => item.classList.remove('active'));
       element.classList.add('active');
 
+      this.lockVehicleTypeTabs();
       this.populateVehicleTypeForm(vehicleId);
     });
 
     const initialItem = list.querySelector('.vehicle-type-item.active') || list.querySelector('.vehicle-type-item');
     if (initialItem && initialItem.dataset.vehicleId) {
       initialItem.classList.add('active');
+      this.lockVehicleTypeTabs();
       this.populateVehicleTypeForm(initialItem.dataset.vehicleId);
     }
   }
@@ -1947,6 +1981,34 @@ class MyOffice {
         alert('Saved locally. Supabase save failed.');
       }
     });
+  }
+
+  setupVehicleRatesSave() {
+    // Placeholder hook if future wiring is needed; listener is attached during setupEventListeners.
+  }
+
+  renderLoggedInEmail() {
+    const label = document.getElementById('loggedInEmail');
+    if (!label) return;
+
+    let emailText = 'Not logged in';
+    let hasEmail = false;
+    try {
+      const sessionRaw = localStorage.getItem('supabase_session');
+      if (sessionRaw) {
+        const session = JSON.parse(sessionRaw);
+        const possibleEmail = session?.user?.email || session?.email;
+        if (possibleEmail) {
+          emailText = `Signed in: ${possibleEmail}`;
+          hasEmail = true;
+        }
+      }
+    } catch (err) {
+      console.warn('Unable to read supabase_session for email display', err);
+    }
+
+    label.textContent = emailText;
+    label.style.color = hasEmail ? '#1f2937' : '#777';
   }
 
   populateVehicleTypeForm(vehicleId) {
@@ -2102,6 +2164,167 @@ class MyOffice {
     this.vehicleTypeDrafts[vehicleId] = draft;
     this.persistVehicleTypeDraft(vehicleId, draft);
     return draft;
+  }
+
+  captureVehicleRates() {
+    const parseNumber = (val) => {
+      const num = parseFloat(val);
+      return Number.isFinite(num) ? num : 0;
+    };
+
+    const perHour = {};
+    const perHourContainer = document.getElementById('perHourRates');
+    if (perHourContainer) {
+      const asLowInput = perHourContainer.querySelector('.rate-input-section input');
+      perHour.asLow = parseNumber(asLowInput?.value || '0');
+
+      const selects = perHourContainer.querySelectorAll('.rate-input-section select');
+      perHour.baseAssociation = selects[0]?.value || '';
+      perHour.duration = selects[1]?.value || '';
+      perHour.multiplier = selects[2]?.value || '';
+
+      const rateSchedules = Array.from(perHourContainer.querySelectorAll('.rate-schedule-row')).map((row) => {
+        const inputs = row.querySelectorAll('input');
+        if (inputs.length < 3) return null;
+        return {
+          from: inputs[0].value,
+          to: inputs[1].value,
+          ratePerHour: inputs[2].value
+        };
+      }).filter(Boolean);
+      perHour.rateSchedules = rateSchedules;
+
+      const hoursGrids = perHourContainer.querySelectorAll('.hours-schedule-grid');
+      if (hoursGrids.length > 1) {
+        const selectsHours = hoursGrids[1].querySelectorAll('select');
+        perHour.hoursRange = {
+          from: selectsHours[0]?.value || '',
+          to: selectsHours[1]?.value || '',
+          ratePerHour: selectsHours[3]?.value || ''
+        };
+      }
+
+      const peakRows = perHourContainer.querySelectorAll('.peak-rate-table tbody tr');
+      perHour.peakSchedule = Array.from(peakRows).map((row) => {
+        const cells = row.querySelectorAll('td');
+        const checkbox = cells[0]?.querySelector('input[type="checkbox"]');
+        const selectsRow = row.querySelectorAll('select');
+        return {
+          day: cells[1]?.textContent?.trim() || '',
+          enabled: Boolean(checkbox?.checked),
+          start1: selectsRow[0]?.value || '',
+          end1: selectsRow[1]?.value || '',
+          start2: selectsRow[2]?.value || '',
+          end2: selectsRow[3]?.value || ''
+        };
+      });
+    }
+
+    const perPassenger = {};
+    const perPassengerContainer = document.getElementById('perPassengerRates');
+    if (perPassengerContainer) {
+      perPassenger.matrix = perPassengerContainer.querySelector('[data-rate-field="pp-matrix"]')?.value || '';
+      perPassenger.baseRate = parseNumber(perPassengerContainer.querySelector('[data-rate-field="pp-base-rate"]')?.value || '0');
+      perPassenger.minPassengers = parseInt(perPassengerContainer.querySelector('[data-rate-field="pp-min"]')?.value || '0', 10) || 0;
+      perPassenger.maxPassengers = parseInt(perPassengerContainer.querySelector('[data-rate-field="pp-max"]')?.value || '0', 10) || 0;
+
+      const tierRows = perPassengerContainer.querySelectorAll('.pp-tier-row');
+      perPassenger.tiers = Array.from(tierRows).map((row) => {
+        const from = row.querySelector('[data-rate-field="pp-from"]')?.value || '';
+        const to = row.querySelector('[data-rate-field="pp-to"]')?.value || '';
+        const rate = row.querySelector('[data-rate-field="pp-rate"]')?.value || '';
+        const hasData = from || to || rate;
+        if (!hasData) {
+          return null;
+        }
+        return {
+          from,
+          to,
+          rate: parseNumber(rate)
+        };
+      }).filter(Boolean);
+
+      const flatRows = perPassengerContainer.querySelectorAll('.pp-flat-row');
+      perPassenger.flatFees = Array.from(flatRows).map((row) => {
+        const label = row.querySelector('[data-rate-field="pp-flat-label"]')?.value?.trim() || '';
+        const amount = row.querySelector('[data-rate-field="pp-flat-amount"]')?.value || '';
+        if (!label && !amount) {
+          return null;
+        }
+        return {
+          label,
+          amount: parseNumber(amount)
+        };
+      }).filter(Boolean);
+    }
+
+    const distance = {};
+    const distanceContainer = document.getElementById('distanceRates');
+    if (distanceContainer) {
+      distance.matrix = distanceContainer.querySelector('[data-rate-field="dist-matrix"]')?.value || '';
+      distance.basePerMile = parseNumber(distanceContainer.querySelector('[data-rate-field="dist-base"]')?.value || '0');
+      distance.minimumFare = parseNumber(distanceContainer.querySelector('[data-rate-field="dist-min-fare"]')?.value || '0');
+      distance.includedMiles = parseNumber(distanceContainer.querySelector('[data-rate-field="dist-included"]')?.value || '0');
+
+      const tierRows = distanceContainer.querySelectorAll('.distance-tier-row');
+      distance.tiers = Array.from(tierRows).map((row) => {
+        const from = row.querySelector('[data-rate-field="dist-from"]')?.value || '';
+        const to = row.querySelector('[data-rate-field="dist-to"]')?.value || '';
+        const rate = row.querySelector('[data-rate-field="dist-rate"]')?.value || '';
+        const hasData = from || to || rate;
+        if (!hasData) {
+          return null;
+        }
+        return {
+          from,
+          to,
+          rate: parseNumber(rate)
+        };
+      }).filter(Boolean);
+
+      const surchargeRows = distanceContainer.querySelectorAll('.distance-surcharge-row');
+      distance.surcharges = Array.from(surchargeRows).map((row) => {
+        const label = row.querySelector('[data-rate-field="dist-surcharge-label"]')?.value?.trim() || '';
+        const amount = row.querySelector('[data-rate-field="dist-surcharge-amount"]')?.value || '';
+        if (!label && !amount) {
+          return null;
+        }
+        return {
+          label,
+          amount: parseNumber(amount)
+        };
+      }).filter(Boolean);
+    }
+
+    return { perHour, perPassenger, distance };
+  }
+
+  async saveVehicleRates() {
+    const vehicleId = this.activeVehicleTypeId;
+    if (!vehicleId) {
+      alert('Select a vehicle type first.');
+      return;
+    }
+
+    const draft = this.captureVehicleTypeForm(vehicleId);
+    const rates = this.captureVehicleRates();
+    const payload = { ...draft, rates };
+    this.vehicleTypeDrafts[vehicleId] = payload;
+    this.persistVehicleTypeDraft(vehicleId, payload);
+
+    try {
+      if (!this.apiReady) throw new Error('API not ready');
+      const saved = await upsertVehicleType(payload);
+      if (saved?.id) {
+        this.vehicleTypeSeeds[saved.id] = saved;
+        this.vehicleTypeDrafts[saved.id] = saved;
+        this.refreshVehicleTypeList(saved.id, saved.name);
+      }
+      alert('Vehicle type rates saved to Supabase.');
+    } catch (err) {
+      console.error('Vehicle Type rate save failed, kept locally:', err);
+      alert('Saved locally. Supabase save failed.');
+    }
   }
 
   persistVehicleTypeDraft(vehicleId, draft) {
@@ -2493,6 +2716,10 @@ class MyOffice {
   }
 
   switchVehicleTypeTab(tabName) {
+    if (this.vehicleTabsLocked && tabName !== 'edit') {
+      return;
+    }
+
     // Update tab active state
     document.querySelectorAll('.vehicle-type-tab').forEach(tab => {
       tab.classList.remove('active');
@@ -2519,6 +2746,43 @@ class MyOffice {
     if (contentElement) {
       contentElement.classList.add('active');
     }
+
+    this.updateVehicleTypeTabLockState();
+  }
+
+  updateVehicleTypeTabLockState() {
+    const tabs = document.querySelectorAll('.vehicle-type-tab');
+    tabs.forEach((tab) => {
+      const locked = this.vehicleTabsLocked && tab.dataset.vtypeTab !== 'edit';
+      tab.disabled = locked;
+      tab.classList.toggle('disabled', locked);
+    });
+
+    document.querySelectorAll('.vehicle-type-tab-content').forEach((content) => {
+      const locked = this.vehicleTabsLocked && content.id !== 'editVehicleTypeContent';
+      if (locked) {
+        content.classList.remove('active');
+        content.style.display = 'none';
+      } else {
+        content.style.display = '';
+      }
+    });
+
+    const hint = document.getElementById('vehicleTabsLockedHint');
+    if (hint) {
+      hint.style.display = this.vehicleTabsLocked ? 'block' : 'none';
+    }
+  }
+
+  lockVehicleTypeTabs() {
+    this.vehicleTabsLocked = true;
+    this.switchVehicleTypeTab('edit');
+    this.updateVehicleTypeTabLockState();
+  }
+
+  unlockVehicleTypeTabs() {
+    this.vehicleTabsLocked = false;
+    this.updateVehicleTypeTabLockState();
   }
 
   switchRateType(rateType) {
