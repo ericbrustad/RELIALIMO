@@ -13,14 +13,17 @@
       <p class="page-subtitle">Set your status so dispatch knows who is ready for farm-outs.</p>
     </header>
     <main>
-      <div class="controls">
+        <div class="controls">
         <div class="control-group">
           <button id="resetOverrides" class="btn btn-secondary" type="button">Reset All</button>
           <button id="refreshView" class="btn btn-secondary" type="button">Refresh</button>
         </div>
         <span id="lastSync" class="timestamp">Last sync: —</span>
       </div>
-      <section id="driverGrid" class="driver-grid"></section>
+        <div style="display:flex; gap:16px; align-items:flex-start;">
+          <section id="driverGrid" class="driver-grid" style="flex:1;"></section>
+          <aside id="offlineSidebar" class="offline-sidebar"></aside>
+        </div>
     </main>
     <div id="toast" class="toast hidden"></div>
   </div>

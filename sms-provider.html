@@ -31,15 +31,12 @@
           <div class="settings-nav-section">
             <div class="settings-nav-item active-section">System Settings</div>
             <a href="service-types.html" class="settings-nav-subitem">Service Types</a>
-            <a href="#" class="settings-nav-subitem">Partner Settings</a>
             <a href="system-mapping.html" class="settings-nav-subitem">System Mapping</a>
-            <a href="#" class="settings-nav-subitem">Data Reduction</a>
-            <a href="#" class="settings-nav-subitem">Electronic Fax</a>
             <a href="magic-link.html" class="settings-nav-subitem">Magic Link</a>
             <a href="sms-provider.html" class="settings-nav-subitem active">Sms Provider</a>
+            <a href="email-settings.html" class="settings-nav-subitem">Email Settings</a>
             <a href="full-site-test-checklist.html" class="settings-nav-subitem">Test Checklist</a>
             <a href="test-supabase-integration.html" class="settings-nav-subitem">Supabase Integration Test</a>
-            <a href="#" class="settings-nav-subitem">LimoAnywhere Pay</a>
             <a href="#" class="settings-nav-subitem">Digital Marketing</a>
           </div>
         </nav>
@@ -47,46 +44,63 @@
 
       <!-- Main Content -->
       <main class="sms-provider-main">
-        <!-- Header -->
         <div class="sms-provider-header">
-          <h1 class="sms-provider-title">Configured Sms Providers</h1>
-          <button class="btn-add-new" onclick="addNewProvider()">Add New</button>
+          <div>
+            <h1 class="sms-provider-title">Twilio SMS Settings</h1>
+            <p class="sms-provider-subtitle">Configure outbound texting. Values save locally; wire a backend proxy to avoid CORS.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-add-new" id="saveTwilioBtn">Save Settings</button>
+            <button class="btn-add-new" id="testTwilioBtn" style="background:#455a64;">Send Test</button>
+          </div>
         </div>
 
-        <!-- SMS Providers Table -->
-        <div class="sms-providers-table-wrapper">
-          <table class="sms-providers-table">
-            <thead>
-              <tr>
-                <th style="width: 80px;">Default</th>
-                <th>Name</th>
-                <th style="width: 150px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="providersTableBody">
-              <tr>
-                <td class="radio-cell">
-                  <input type="radio" name="defaultProvider" value="limo-anywhere" checked />
-                </td>
-                <td class="provider-name">Limo Anywhere</td>
-                <td class="actions-cell">
-                  <a href="#" class="action-link" onclick="editProvider(event, 'limo-anywhere')">Edit</a>
-                  <a href="#" class="action-link delete-link" onclick="deleteProvider(event, 'limo-anywhere')">Delete</a>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <section class="card">
+          <div class="card-header"><h2>Credentials</h2></div>
+          <div class="card-body grid-2">
+            <label class="form-row">Account SID
+              <input id="twilioAccountSid" type="text" placeholder="ACxxxxxxxx" />
+            </label>
+            <label class="form-row">Auth Token
+              <input id="twilioAuthToken" type="password" placeholder="Auth Token" />
+            </label>
+            <label class="form-row">API Key SID (optional)
+              <input id="twilioApiKeySid" type="text" placeholder="SKxxxxxxxx" />
+            </label>
+            <label class="form-row">API Key Secret (optional)
+              <input id="twilioApiKeySecret" type="password" placeholder="API Key Secret" />
+            </label>
+            <label class="form-row">Messaging Service SID (preferred)
+              <input id="twilioMessagingServiceSid" type="text" placeholder="MGxxxxxxxx" />
+            </label>
+            <label class="form-row">From Number (fallback)
+              <input id="twilioFromNumber" type="text" placeholder="+15551234567" />
+            </label>
+            <label class="form-row">Status Callback URL
+              <input id="twilioStatusCallback" type="text" placeholder="https://..." />
+            </label>
+            <label class="form-row checkbox-row">
+              <input id="twilioDeliveryReceipts" type="checkbox" /> Request delivery receipts
+            </label>
+          </div>
+        </section>
 
-        <!-- Empty State (hidden when there are providers) -->
-        <div class="empty-state" id="emptyState" style="display: none;">
-          <div class="empty-state-icon">📱</div>
-          <p class="empty-state-text">No SMS providers configured</p>
-          <p class="empty-state-subtext">Click "Add New" to configure your first SMS provider</p>
-        </div>
+        <section class="card">
+          <div class="card-header"><h2>Test Message</h2></div>
+          <div class="card-body grid-2">
+            <label class="form-row">To Number
+              <input id="twilioTestTo" type="text" placeholder="+15551234567" />
+            </label>
+            <label class="form-row">Body
+              <textarea id="twilioTestBody" rows="3" placeholder="Your test message"></textarea>
+            </label>
+          </div>
+          <div class="card-footer">
+            <span id="twilioStatus" class="status-text"></span>
+          </div>
+        </section>
       </main>
     </div>
-
     <script src="sms-provider.js"></script>
   </body>
 </html>

@@ -514,6 +514,13 @@ export async function listDrivers({ limit = 50, offset = 0 } = {}) {
   return res.json();
 }
 
+// Lightweight driver list for dropdowns (active only, name fallback)
+export async function listDriverNames({ limit = 200, offset = 0 } = {}) {
+  const res = await apiFetch(`/rest/v1/drivers?select=id,dispatch_display_name,first_name,last_name,status&status=eq.ACTIVE&order=last_name.asc,first_name.asc&limit=${limit}&offset=${offset}`);
+  if (!res.ok) throw new Error(`listDriverNames failed: ${res.status}`);
+  return res.json();
+}
+
 /**
  * Example: Fetch all drivers
  */
@@ -807,7 +814,11 @@ export async function fetchVehicleTypes() {
       .order('name', { ascending: true });
 
     if (error) throw error;
-    return data || [];
+    return (data || []).map((v) => ({
+      ...v,
+      rates: v?.metadata?.rates ?? null,
+      images: v?.metadata?.images ?? null
+    }));
   } catch (error) {
     console.error('Error fetching vehicle types:', error);
     lastApiError = error;
@@ -892,6 +903,22 @@ export async function fetchActiveVehicles() {
   }
 }
 
+// Lightweight active vehicles for dropdowns (id + display fields)
+export async function listActiveVehiclesLight({ limit = 200, offset = 0 } = {}) {
+  const activeStatuses = 'ACTIVE,AVAILABLE,IN_USE';
+  const res = await apiFetch(`/rest/v1/vehicles?select=id,veh_disp_name,unit_number,make,model,year,license_plate,status,veh_type,veh_title&status=in.(${activeStatuses})&order=veh_disp_name.asc,make.asc,model.asc,year.desc&limit=${limit}&offset=${offset}`);
+  if (!res.ok) throw new Error(`listActiveVehiclesLight failed: ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+// Active vehicle types for dropdowns
+export async function listActiveVehicleTypes({ limit = 200, offset = 0 } = {}) {
+  const res = await apiFetch(`/rest/v1/vehicle_types?select=id,name,code,status&status=eq.ACTIVE&order=sort_order.asc,name.asc&limit=${limit}&offset=${offset}`);
+  if (!res.ok) throw new Error(`listActiveVehicleTypes failed: ${res.status}`);
+  return res.json();
+}
+
 export async function upsertVehicleType(vehicleType) {
   const client = getSupabaseClient();
   if (!client) throw new Error('Supabase client not initialized');
@@ -902,6 +929,12 @@ export async function upsertVehicleType(vehicleType) {
     const now = new Date().toISOString();
     const isValidId = typeof vehicleType.id === 'string'
       && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(vehicleType.id);
+
+    const metadata = {
+      ...(vehicleType.metadata || {}),
+      ...(vehicleType.rates ? { rates: vehicleType.rates } : {}),
+      ...(vehicleType.images ? { images: vehicleType.images } : {})
+    };
 
     const payload = sanitizeVehiclePayload({
       id: isValidId ? vehicleType.id : undefined,
@@ -924,7 +957,7 @@ export async function upsertVehicleType(vehicleType) {
       hide_from_online: vehicleType.hide_from_online === true,
       description: vehicleType.description?.trim() || null,
       sort_order: Number.isFinite(vehicleType.sort_order) ? vehicleType.sort_order : 0,
-      metadata: vehicleType.metadata ?? {},
+      metadata,
       updated_at: now,
       updated_by: user.id,
       created_at: isValidId ? undefined : now,
@@ -941,6 +974,28 @@ export async function upsertVehicleType(vehicleType) {
     return data;
   } catch (error) {
     console.error('Error upserting vehicle type:', error);
+    lastApiError = error;
+    throw error;
+  }
+}
+
+export async function deleteVehicleType(vehicleTypeId) {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase client not initialized');
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+    const { error } = await client
+      .from('vehicle_types')
+      .delete()
+      .eq('id', vehicleTypeId)
+      .eq('organization_id', organizationId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting vehicle type:', error);
     lastApiError = error;
     throw error;
   }

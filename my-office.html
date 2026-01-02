@@ -49,12 +49,9 @@
               <button class="sidebar-btn" data-section="system-settings">System Settings</button>
               <div class="sidebar-subgroup" id="systemSettingsSubnav" style="display: none;">
                 <button class="sidebar-subbtn active" data-system-setting="service-types">Service Types</button>
-                <button class="sidebar-subbtn" data-system-setting="partner-settings">Partner Settings</button>
                 <button class="sidebar-subbtn" data-system-setting="system-mapping">System Mapping</button>
-                <button class="sidebar-subbtn" data-system-setting="data-reduction">Data Reduction</button>
-                <button class="sidebar-subbtn" data-system-setting="electronic-fax">Electronic Fax</button>
                 <button class="sidebar-subbtn" data-system-setting="sms-provider">Sms Provider</button>
-                <button class="sidebar-subbtn" data-system-setting="limoanywhere-pay">LimoAnywhere Pay</button>
+                <button class="sidebar-subbtn" data-system-setting="email-settings">Email Settings</button>
                 <button class="sidebar-subbtn" data-system-setting="digital-marketing">Digital Marketing</button>
                 <button class="sidebar-subbtn" data-system-setting="utilities">Utilities</button>
               </div>
@@ -3795,9 +3792,26 @@ further assistance.</textarea>
 
             <!-- System Settings Section -->
             <section id="system-settings-section" class="office-section">
-              <div style="width: 100%; height: calc(100vh - 160px);">
-                <iframe src="service-types.html" style="width: 100%; height: 100%; border: none;"></iframe>
+              <div style="display:flex; gap:8px; padding:0 0 10px 0; align-items:center;">
+                <button class="btn btn-primary" data-sys-settings-src="service-types.html" style="padding:8px 12px; font-size:12px;">Service Types</button>
+                <button class="btn btn-primary" data-sys-settings-src="system-mapping.html" style="padding:8px 12px; font-size:12px;">System Mapping</button>
+                <button class="btn btn-primary" data-sys-settings-src="sms-provider.html" style="padding:8px 12px; font-size:12px;">SMS Provider</button>
+                <button class="btn btn-primary" data-sys-settings-src="email-settings.html" style="padding:8px 12px; font-size:12px;">Email Settings</button>
               </div>
+              <div style="width: 100%; height: calc(100vh - 200px);">
+                <iframe id="systemSettingsFrame" src="email-settings.html" style="width: 100%; height: 100%; border: none;"></iframe>
+              </div>
+              <script>
+                (function setupSystemSettingsNav(){
+                  const frame = document.getElementById('systemSettingsFrame');
+                  document.querySelectorAll('[data-sys-settings-src]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                      const src = btn.getAttribute('data-sys-settings-src');
+                      if (src && frame) frame.src = src;
+                    });
+                  });
+                })();
+              </script>
             </section>
           </div>
         </div>
@@ -3848,44 +3862,17 @@ further assistance.</textarea>
                 <!-- Center: Add/Edit Driver Form -->
                 <div class="drivers-form-panel" style="flex: 1; border: 1px solid #ddd; padding: 15px; background: #fff; border-radius: 4px; overflow-y: auto;">
                   <h3 id="driverFormTitle" style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #333;">Add New Driver</h3>
-                  <div id="driverContactSummary" style="margin-bottom: 18px;">
-                    <div style="font-size: 12px; color: #607d8b; margin-bottom: 6px;">Driver contact fields mapped to Supabase columns:</div>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
-                      <thead>
-                        <tr style="background: #f5f5f5;">
-                          <th style="text-align: left; padding: 6px 8px; border: 1px solid #e0e0e0;">Form Field</th>
-                          <th style="text-align: left; padding: 6px 8px; border: 1px solid #e0e0e0;">Supabase Column</th>
-                          <th style="text-align: left; padding: 6px 8px; border: 1px solid #e0e0e0;">Current Value</th>
-                        </tr>
-                      </thead>
-                      <tbody id="driverContactSummaryBody">
-                        <tr>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Cellular Phone *</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">cell_phone</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Cell Provider</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">cell_phone_provider</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Home Phone</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">home_phone</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Pager / Other</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">other_phone</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0;">Email Address</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; font-family: 'Courier New', monospace;">email</td>
-                          <td style="padding: 6px 8px; border: 1px solid #e0e0e0; color: #78909c;">—</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                    <label for="driverStatusSelect" style="font-size:12px; font-weight:600; color:#333;">Availability Status</label>
+                    <select id="driverStatusSelect" style="padding:6px 10px; font-size:12px; border:1px solid #ccc; border-radius:4px; min-width:160px;">
+                      <option value="available">Available</option>
+                      <option value="enroute">En Route</option>
+                      <option value="arrived">Arrived</option>
+                      <option value="passenger_onboard">Passenger On Board</option>
+                      <option value="busy">Busy</option>
+                      <option value="offline">Offline</option>
+                    </select>
+                    <span style="font-size:11px; color:#666;">Syncs with Driver Availability board</span>
                   </div>
                   
                   <div class="drivers-form-columns">
@@ -3918,8 +3905,57 @@ further assistance.</textarea>
                           <label>State/Prov</label>
                           <select class="form-control">
                             <option value=""></option>
-                            <option value="MN">MN</option>
-                            <option value="WI">WI</option>
+                            <option value="AL">AL - Alabama</option>
+                            <option value="AK">AK - Alaska</option>
+                            <option value="AZ">AZ - Arizona</option>
+                            <option value="AR">AR - Arkansas</option>
+                            <option value="CA">CA - California</option>
+                            <option value="CO">CO - Colorado</option>
+                            <option value="CT">CT - Connecticut</option>
+                            <option value="DE">DE - Delaware</option>
+                            <option value="FL">FL - Florida</option>
+                            <option value="GA">GA - Georgia</option>
+                            <option value="HI">HI - Hawaii</option>
+                            <option value="ID">ID - Idaho</option>
+                            <option value="IL">IL - Illinois</option>
+                            <option value="IN">IN - Indiana</option>
+                            <option value="IA">IA - Iowa</option>
+                            <option value="KS">KS - Kansas</option>
+                            <option value="KY">KY - Kentucky</option>
+                            <option value="LA">LA - Louisiana</option>
+                            <option value="ME">ME - Maine</option>
+                            <option value="MD">MD - Maryland</option>
+                            <option value="MA">MA - Massachusetts</option>
+                            <option value="MI">MI - Michigan</option>
+                            <option value="MN">MN - Minnesota</option>
+                            <option value="MS">MS - Mississippi</option>
+                            <option value="MO">MO - Missouri</option>
+                            <option value="MT">MT - Montana</option>
+                            <option value="NE">NE - Nebraska</option>
+                            <option value="NV">NV - Nevada</option>
+                            <option value="NH">NH - New Hampshire</option>
+                            <option value="NJ">NJ - New Jersey</option>
+                            <option value="NM">NM - New Mexico</option>
+                            <option value="NY">NY - New York</option>
+                            <option value="NC">NC - North Carolina</option>
+                            <option value="ND">ND - North Dakota</option>
+                            <option value="OH">OH - Ohio</option>
+                            <option value="OK">OK - Oklahoma</option>
+                            <option value="OR">OR - Oregon</option>
+                            <option value="PA">PA - Pennsylvania</option>
+                            <option value="RI">RI - Rhode Island</option>
+                            <option value="SC">SC - South Carolina</option>
+                            <option value="SD">SD - South Dakota</option>
+                            <option value="TN">TN - Tennessee</option>
+                            <option value="TX">TX - Texas</option>
+                            <option value="UT">UT - Utah</option>
+                            <option value="VT">VT - Vermont</option>
+                            <option value="VA">VA - Virginia</option>
+                            <option value="WA">WA - Washington</option>
+                            <option value="WV">WV - West Virginia</option>
+                            <option value="WI">WI - Wisconsin</option>
+                            <option value="WY">WY - Wyoming</option>
+                            <option value="DC">DC - District of Columbia</option>
                           </select>
                         </div>
                         <div class="form-group">
@@ -3941,8 +3977,57 @@ further assistance.</textarea>
                           <label>DL State</label>
                           <select class="form-control">
                             <option value=""></option>
-                            <option value="MN">MN</option>
-                            <option value="WI">WI</option>
+                            <option value="AL">AL - Alabama</option>
+                            <option value="AK">AK - Alaska</option>
+                            <option value="AZ">AZ - Arizona</option>
+                            <option value="AR">AR - Arkansas</option>
+                            <option value="CA">CA - California</option>
+                            <option value="CO">CO - Colorado</option>
+                            <option value="CT">CT - Connecticut</option>
+                            <option value="DE">DE - Delaware</option>
+                            <option value="FL">FL - Florida</option>
+                            <option value="GA">GA - Georgia</option>
+                            <option value="HI">HI - Hawaii</option>
+                            <option value="ID">ID - Idaho</option>
+                            <option value="IL">IL - Illinois</option>
+                            <option value="IN">IN - Indiana</option>
+                            <option value="IA">IA - Iowa</option>
+                            <option value="KS">KS - Kansas</option>
+                            <option value="KY">KY - Kentucky</option>
+                            <option value="LA">LA - Louisiana</option>
+                            <option value="ME">ME - Maine</option>
+                            <option value="MD">MD - Maryland</option>
+                            <option value="MA">MA - Massachusetts</option>
+                            <option value="MI">MI - Michigan</option>
+                            <option value="MN">MN - Minnesota</option>
+                            <option value="MS">MS - Mississippi</option>
+                            <option value="MO">MO - Missouri</option>
+                            <option value="MT">MT - Montana</option>
+                            <option value="NE">NE - Nebraska</option>
+                            <option value="NV">NV - Nevada</option>
+                            <option value="NH">NH - New Hampshire</option>
+                            <option value="NJ">NJ - New Jersey</option>
+                            <option value="NM">NM - New Mexico</option>
+                            <option value="NY">NY - New York</option>
+                            <option value="NC">NC - North Carolina</option>
+                            <option value="ND">ND - North Dakota</option>
+                            <option value="OH">OH - Ohio</option>
+                            <option value="OK">OK - Oklahoma</option>
+                            <option value="OR">OR - Oregon</option>
+                            <option value="PA">PA - Pennsylvania</option>
+                            <option value="RI">RI - Rhode Island</option>
+                            <option value="SC">SC - South Carolina</option>
+                            <option value="SD">SD - South Dakota</option>
+                            <option value="TN">TN - Tennessee</option>
+                            <option value="TX">TX - Texas</option>
+                            <option value="UT">UT - Utah</option>
+                            <option value="VT">VT - Vermont</option>
+                            <option value="VA">VA - Virginia</option>
+                            <option value="WA">WA - Washington</option>
+                            <option value="WV">WV - West Virginia</option>
+                            <option value="WI">WI - Wisconsin</option>
+                            <option value="WY">WY - Wyoming</option>
+                            <option value="DC">DC - District of Columbia</option>
                           </select>
                         </div>
                         <div class="form-group">
@@ -4602,7 +4687,7 @@ further assistance.</textarea>
             <div class="resources-list-panel">
               <div class="resources-list-header">
                 <h3>Vehicle Type Listing</h3>
-                <button class="btn btn-secondary btn-small">Show All</button>
+                <button class="btn btn-secondary btn-small" id="vehicleTypeShowAllBtn">Show All</button>
               </div>
               
               <div class="resources-scrollable-list" id="vehicleTypeList">
@@ -4625,7 +4710,9 @@ further assistance.</textarea>
               </div>
 
               <div class="resources-actions">
+                <button class="btn btn-primary btn-block" id="vehicleTypeAddBtn">+ Add New Vehicle Type</button>
                 <button class="btn btn-primary btn-block" id="vehicleTypeEditBtn">EDIT VEHICLE TYPE</button>
+                <button class="btn btn-danger btn-block" id="vehicleTypeDeleteBtn" style="margin-top: 10px;">Delete Vehicle Type</button>
                 <button class="btn btn-secondary btn-block" style="margin-top: 10px;">Configure Sort Order</button>
               </div>
             </div>
@@ -4643,14 +4730,9 @@ further assistance.</textarea>
               <!-- Edit Vehicle Type Tab -->
               <div class="vehicle-type-tab-content active" id="editVehicleTypeContent">
                 <div class="resources-form-header">
-                  <h3>Add New Vehicle Type</h3>
+                  <h3>Vehicle Type</h3>
                 </div>
                 <div class="resources-form-content">
-                <!-- Vehicle Type Information Alert -->
-                <div class="info-alert" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 20px;">
-                  <span style="color: #ff0000; font-weight: bold;">⚠ Hide in Online Reservation System</span>
-                </div>
-
                 <div class="form-row">
                   <div class="form-group" style="flex: 2;">
                     <label>Vehicle Type Title</label>
@@ -4681,13 +4763,7 @@ further assistance.</textarea>
                   <div class="form-group">
                     <label>Passenger Capacity</label>
                     <select class="form-control" data-vehicle-field="passenger_capacity">
-                      <option value="0">0</option>
-                      <option value="6" selected>6</option>
-                      <option value="7">7</option>
-                      <option value="8">8</option>
-                      <option value="10">10</option>
-                      <option value="12">12</option>
-                      <option value="14">14</option>
+                      <option value="">Select capacity</option>
                     </select>
                   </div>
                   <div class="form-group">
@@ -5247,97 +5323,34 @@ further assistance.</textarea>
           <div class="resource-layout">
             <!-- Left: Fleet List -->
             <div class="resource-list-panel">
-              <div class="resource-header">
-                <h3>Fleet Vehicles</h3>
-                <div class="search-bar">
-                  <input type="text" placeholder="Search vehicles..." class="form-control" />
+              <div class="resource-header" style="display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap;">
+                <h3 style="margin: 0;">Fleet Vehicles</h3>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                  <div class="search-bar" style="min-width: 220px;">
+                    <input type="text" placeholder="Search vehicles..." class="form-control" />
+                  </div>
+                  <select class="form-control">
+                    <option>All Vehicles</option>
+                    <option>Active</option>
+                    <option>Inactive</option>
+                    <option>In Service</option>
+                    <option>Out of Service</option>
+                  </select>
+                  <select class="form-control">
+                    <option>All Vehicle Types</option>
+                    <option>Sedan</option>
+                    <option>SUV</option>
+                    <option>Stretch Limo</option>
+                    <option>Van</option>
+                    <option>Bus</option>
+                  </select>
                 </div>
-              </div>
-              <div class="filter-options">
-                <select class="form-control">
-                  <option>All Vehicles</option>
-                  <option>Active</option>
-                  <option>Inactive</option>
-                  <option>In Service</option>
-                  <option>Out of Service</option>
-                </select>
-                <select class="form-control">
-                  <option>All Vehicle Types</option>
-                  <option>Sedan</option>
-                  <option>SUV</option>
-                  <option>Stretch Limo</option>
-                  <option>Van</option>
-                  <option>Bus</option>
-                </select>
               </div>
               <div class="resource-list" id="fleetList">
-                <div class="resource-item active">
-                  <div class="resource-item-main">
-                    <div class="resource-status-badge" style="background: #4caf50;"></div>
-                    <div class="resource-item-details">
-                      <div class="resource-item-name">Lincoln MKT - Unit #101</div>
-                      <div class="resource-item-meta">
-                        <span>VIN: 5LMJJ2H53FEL12345</span>
-                        <span>License: ABC1234</span>
-                      </div>
-                      <div class="resource-item-meta">
-                        <span>Type: Sedan</span>
-                        <span>Year: 2023</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="resource-item">
-                  <div class="resource-item-main">
-                    <div class="resource-status-badge" style="background: #4caf50;"></div>
-                    <div class="resource-item-details">
-                      <div class="resource-item-name">Cadillac Escalade - Unit #102</div>
-                      <div class="resource-item-meta">
-                        <span>VIN: 1GYS4JKJ9FR123456</span>
-                        <span>License: XYZ5678</span>
-                      </div>
-                      <div class="resource-item-meta">
-                        <span>Type: SUV</span>
-                        <span>Year: 2024</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="resource-item">
-                  <div class="resource-item-main">
-                    <div class="resource-status-badge" style="background: #ff9800;"></div>
-                    <div class="resource-item-details">
-                      <div class="resource-item-name">Mercedes Sprinter - Unit #201</div>
-                      <div class="resource-item-meta">
-                        <span>VIN: WDYPF4CC9DP123456</span>
-                        <span>License: VAN9999</span>
-                      </div>
-                      <div class="resource-item-meta">
-                        <span>Type: Van</span>
-                        <span>Year: 2022</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="resource-item">
-                  <div class="resource-item-main">
-                    <div class="resource-status-badge" style="background: #f44336;"></div>
-                    <div class="resource-item-details">
-                      <div class="resource-item-name">Lincoln Stretch - Unit #301</div>
-                      <div class="resource-item-meta">
-                        <span>VIN: 1LNHM82W74Y123456</span>
-                        <span>License: LIMO123</span>
-                      </div>
-                      <div class="resource-item-meta">
-                        <span>Type: Stretch Limo</span>
-                        <span>Year: 2021</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <!-- Populated dynamically -->
               </div>
               <div class="resource-actions">
-                <button class="btn btn-primary btn-large">+ Add New Vehicle</button>
+                <button class="btn btn-primary btn-large" id="fleetAddBtn">+ Add New Vehicle</button>
               </div>
             </div>
 
@@ -5354,15 +5367,18 @@ further assistance.</textarea>
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Unit Number: <span class="required">*</span></label>
-                      <input type="text" class="form-control" placeholder="e.g., 101" value="101" />
+                      <input type="text" class="form-control" id="fleetUnitNumber" placeholder="e.g., 101" />
                     </div>
                     <div class="form-group">
                       <label>Status: <span class="required">*</span></label>
-                      <select class="form-control">
-                        <option value="active" selected>Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="maintenance">In Maintenance</option>
-                        <option value="out-of-service">Out of Service</option>
+                      <select class="form-control" id="fleetStatus">
+                        <option value="ACTIVE">Active</option>
+                        <option value="AVAILABLE">Available</option>
+                        <option value="IN_USE">In Use</option>
+                        <option value="MAINTENANCE">In Maintenance</option>
+                        <option value="OUT_OF_SERVICE">Out of Service</option>
+                        <option value="INACTIVE">Inactive</option>
+                        <option value="RETIRED">Retired</option>
                       </select>
                     </div>
                   </div>
@@ -5370,29 +5386,14 @@ further assistance.</textarea>
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Vehicle Type: <span class="required">*</span></label>
-                      <select class="form-control">
+                      <select class="form-control" id="fleetVehicleType">
                         <option value="">Select Vehicle Type</option>
-                        <option value="sedan" selected>Sedan</option>
-                        <option value="suv">SUV</option>
-                        <option value="stretch-limo">Stretch Limo</option>
-                        <option value="van">Van</option>
-                        <option value="bus">Bus</option>
                       </select>
                     </div>
                     <div class="form-group">
                       <label>Year: <span class="required">*</span></label>
-                      <select class="form-control">
+                      <select class="form-control" id="fleetYear">
                         <option value="">Select Year</option>
-                        <option value="2024">2024</option>
-                        <option value="2023" selected>2023</option>
-                        <option value="2022">2022</option>
-                        <option value="2021">2021</option>
-                        <option value="2020">2020</option>
-                        <option value="2019">2019</option>
-                        <option value="2018">2018</option>
-                        <option value="2017">2017</option>
-                        <option value="2016">2016</option>
-                        <option value="2015">2015</option>
                       </select>
                     </div>
                   </div>
@@ -5400,22 +5401,22 @@ further assistance.</textarea>
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Make: <span class="required">*</span></label>
-                      <input type="text" class="form-control" placeholder="e.g., Lincoln" value="Lincoln" />
+                      <input type="text" class="form-control" id="fleetMake" placeholder="e.g., Lincoln" />
                     </div>
                     <div class="form-group">
                       <label>Model: <span class="required">*</span></label>
-                      <input type="text" class="form-control" placeholder="e.g., MKT" value="MKT" />
+                      <input type="text" class="form-control" id="fleetModel" placeholder="e.g., MKT" />
                     </div>
                   </div>
 
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Color:</label>
-                      <input type="text" class="form-control" placeholder="e.g., Black" value="Black" />
+                      <input type="text" class="form-control" id="fleetColor" placeholder="e.g., Black" />
                     </div>
                     <div class="form-group">
                       <label>Passenger Capacity: <span class="required">*</span></label>
-                      <input type="number" class="form-control" placeholder="e.g., 4" value="4" min="1" />
+                      <input type="number" class="form-control" id="fleetPassengers" placeholder="e.g., 4" min="1" />
                     </div>
                   </div>
                 </div>
@@ -5429,40 +5430,40 @@ further assistance.</textarea>
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>VIN Number: <span class="required">*</span></label>
-                      <input type="text" class="form-control" placeholder="17-character VIN" value="5LMJJ2H53FEL12345" maxlength="17" />
+                      <input type="text" class="form-control" id="fleetVin" placeholder="17-character VIN" maxlength="17" />
                     </div>
                     <div class="form-group">
                       <label>License Plate: <span class="required">*</span></label>
-                      <input type="text" class="form-control" placeholder="e.g., ABC1234" value="ABC1234" />
+                      <input type="text" class="form-control" id="fleetLicense" placeholder="e.g., ABC1234" />
                     </div>
                   </div>
 
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Registration Expiration:</label>
-                      <input type="date" class="form-control" value="2024-12-31" />
+                      <input type="date" class="form-control" id="fleetRegExp" />
                     </div>
                     <div class="form-group">
                       <label>Insurance Expiration:</label>
-                      <input type="date" class="form-control" value="2024-12-31" />
+                      <input type="date" class="form-control" id="fleetInsExp" />
                     </div>
                   </div>
 
                   <div class="form-row">
                     <div class="form-group">
                       <label>Insurance Company:</label>
-                      <input type="text" class="form-control" placeholder="Insurance provider name" value="Progressive Commercial" />
+                      <input type="text" class="form-control" id="fleetInsCompany" placeholder="Insurance provider name" />
                     </div>
                   </div>
 
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Policy Number:</label>
-                      <input type="text" class="form-control" placeholder="Insurance policy number" value="POL-2024-12345" />
+                      <input type="text" class="form-control" id="fleetPolicyNumber" placeholder="Insurance policy number" />
                     </div>
                     <div class="form-group">
                       <label>Insurance Contact:</label>
-                      <input type="text" class="form-control" placeholder="Agent name or phone" value="(555) 123-4567" />
+                      <input type="text" class="form-control" id="fleetInsContact" placeholder="Agent name or phone" />
                     </div>
                   </div>
                 </div>
@@ -5476,29 +5477,29 @@ further assistance.</textarea>
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Current Mileage:</label>
-                      <input type="number" class="form-control" placeholder="e.g., 45000" value="45000" min="0" />
+                      <input type="number" class="form-control" id="fleetMileage" placeholder="e.g., 45000" min="0" />
                     </div>
                     <div class="form-group">
                       <label>Next Service Due (Miles):</label>
-                      <input type="number" class="form-control" placeholder="e.g., 50000" value="50000" min="0" />
+                      <input type="number" class="form-control" id="fleetNextServiceMiles" placeholder="e.g., 50000" min="0" />
                     </div>
                   </div>
 
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Last Service Date:</label>
-                      <input type="date" class="form-control" value="2024-01-15" />
+                      <input type="date" class="form-control" id="fleetLastServiceDate" />
                     </div>
                     <div class="form-group">
                       <label>Next Service Date:</label>
-                      <input type="date" class="form-control" value="2024-04-15" />
+                      <input type="date" class="form-control" id="fleetNextServiceDate" />
                     </div>
                   </div>
 
                   <div class="form-row">
                     <div class="form-group">
                       <label>Service Notes:</label>
-                      <textarea class="form-control" rows="3" placeholder="Any maintenance notes or special requirements...">Regular oil changes every 5,000 miles. Premium fuel required.</textarea>
+                      <textarea class="form-control" id="fleetServiceNotes" rows="3" placeholder="Any maintenance notes or special requirements..."></textarea>
                     </div>
                   </div>
                 </div>
@@ -5512,9 +5513,9 @@ further assistance.</textarea>
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Garaged Location:</label>
-                      <select class="form-control">
+                      <select class="form-control" id="fleetGaragedLocation">
                         <option value="">Select Location</option>
-                        <option value="main" selected>Main Garage</option>
+                        <option value="main">Main Garage</option>
                         <option value="north">North Branch</option>
                         <option value="south">South Branch</option>
                         <option value="airport">Airport Facility</option>
@@ -5522,12 +5523,8 @@ further assistance.</textarea>
                     </div>
                     <div class="form-group">
                       <label>Assigned Driver:</label>
-                      <select class="form-control">
+                      <select class="form-control" id="fleetAssignedDriver">
                         <option value="">Not Assigned</option>
-                        <option value="driver1">John Smith</option>
-                        <option value="driver2">Jane Doe</option>
-                        <option value="driver3">Mike Johnson</option>
-                        <option value="driver4">Sarah Williams</option>
                       </select>
                     </div>
                   </div>
@@ -5537,39 +5534,39 @@ further assistance.</textarea>
                       <label>Features & Amenities:</label>
                       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px;">
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" checked />
+                          <input type="checkbox" class="fleet-feature" data-value="WiFi" />
                           <span>WiFi</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" checked />
+                          <input type="checkbox" class="fleet-feature" data-value="Leather Seats" />
                           <span>Leather Seats</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" class="fleet-feature" data-value="GPS Tracking" />
                           <span>GPS Tracking</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" checked />
+                          <input type="checkbox" class="fleet-feature" data-value="Climate Control" />
                           <span>Climate Control</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" class="fleet-feature" data-value="Entertainment System" />
                           <span>Entertainment System</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" class="fleet-feature" data-value="Mini Bar" />
                           <span>Mini Bar</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" checked />
+                          <input type="checkbox" class="fleet-feature" data-value="Wheelchair Accessible" />
                           <span>Wheelchair Accessible</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" class="fleet-feature" data-value="Pet Friendly" />
                           <span>Pet Friendly</span>
                         </label>
                         <label style="font-weight: 400; display: flex; align-items: center; gap: 5px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" class="fleet-feature" data-value="Child Seat Available" />
                           <span>Child Seat Available</span>
                         </label>
                       </div>
@@ -5579,15 +5576,15 @@ further assistance.</textarea>
                   <div class="form-row">
                     <div class="form-group">
                       <label>Internal Notes:</label>
-                      <textarea class="form-control" rows="3" placeholder="Any internal notes about this vehicle...">Executive vehicle - reserved for VIP clients. Keep impeccably clean.</textarea>
+                      <textarea class="form-control" id="fleetInternalNotes" rows="3" placeholder="Any internal notes about this vehicle..."></textarea>
                     </div>
                   </div>
                 </div>
 
                 <div class="form-actions">
-                  <button class="btn btn-primary btn-large">Save Vehicle</button>
-                  <button class="btn btn-secondary btn-large">Cancel</button>
-                  <button class="btn btn-danger btn-large" style="margin-left: auto;">Delete Vehicle</button>
+                  <button class="btn btn-primary btn-large" id="fleetSaveBtn">Save Vehicle</button>
+                  <button class="btn btn-secondary btn-large" id="fleetCancelBtn">Cancel</button>
+                  <button class="btn btn-danger btn-large" id="fleetDeleteBtn" style="margin-left: auto;">Delete Vehicle</button>
                 </div>
               </div>
             </div>

@@ -3,7 +3,7 @@ import { CostCalculator } from './CostCalculator.js';
 import { googleMapsService } from './GoogleMapsService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
-import { fetchDrivers, fetchActiveVehicles, setupAPI } from './api-service.js';
+import { fetchDrivers, setupAPI, listDriverNames, listActiveVehiclesLight, listActiveVehicleTypes } from './api-service.js';
 import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
@@ -595,12 +595,21 @@ class ReservationForm {
     const secondary = document.getElementById('secondaryDriverSelect');
     try {
       await setupAPI();
-      const drivers = await fetchDrivers();
+      const drivers = await listDriverNames({ limit: 200, offset: 0 });
+
+      const isActive = (d) => {
+        const flag = (d?.status || d?.driver_status || '').toString().trim().toUpperCase();
+        if (!flag) return true; // treat empty as active
+        return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
+      };
+
       const options = Array.isArray(drivers) && drivers.length
-        ? drivers.map(d => {
-            const name = [d.first_name, d.last_name].filter(Boolean).join(' ').trim() || 'Unnamed Driver';
-            return { value: d.id || name, label: name };
-          })
+        ? drivers
+            .filter(isActive)
+            .map(d => {
+              const name = (d.dispatch_display_name || [d.first_name, d.last_name].filter(Boolean).join(' ')).trim() || 'Unnamed Driver';
+              return { value: d.id || name, label: name };
+            })
         : [];
 
       const render = (el) => {
@@ -628,6 +637,7 @@ class ReservationForm {
   async loadVehicleTypes() {
     const primaryCar = document.getElementById('carSelect');
     const secondaryCar = document.getElementById('secondaryCarSelect');
+    const vehicleTypeSelect = document.getElementById('vehicleTypeRes');
 
     const render = (el, options) => {
       if (!el) return;
@@ -642,7 +652,8 @@ class ReservationForm {
 
     try {
       await setupAPI();
-      const vehicles = await fetchActiveVehicles();
+      const vehicles = await listActiveVehiclesLight({ limit: 200, offset: 0 });
+      const vehicleTypes = await listActiveVehicleTypes({ limit: 200, offset: 0 });
 
       // Filter to active only (defensive in case data is cached/legacy)
       const isActive = (v) => {
@@ -651,24 +662,37 @@ class ReservationForm {
         return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
       };
 
-      const options = Array.isArray(vehicles) && vehicles.length
-        ? vehicles
-            .filter(isActive)
-            .map(v => {
-              const label = v.veh_disp_name || v.veh_title || v.veh_type || v.name || v.code || 'Vehicle';
-              const value = v.id || v.veh_disp_name || v.veh_title || v.veh_type || label;
-              return { value, label };
-            })
+      const activeVehicles = Array.isArray(vehicles) ? vehicles.filter(isActive) : [];
+
+      const options = activeVehicles.length
+        ? activeVehicles.map(v => {
+            const label = v.veh_disp_name || v.veh_title || v.unit_number || `${[v.make, v.model, v.year].filter(Boolean).join(' ')}` || 'Vehicle';
+            const value = v.id || v.veh_disp_name || v.unit_number || label;
+            return { value, label };
+          })
         : [];
+
+      const typeOptionsFromTable = Array.isArray(vehicleTypes) && vehicleTypes.length
+        ? vehicleTypes.map(t => ({ value: t.id, label: t.name || t.code || 'Vehicle Type' }))
+        : [];
+
+      const typeOptionsFallback = activeVehicles.length
+        ? Array.from(new Set(activeVehicles.map(v => v.veh_type || v.veh_disp_name || v.veh_title || 'Vehicle')))
+            .map(t => ({ value: t, label: t }))
+        : [];
+
+      const typeOptions = typeOptionsFromTable.length ? typeOptionsFromTable : typeOptionsFallback;
 
       render(primaryCar, options);
       render(secondaryCar, options);
+      render(vehicleTypeSelect, typeOptions);
 
       console.log(`✅ Loaded ${options.length} vehicles`);
     } catch (error) {
       console.error('❌ Error loading vehicles:', error);
       if (primaryCar) primaryCar.innerHTML = '<option value="">-- Error loading vehicles --</option>';
       if (secondaryCar) secondaryCar.innerHTML = '<option value="">-- Error loading vehicles --</option>';
+      if (vehicleTypeSelect) vehicleTypeSelect.innerHTML = '<option value="">-- Error loading vehicles --</option>';
     }
   }
 

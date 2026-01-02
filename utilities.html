@@ -161,6 +161,21 @@ enforceSectionAccess();
       <button id="addMembershipBtn" class="btn" style="background:#6a1b9a; margin-left:8px;">Add Membership</button>
     </div>
   </div>
+
+  <div style="margin-top:24px; padding:16px; border:1px solid #e0e0e0; border-radius:6px;">
+    <h3 style="margin-top:0;">Vehicle Type Tools</h3>
+    <p style="margin:0 0 12px; font-size:13px; color:#37474f;">Delete a single vehicle type and its related rate matrices, entries, peak rates, and images. Vehicles referencing the type are set to null.</p>
+    <div style="margin-bottom:12px;">
+      <label for="vehicleTypeIdInput" style="display:block; font-weight:600; margin-bottom:6px;">Vehicle Type UUID</label>
+      <input id="vehicleTypeIdInput" type="text" placeholder="Vehicle type UUID" style="width:360px; padding:8px; border:1px solid #ccc; border-radius:4px;" />
+    </div>
+    <div style="margin-bottom:12px;">
+      <label for="vehicleOrgIdInput" style="display:block; font-weight:600; margin-bottom:6px;">Organization UUID (optional, auto-fills)</label>
+      <input id="vehicleOrgIdInput" type="text" placeholder="Organization UUID" style="width:360px; padding:8px; border:1px solid #ccc; border-radius:4px;" />
+    </div>
+    <button id="deleteVehicleTypeBtn" class="btn" style="background:#d32f2f;">🗑️ Delete Vehicle Type (Supabase)</button>
+    <div id="deleteVehicleTypeStatus" style="margin-top:10px; font-size:12px; color:#546e7a;"></div>
+  </div>
 <script type="module">
 console.log('=== UTILITIES MODULE LOADING ===');
 
@@ -252,6 +267,130 @@ async function getCurrentOrgId() {
   } catch (err) {
     console.warn('Failed to resolve organization id', err);
     return null;
+  }
+}
+
+// Enforce PostgREST 204-or-ok contract for deletes/patches
+async function expect204(res, step) {
+  if (!res.ok && res.status !== 204) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`${step} failed: ${res.status} ${body}`);
+  }
+}
+
+async function hydrateVehicleOrgId() {
+  const orgInput = document.getElementById('vehicleOrgIdInput');
+  if (!orgInput || orgInput.value.trim()) return;
+  const org = await getCurrentOrgId();
+  if (org) orgInput.value = org;
+}
+
+async function deleteVehicleTypeById() {
+  const btn = document.getElementById('deleteVehicleTypeBtn');
+  const statusEl = document.getElementById('deleteVehicleTypeStatus');
+  const vehicleTypeId = (document.getElementById('vehicleTypeIdInput')?.value || '').trim();
+  let organizationId = (document.getElementById('vehicleOrgIdInput')?.value || '').trim();
+
+  statusEl.textContent = '';
+
+  if (!vehicleTypeId) { alert('Enter the vehicle type UUID.'); return; }
+  if (!organizationId) {
+    organizationId = await getCurrentOrgId();
+  }
+  if (!organizationId) { alert('Organization UUID is required.'); return; }
+
+  const confirmed = window.confirm('Delete this vehicle type and related rate data/images? This cannot be undone.');
+  if (!confirmed) return;
+
+  try {
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+    statusEl.textContent = 'Running delete steps...';
+
+    const ready = await ensureSupabaseReady();
+    if (!ready) throw new Error('Not authenticated');
+
+    const supabaseUrl = window.ENV?.SUPABASE_URL;
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) throw new Error('Supabase not configured');
+
+    const storedSession = localStorage.getItem('supabase_session');
+    let authToken = supabaseKey;
+    if (storedSession) {
+      try {
+        const session = JSON.parse(storedSession);
+        if (session?.access_token) authToken = session.access_token;
+      } catch (_) {}
+    }
+
+    const headers = {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal'
+    };
+
+    const rest = (path, init) => fetch(`${supabaseUrl}/rest/v1${path}`, { headers, ...init });
+
+    // 1) Delete images for this vehicle type within org
+    await expect204(
+      rest(`/vehicle_type_images?vehicle_type_id=eq.${vehicleTypeId}&organization_id=eq.${organizationId}`, { method: 'DELETE' }),
+      'delete vehicle_type_images'
+    );
+
+    // 2) Fetch rate matrix IDs
+    const matricesRes = await rest(`/vehicle_type_rate_matrices?vehicle_type_id=eq.${vehicleTypeId}&organization_id=eq.${organizationId}&select=id`, { method: 'GET' });
+    if (!matricesRes.ok) throw new Error(`list matrices failed: ${matricesRes.status} ${await matricesRes.text()}`);
+    const matrices = await matricesRes.json();
+    const matrixIds = (matrices || []).map(m => m.id).filter(Boolean);
+    const matrixList = matrixIds.length ? `in.(${matrixIds.join(',')})` : '';
+
+    // 3) Delete rate entries
+    if (matrixIds.length) {
+      await expect204(
+        rest(`/vehicle_type_rate_entries?rate_matrix_id=${matrixList}`, { method: 'DELETE' }),
+        'delete vehicle_type_rate_entries'
+      );
+      // 4) Delete peak rates
+      await expect204(
+        rest(`/vehicle_type_peak_rates?rate_matrix_id=${matrixList}`, { method: 'DELETE' }),
+        'delete vehicle_type_peak_rates'
+      );
+    }
+
+    // 5) Delete rate matrices
+    await expect204(
+      rest(`/vehicle_type_rate_matrices?vehicle_type_id=eq.${vehicleTypeId}&organization_id=eq.${organizationId}`, { method: 'DELETE' }),
+      'delete vehicle_type_rate_matrices'
+    );
+
+    // 6) Null vehicle references to this type
+    await expect204(
+      rest(`/vehicles?vehicle_type_id=eq.${vehicleTypeId}&organization_id=eq.${organizationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ vehicle_type_id: null })
+      }),
+      'null vehicle references'
+    );
+
+    // 7) Delete the vehicle type
+    await expect204(
+      rest(`/vehicle_types?id=eq.${vehicleTypeId}&organization_id=eq.${organizationId}`, { method: 'DELETE' }),
+      'delete vehicle_type'
+    );
+
+    statusEl.textContent = 'Vehicle type deleted.';
+    alert('Vehicle type deleted.');
+    if (document.getElementById('vehicleOrgIdInput') && !document.getElementById('vehicleOrgIdInput').value) {
+      document.getElementById('vehicleOrgIdInput').value = organizationId;
+    }
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = e.message || 'Delete failed.';
+    alert(`Failed to delete vehicle type: ${e.message || e}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑️ Delete Vehicle Type (Supabase)';
   }
 }
 
@@ -1563,6 +1702,13 @@ async function addCurrentUserMembership() {
 }
 const addMemBtn = document.getElementById('addMembershipBtn');
 if (addMemBtn) addMemBtn.addEventListener('click', addCurrentUserMembership);
+
+// Vehicle Type delete wiring
+const deleteVehicleTypeBtn = document.getElementById('deleteVehicleTypeBtn');
+if (deleteVehicleTypeBtn) {
+  deleteVehicleTypeBtn.addEventListener('click', deleteVehicleTypeById);
+  hydrateVehicleOrgId();
+}
 </script>
 </div>
 </body>

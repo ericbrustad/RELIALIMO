@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Settings - RELIA🐂LIMO™</title>
+  <script src="env.js"></script>
+  <link rel="stylesheet" href="email-settings.css" />
+</head>
+<body>
+  <script>
+    if (window.self !== window.top) {
+      document.documentElement.classList.add('embedded');
+      document.body.classList.add('embedded');
+    }
+  </script>
+  <div class="email-settings-container">
+    <aside class="settings-sidebar">
+      <nav class="settings-nav">
+        <a href="#" class="settings-nav-item">Contact Information</a>
+        <a href="#" class="settings-nav-item">Company Preferences</a>
+        <a href="#" class="settings-nav-item">System Users</a>
+        <a href="#" class="settings-nav-item">Policies</a>
+        <a href="#" class="settings-nav-item">ReadBack Script Templates</a>
+        <a href="#" class="settings-nav-item">Messaging & Template Settings</a>
+        <a href="#" class="settings-nav-item">Calendar Settings</a>
+        <a href="#" class="settings-nav-item">Online Reservations</a>
+        <a href="#" class="settings-nav-item">Payment Gateway</a>
+        <a href="#" class="settings-nav-item">Third-party Plug-ins</a>
+        <div class="settings-nav-section">
+          <div class="settings-nav-item active-section">System Settings</div>
+          <a href="service-types.html" class="settings-nav-subitem">Service Types</a>
+          <a href="system-mapping.html" class="settings-nav-subitem">System Mapping</a>
+          <a href="magic-link.html" class="settings-nav-subitem">Magic Link</a>
+          <a href="sms-provider.html" class="settings-nav-subitem">Sms Provider</a>
+          <a href="email-settings.html" class="settings-nav-subitem active">Email Settings</a>
+          <a href="full-site-test-checklist.html" class="settings-nav-subitem">Test Checklist</a>
+          <a href="test-supabase-integration.html" class="settings-nav-subitem">Supabase Integration Test</a>
+          <a href="#" class="settings-nav-subitem">Digital Marketing</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="email-settings-main">
+      <header class="email-settings-header">
+        <div>
+          <h1 class="email-settings-title">Email Settings</h1>
+          <p class="email-settings-subtitle">Configure outgoing email and manage HTML templates with trip and rate tags.</p>
+        </div>
+        <div class="header-actions">
+          <button id="saveSettingsBtn" class="btn primary">Save Settings</button>
+          <button id="testSendBtn" class="btn secondary">Test Send (local)</button>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Outgoing Email (SMTP / Provider)</h2>
+        </div>
+        <div class="card-body grid-2">
+          <label class="form-row">From Name
+            <input id="fromNameInput" type="text" placeholder="Dispatch Team" />
+          </label>
+          <label class="form-row">From Email
+            <input id="fromEmailInput" type="email" placeholder="dispatch@example.com" />
+          </label>
+          <label class="form-row">Reply-To
+            <input id="replyToInput" type="email" placeholder="support@example.com" />
+          </label>
+          <label class="form-row">SMTP Host / API Endpoint
+            <input id="smtpHostInput" type="text" placeholder="smtp.sendgrid.net" />
+          </label>
+          <label class="form-row">Port
+            <input id="smtpPortInput" type="number" placeholder="587" />
+          </label>
+          <label class="form-row">Username
+            <input id="smtpUserInput" type="text" placeholder="apikey or username" />
+          </label>
+          <label class="form-row">Password / Token
+            <input id="smtpPassInput" type="password" placeholder="password or token" />
+          </label>
+          <label class="form-row checkbox-row">
+            <input id="tlsInput" type="checkbox" /> Use TLS/STARTTLS
+          </label>
+        </div>
+        <div class="hint">Saved locally only. Wire to your email provider backend to send for real.</div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Template Editor</h2>
+          <div class="card-actions">
+            <input id="templateNameInput" type="text" placeholder="Template name (e.g., Trip Confirmation)" />
+            <button id="saveTemplateBtn" class="btn primary">Save Template</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <label class="form-row">Subject
+            <input id="subjectInput" type="text" placeholder="Your trip on #TRIP_DATE#" />
+          </label>
+
+          <div class="editor-toolbar">
+            <div class="toolbar-left">
+              <button data-cmd="bold" class="tool-btn">B</button>
+              <button data-cmd="italic" class="tool-btn">I</button>
+              <button data-cmd="underline" class="tool-btn">U</button>
+              <button data-cmd="insertUnorderedList" class="tool-btn">• List</button>
+              <button data-cmd="insertOrderedList" class="tool-btn">1. List</button>
+            </div>
+            <div class="toolbar-right">
+              <select id="tripTagSelect">
+                <option value="">Insert Trip Tag…</option>
+              </select>
+              <select id="rateTagSelect">
+                <option value="">Insert Rate Tag…</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="templateEditor" class="editor" contenteditable="true">
+            <p>Hello #TRIP_PAX_NAME#,</p>
+            <p>Your trip #TRIP_CONFNUM# on #TRIP_DATE# at #TRIP_TIME# is confirmed.</p>
+            <p>Pickup: #TRIP_PICKUP#<br/>Dropoff: #TRIP_DROPOFF#</p>
+            <p>Total: #TRIP_RATES_TOTAL#</p>
+            <p>Thank you!</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Saved Templates (local)</h2>
+        </div>
+        <div class="card-body" id="templateList"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Tag Reference</h2>
+        </div>
+        <div class="card-body tag-reference">
+          <div>
+            <h3>Trip Tags</h3>
+            <ul id="tripTagList"></ul>
+          </div>
+          <div>
+            <h3>Rate Tags</h3>
+            <ul id="rateTagList"></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="email-settings.js"></script>
+</body>
+</html>

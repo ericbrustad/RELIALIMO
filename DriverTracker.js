@@ -11,9 +11,53 @@ export class DriverTracker {
   }
 
   initializeDrivers() {
-    // Initialize sample drivers with starting positions around base location
+    // Prefer real drivers cached from My Office → Drivers
     const [baseLat, baseLng] = this.baseLocation;
-    
+
+    const pullCachedDrivers = () => {
+      try {
+        const raw = localStorage.getItem('relia_driver_directory');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.warn('[DriverTracker] Unable to read cached drivers:', e.message);
+        return [];
+      }
+    };
+
+    const cachedDrivers = pullCachedDrivers();
+
+    if (cachedDrivers.length > 0) {
+      const jitter = () => (Math.random() - 0.5) * 0.08; // ~5 mile scatter
+
+      this.drivers = cachedDrivers.map((d, idx) => {
+        const first = d.first_name || d.first || '';
+        const last = d.last_name || d.last || '';
+        const name = [first, last].filter(Boolean).join(' ').trim() || d.name || `Driver ${idx + 1}`;
+        const vehicle = d.vehicle_type || d.vehicle || d.car_type || 'Sedan';
+        const phone = d.cell_phone || d.mobile_phone || d.phone || d.phone_number || '';
+        const affiliate = d.affiliate || d.affiliate_name || d.company || 'RELIA Fleet';
+        const isActive = d.is_active !== false;
+        return {
+          id: d.id || idx + 1,
+          name,
+          status: isActive ? 'available' : 'offline',
+          vehicle,
+          affiliate,
+          phone,
+          position: [baseLat + jitter(), baseLng + jitter()],
+          heading: Math.random() * 360,
+          speed: 0.0006 + Math.random() * 0.0006,
+          assignedReservationId: null
+        };
+      });
+
+      this.applyStatusOverrides();
+      return;
+    }
+
+    // Fallback sample drivers around base location
     this.drivers = [
       {
         id: 1,
@@ -22,9 +66,9 @@ export class DriverTracker {
         vehicle: 'Sedan',
         affiliate: 'RELIA Fleet',
         phone: '(555) 200-1001',
-        position: [baseLat, baseLng], // Center
-        heading: 45, // Direction in degrees
-        speed: 0.001, // Speed factor for movement
+        position: [baseLat, baseLng],
+        heading: 45,
+        speed: 0.001,
         assignedReservationId: null
       },
       {
@@ -34,7 +78,7 @@ export class DriverTracker {
         vehicle: 'SUV Limousine',
         affiliate: 'RELIA Fleet',
         phone: '(555) 200-1002',
-        position: [baseLat + 0.05, baseLng - 0.05], // NW
+        position: [baseLat + 0.05, baseLng - 0.05],
         heading: 135,
         speed: 0.0008,
         assignedReservationId: null
@@ -46,7 +90,7 @@ export class DriverTracker {
         vehicle: 'Stretch Limousine',
         affiliate: 'RELIA Fleet',
         phone: '(555) 200-1003',
-        position: [baseLat + 0.03, baseLng + 0.03], // NE
+        position: [baseLat + 0.03, baseLng + 0.03],
         heading: 225,
         speed: 0.0012,
         assignedReservationId: null
@@ -58,7 +102,7 @@ export class DriverTracker {
         vehicle: 'Luxury Sedan',
         affiliate: 'RELIA Fleet',
         phone: '(555) 200-1004',
-        position: [baseLat - 0.04, baseLng - 0.04], // SW
+        position: [baseLat - 0.04, baseLng - 0.04],
         heading: 315,
         speed: 0.0009,
         assignedReservationId: null
@@ -70,7 +114,7 @@ export class DriverTracker {
         vehicle: 'SUV',
         affiliate: 'RELIA Fleet',
         phone: '(555) 200-1005',
-        position: [baseLat - 0.02, baseLng + 0.04], // SE
+        position: [baseLat - 0.02, baseLng + 0.04],
         heading: 90,
         speed: 0.001,
         assignedReservationId: null

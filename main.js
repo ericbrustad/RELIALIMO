@@ -552,8 +552,9 @@ class LimoReservationSystem {
     // Get company location from zip code
     await this.getCompanyLocation();
     
-    // Initialize maps with company location
-    const center = this.companyLocation || [44.8848, -93.2223]; // Default to Minneapolis if geocoding fails
+    // Initialize maps with company location; fall back to last known center or neutral default
+    const fallbackCenter = window.COMPANY_CENTER || [39.7392, -104.9903];
+    const center = this.companyLocation || fallbackCenter;
     this.mapManager.initUserMap('userMap', center);
     this.mapManager.initDriverMap('driverMap', center);
     
@@ -659,24 +660,28 @@ class LimoReservationSystem {
 
   async getCompanyLocation() {
     try {
-      // Get company zip code from global variable
-      const companyZip = window.COMPANY_ZIP_CODE || '55431';
+      // Build location query from globals injected by index-reservations.html
+      const companyZip = (window.COMPANY_ZIP_CODE || '').toString().trim();
+      const cityState = (window.COMPANY_LOCATION_QUERY || '').toString().trim();
+      const locationQuery = cityState || companyZip;
       
-      console.log('Geocoding company zip code:', companyZip);
+      console.log('Geocoding company location:', { locationQuery, companyZip, cityState });
       
-      // Geocode the zip code to get coordinates
-      const results = await this.mapboxService.geocodeAddress(companyZip);
+      // Geocode the city/state or zip code to get coordinates
+      const results = await this.mapboxService.geocodeAddress(locationQuery);
       
       if (results && results.length > 0) {
         // Convert from [lng, lat] to [lat, lng] for Leaflet
         this.companyLocation = [results[0].coordinates[1], results[0].coordinates[0]];
-        console.log('✓ Company location set to:', this.companyLocation, '(' + companyZip + ')');
+        console.log('✓ Company location set to:', this.companyLocation, '(' + locationQuery + ')');
+        window.COMPANY_CENTER = this.companyLocation;
       } else {
-        console.warn('No geocoding results for zip code:', companyZip);
+        console.warn('No geocoding results for company location query:', locationQuery);
+        this.companyLocation = null;
       }
     } catch (error) {
       console.error('Error getting company location:', error);
-      // Will use default location
+      this.companyLocation = null;
     }
   }
 

@@ -750,6 +750,18 @@
               }, '*');
             }
           }, 100);
+        } else if (event.data.action === 'navigateToSystemSettings') {
+          // Open Office then forward page selection to its iframe
+          switchMainSection('office');
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({
+                action: 'navigateToSystemSettings',
+                page: event.data.page
+              }, '*');
+            }
+          }, 100);
         } else if (event.data.action === 'navigateToSystemMapping') {
           // Switch to Office section
           switchMainSection('office');

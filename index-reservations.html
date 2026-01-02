@@ -22,9 +22,48 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css" />
     <script>
-      // Store company zip code for map initialization
-      window.COMPANY_ZIP_CODE = '55431'; // Minnesota
-      
+      // Derive company location from saved Office > Company Info (localStorage)
+      (function syncCompanyLocationFromSettings() {
+        const fallbackZip = '55431'; // Minneapolis fallback
+        let city = '';
+        let state = '';
+        let postal = '';
+
+        try {
+          const cached = localStorage.getItem('companyInfo');
+          if (cached) {
+            const info = JSON.parse(cached);
+            city = info?.city?.trim() || '';
+            state = info?.state?.trim() || '';
+            postal = info?.postal_code?.trim() || '';
+          }
+        } catch (e) {
+          console.warn('Unable to read companyInfo from storage:', e.message);
+        }
+
+        // Fallback to relia_company_settings if present
+        if (!city && !state && !postal) {
+          try {
+            const settingsRaw = localStorage.getItem('relia_company_settings');
+            if (settingsRaw) {
+              const settings = JSON.parse(settingsRaw);
+              city = settings?.companyCity?.trim() || '';
+              state = settings?.companyState?.trim() || '';
+              postal = settings?.companyZip?.trim() || settings?.companyZipCode?.trim() || '';
+            }
+          } catch (e) {
+            console.warn('Unable to read relia_company_settings from storage:', e.message);
+          }
+        }
+
+        const cityState = city && state ? `${city}, ${state}` : (city || state || '');
+
+        if (cityState) {
+          window.COMPANY_LOCATION_QUERY = cityState;
+        }
+        window.COMPANY_ZIP_CODE = postal || fallbackZip;
+      })();
+
       const activateFarmOutTab = () => {
         document.getElementById('farmOutBtn')?.click();
       };
