@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" style="visibility:hidden">
+<html lang="en" style="visibility:hidden" data-keep-header="true">
   <head>
     <script>
       // INSTANT startup page redirect - must be first script
@@ -21,6 +21,8 @@
     <title>RELIA🐂LIMO™ - Reservation System</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css" />
+    <!-- Environment config for Supabase/Maps keys -->
+    <script src="env.js"></script>
     <script>
       // Derive company location from saved Office > Company Info (localStorage)
       (function syncCompanyLocationFromSettings() {
@@ -127,12 +129,30 @@
             <button id="driverViewBtn" class="tab-btn">Driver View</button>
             <button id="reservationsBtn" class="tab-btn">Reservations</button>
             <button id="farmOutBtn" class="tab-btn">Farm-out Reservations</button>
+            <div class="farmout-tool-buttons">
+              <button class="tab-btn farmout-tool-btn" data-tool-url="driver-availability.html">Availability Console</button>
+              <button class="tab-btn farmout-tool-btn" data-tool-url="driver-active-list.html">Active Drivers</button>
+              <button class="tab-btn farmout-tool-btn" data-tool-url="driver-trip-monitor.html">Trip Monitor</button>
+            </div>
           </div>
         </div>
       </header>
 
+      <!-- Full-page Farm-out Tool Frame -->
+      <section id="farmoutToolShell" class="farmout-tool-shell" style="display: none;">
+        <div class="farmout-tool-bar">
+          <div class="farmout-tool-title">
+            <span class="farmout-tool-label" id="farmoutToolLabel">Farm-out Tool</span>
+          </div>
+          <div class="farmout-tool-actions">
+            <button id="farmoutToolBack" class="btn btn-secondary">Back to Farm-out Reservations</button>
+          </div>
+        </div>
+        <iframe id="farmoutToolFrame" title="Farm-out tool" src="" loading="lazy" referrerpolicy="no-referrer" allow="fullscreen"></iframe>
+      </section>
+
       <!-- Main Content -->
-      <main class="main-content">
+      <main class="main-content" id="mainContent">
         <!-- User View -->
         <section id="userView" class="view active">
           <div class="split-layout">
@@ -318,11 +338,6 @@
           <div class="reservations-panel farmout">
             <div class="panel-header">
               <h2 class="panel-title">Farm-out Reservations</h2>
-              <nav class="farmout-tabs" aria-label="Farm-out tools">
-                <a href="driver-availability.html" target="_blank" rel="noopener" class="farmout-tab">Availability Console</a>
-                <a href="driver-active-list.html" target="_blank" rel="noopener" class="farmout-tab">Active Drivers</a>
-                <a href="driver-trip-monitor.html" target="_blank" rel="noopener" class="farmout-tab">Trip Monitor</a>
-              </nav>
               <div class="farmout-toolbar">
                 <div class="toolbar-group">
                   <label for="farmoutStatusFilter">Status</label>

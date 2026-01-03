@@ -95,6 +95,28 @@ async function refreshToken() {
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const jitter = (base) => base + Math.floor(Math.random() * base);
 
+// Reset confirmation counter to starting point defined in company settings
+export function resetConfirmationCounterToStart() {
+  try {
+    const settingsKey = 'relia_company_settings';
+    const raw = localStorage.getItem(settingsKey);
+    const settings = raw ? JSON.parse(raw) : {};
+    const startRaw = settings.confirmationStartNumber;
+    const start = Number.isFinite(parseInt(startRaw, 10)) && parseInt(startRaw, 10) > 0
+      ? parseInt(startRaw, 10)
+      : 100000;
+
+    settings.confirmationStartNumber = start;
+    settings.lastUsedConfirmationNumber = start - 1;
+    localStorage.setItem(settingsKey, JSON.stringify(settings));
+    console.log('🔁 Confirmation counter reset to start:', start);
+    return start;
+  } catch (e) {
+    console.warn('⚠️ Unable to reset confirmation counter:', e);
+    return null;
+  }
+}
+
 export async function robustRefresh(maxTries = 3) {
   let delay = 250;
   for (let i = 0; i < maxTries; i += 1) {
@@ -174,14 +196,16 @@ let lastApiError = null;
 
 function resolveAdminOrgId() {
   const env = (typeof window !== 'undefined' && window.ENV) ? window.ENV : {};
-  return env.ADMIN_ORG_ID || env.ADMIN_UUID || env.SUPABASE_ADMIN_ORG_ID || env.ORG_ID ||
+  const candidate = env.ADMIN_ORG_ID || env.ADMIN_UUID || env.SUPABASE_ADMIN_ORG_ID || env.ORG_ID ||
     (typeof process !== 'undefined' ? (
       process.env?.ADMIN_ORG_ID ||
       process.env?.ADMIN_UUID ||
       process.env?.SUPABASE_ADMIN_ORG_ID ||
       process.env?.ORG_ID
-    ) : null) ||
-    '00000000-0000-0000-0000-000000000000';
+    ) : null);
+
+  if (!candidate || candidate === '00000000-0000-0000-0000-000000000000') return null;
+  return candidate;
 }
 
 export function getLastApiError() {
@@ -308,6 +332,29 @@ async function refreshAccessToken(client, providedRefreshToken) {
 // SDK storage key pattern
 const SDK_SESSION_KEY = 'sb-siumiadylwcrkaqsfwkj-auth-token';
 
+function generateDevUuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Lightweight fallback UUID v4-ish
+  const tpl = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+  return tpl.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function buildDevUser() {
+  const id = generateDevUuid();
+  return {
+    id,
+    email: 'dev@localhost.local',
+    created_at: new Date().toISOString(),
+    external_ref: `dev-user-${Date.now()}`
+  };
+}
+
 async function getOrgContextOrThrow(client) {
   console.log('🔐 getOrgContextOrThrow starting...');
   console.log('🔐 Client available:', !!client);
@@ -315,11 +362,7 @@ async function getOrgContextOrThrow(client) {
   // Development mode bypass
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     console.log('🔧 Development mode: Using admin organization context');
-    const devUser = { 
-      id: 'dev-user-' + Date.now(), 
-      email: 'dev@localhost.local',
-      created_at: new Date().toISOString()
-    };
+    const devUser = buildDevUser();
     const devOrgId = resolveAdminOrgId();
     return { user: devUser, organizationId: devOrgId, userId: devUser.id };
   }
@@ -385,11 +428,7 @@ async function getOrgContextOrThrow(client) {
       if (userError.message && userError.message.includes('permission denied for table users')) {
         console.warn('⚠️ Users table permission denied - using development fallback');
         // Create a fake user for development
-        const devUser = { 
-          id: 'dev-user-' + Date.now(), 
-          email: 'dev@localhost.local',
-          created_at: new Date().toISOString()
-        };
+        const devUser = buildDevUser();
         const devOrgId = resolveAdminOrgId();
         console.log('🔧 Using development user context:', devUser.id);
         return { user: devUser, organizationId: devOrgId, userId: devUser.id };
@@ -399,11 +438,7 @@ async function getOrgContextOrThrow(client) {
     
     if (!user) {
       console.warn('⚠️ No user found - using development fallback');
-      const devUser = { 
-        id: 'dev-user-' + Date.now(), 
-        email: 'dev@localhost.local',
-        created_at: new Date().toISOString()
-      };
+      const devUser = buildDevUser();
       const devOrgId = resolveAdminOrgId();
       return { user: devUser, organizationId: devOrgId, userId: devUser.id };
     }
@@ -437,11 +472,7 @@ async function getOrgContextOrThrow(client) {
         error.message.includes('not authenticated')
     )) {
       console.warn('⚠️ Database permission error - using development fallback');
-      const devUser = { 
-        id: 'dev-user-' + Date.now(), 
-        email: 'dev@localhost.local',
-        created_at: new Date().toISOString()
-      };
+      const devUser = buildDevUser();
       const devOrgId = resolveAdminOrgId();
       return { user: devUser, organizationId: devOrgId, userId: devUser.id };
     }
@@ -798,13 +829,26 @@ function sanitizeVehiclePayload(payload) {
   return cleaned;
 }
 
-export async function fetchVehicleTypes() {
+export async function fetchVehicleTypes(options = {}) {
+  const { includeInactive = false } = options;
   const client = getSupabaseClient();
   if (!client) return [];
 
   try {
     lastApiError = null;
-    const { organizationId } = await getOrgContextOrThrow(client);
+    const forcedOrgId = (typeof window !== 'undefined' && (window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || window.ENV?.FORCE_VEHICLE_ORG_ID)) || null;
+    let organizationId = forcedOrgId || null;
+
+    if (!organizationId) {
+      const ctx = await getOrgContextOrThrow(client);
+      organizationId = ctx.organizationId;
+    }
+
+    // If still no org, bail to avoid null filter errors
+    if (!organizationId) {
+      console.warn('⚠️ No organization_id; skipping Supabase vehicle type fetch.');
+      return [];
+    }
 
     const { data, error } = await client
       .from('vehicle_types')
@@ -814,11 +858,19 @@ export async function fetchVehicleTypes() {
       .order('name', { ascending: true });
 
     if (error) throw error;
-    return (data || []).map((v) => ({
+    const normalized = (data || []).map((v) => ({
       ...v,
       rates: v?.metadata?.rates ?? null,
       images: v?.metadata?.images ?? null
     }));
+
+    if (includeInactive) return normalized;
+
+    return normalized.filter((v) => {
+      const status = (v.status || '').toString().toUpperCase();
+      if (!status) return true; // treat missing as active
+      return status === 'ACTIVE';
+    });
   } catch (error) {
     console.error('Error fetching vehicle types:', error);
     lastApiError = error;
@@ -828,7 +880,8 @@ export async function fetchVehicleTypes() {
 
 // Fetch active vehicles from the "Company Resources > Vehicles" list
 // Filters to the current organization and only includes rows marked active
-export async function fetchActiveVehicles() {
+export async function fetchActiveVehicles(options = {}) {
+  const { includeInactive = false, limit = 500 } = options;
   const client = getSupabaseClient();
   const isDevHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
@@ -862,7 +915,19 @@ export async function fetchActiveVehicles() {
 
   try {
     lastApiError = null;
-    const { organizationId } = await getOrgContextOrThrow(client);
+    const forcedOrgId = (typeof window !== 'undefined' && (window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || window.ENV?.FORCE_VEHICLE_ORG_ID)) || null;
+    let organizationId = forcedOrgId || null;
+
+    if (!organizationId) {
+      const { organizationId: ctxOrg } = await getOrgContextOrThrow(client);
+      organizationId = ctxOrg;
+    }
+
+    if (!organizationId) {
+      console.warn('⚠️ No organization_id; skipping Supabase vehicle fetch.');
+      const local = loadLocalFleet();
+      return local.length ? local : [];
+    }
 
     const { data, error } = await client
       .from('vehicles')
@@ -870,15 +935,18 @@ export async function fetchActiveVehicles() {
       .eq('organization_id', organizationId)
       .order('veh_disp_name', { ascending: true })
       .order('veh_title', { ascending: true })
-      .order('veh_type', { ascending: true });
+      .order('veh_type', { ascending: true })
+      .limit(limit);
 
     if (error) throw error;
 
-    const filtered = (data || []).filter(v => {
-      const flag = (v?.veh_active || v?.status || '').toString().trim().toUpperCase();
-      if (!flag) return true; // treat empty as active
-      return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
-    });
+    const filtered = includeInactive
+      ? (data || [])
+      : (data || []).filter(v => {
+          const flag = (v?.veh_active || v?.status || '').toString().trim().toUpperCase();
+          if (!flag) return true; // treat empty as active
+          return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
+        });
 
     if (filtered.length) return filtered;
 
@@ -914,7 +982,9 @@ export async function listActiveVehiclesLight({ limit = 200, offset = 0 } = {}) 
 
 // Active vehicle types for dropdowns
 export async function listActiveVehicleTypes({ limit = 200, offset = 0 } = {}) {
-  const res = await apiFetch(`/rest/v1/vehicle_types?select=id,name,code,status&status=eq.ACTIVE&order=sort_order.asc,name.asc&limit=${limit}&offset=${offset}`);
+  const forcedOrgId = (typeof window !== 'undefined' && (window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || window.ENV?.FORCE_VEHICLE_ORG_ID)) || null;
+  const orgFilter = forcedOrgId ? `&organization_id=eq.${forcedOrgId}` : '';
+  const res = await apiFetch(`/rest/v1/vehicle_types?select=id,name,code,status&status=eq.ACTIVE${orgFilter}&order=sort_order.asc,name.asc&limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error(`listActiveVehicleTypes failed: ${res.status}`);
   return res.json();
 }
@@ -1322,6 +1392,11 @@ export async function createReservation(reservationData) {
       currency: reservationData.currency || 'USD',
       timezone: reservationData.timezone || null
     };
+
+    // Persist the full form snapshot when provided so reservation details reload correctly
+    if (reservationData.form_snapshot || reservationData.formSnapshot) {
+      insertData.form_snapshot = reservationData.form_snapshot || reservationData.formSnapshot;
+    }
     
     const { data, error } = await client
       .from('reservations')
@@ -1405,7 +1480,8 @@ export async function updateReservation(reservationId, reservationData) {
         special_instructions: reservationData.routing?.tripNotes || reservationData.special_instructions || undefined,
         notes: reservationData.routing?.dispatchNotes || reservationData.notes || undefined,
         rate_amount: reservationData.grandTotal || reservationData.rate_amount || undefined,
-        updated_by: userId
+        updated_by: userId,
+        form_snapshot: reservationData.form_snapshot || reservationData.formSnapshot || undefined
       })
       .eq('id', reservationId)
       .eq('organization_id', organizationId)
@@ -1429,6 +1505,11 @@ export async function fetchReservations() {
   
   try {
     const { organizationId } = await getOrgContextOrThrow(client);
+    if (!organizationId) {
+      console.warn('⚠️ No organization_id; using local reservations only.');
+      return JSON.parse(localStorage.getItem('local_reservations') || '[]');
+    }
+
     const { data, error } = await client
       .from('reservations')
       .select('*')
@@ -1646,6 +1727,232 @@ export async function calculateDistance(start, end) {
   }
 }
 
+// ============================================================================
+// BULK DELETE HELPERS
+// ============================================================================
+
+async function deleteAllForOrganization(tableName, organizationId, column = 'organization_id') {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase client not initialized');
+
+  const query = client.from(tableName).delete();
+  if (organizationId && column) {
+    query.eq(column, organizationId);
+  }
+
+  const { error } = await query;
+  if (error) throw error;
+  return true;
+}
+
+function clearLocalAccountStorage() {
+  try {
+    const keys = [
+      'local_accounts',
+      'relia_accounts',
+      'relia_account_draft',
+      'nextAccountNumber'
+    ];
+    keys.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn(`⚠️ Unable to remove ${key}:`, e);
+      }
+    });
+
+    // Remove locally cached address records
+    try {
+      const keysToDelete = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('relia_account_') && key.endsWith('_addresses')) {
+          keysToDelete.push(key);
+        }
+      }
+      keysToDelete.forEach(key => localStorage.removeItem(key));
+    } catch (e) {
+      console.warn('⚠️ Unable to purge account address cache:', e);
+    }
+  } catch (e) {
+    console.warn('⚠️ Account local cache purge hit an unexpected error:', e);
+  }
+}
+
+function clearLocalReservationStorage() {
+  const keys = [
+    'dev_reservations',
+    'local_reservations',
+    'relia_reservations',
+    'relia_reservation_draft',
+    'relia_reservation_status_details'
+  ];
+  keys.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn(`⚠️ Unable to remove ${key}:`, e);
+    }
+  });
+}
+
+function clearLocalDriverStorage() {
+  try {
+    localStorage.removeItem('dev_drivers');
+  } catch (e) {
+    console.warn('⚠️ Unable to clear local driver cache:', e);
+  }
+}
+
+export async function deleteAllAccountsSupabase() {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase client not initialized');
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    // Delete accounts scoped to the org
+    if (organizationId) {
+      const { error: scopedError } = await client
+        .from('accounts')
+        .delete()
+        .eq('organization_id', organizationId);
+      if (scopedError) throw scopedError;
+    }
+
+    // Also delete any accounts without an organization_id (cleanup)
+    const { error: nullOrgError } = await client
+      .from('accounts')
+      .delete()
+      .is('organization_id', null);
+    if (nullOrgError) throw nullOrgError;
+
+    clearLocalAccountStorage();
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to delete all accounts:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+
+export async function deleteAllReservationsSupabase() {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase client not initialized');
+    const { organizationId } = await getOrgContextOrThrow(client);
+    await deleteAllForOrganization('reservations', organizationId);
+
+    clearLocalReservationStorage();
+    resetConfirmationCounterToStart();
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to delete all reservations:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+
+export async function deleteAllDriversSupabase() {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase client not initialized');
+    const { organizationId } = await getOrgContextOrThrow(client);
+    await deleteAllForOrganization('drivers', organizationId);
+
+    clearLocalDriverStorage();
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to delete all drivers:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+
+export async function deleteAllRatesSupabase() {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase client not initialized');
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    // Best-effort: cascade across common rate tables. Ignore missing tables gracefully.
+    const rateTables = [
+      'rate_matrix_entries',
+      'rate_matrices',
+      'peak_rates',
+      'vehicle_types'
+    ];
+
+    for (const table of rateTables) {
+      try {
+        await deleteAllForOrganization(table, organizationId);
+      } catch (innerError) {
+        console.warn(`⚠️ Skipped deleting from ${table}:`, innerError?.message || innerError);
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to delete all rate data:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+
+export async function deleteAllVehiclesSupabase() {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase client not initialized');
+    const forcedOrgId = (typeof window !== 'undefined' && (window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || window.ENV?.FORCE_VEHICLE_ORG_ID)) || null;
+    let organizationId = forcedOrgId || null;
+
+    if (!organizationId) {
+      const ctx = await getOrgContextOrThrow(client);
+      organizationId = ctx.organizationId;
+    }
+
+    // Delete vehicles for this org
+    if (organizationId) {
+      const { error: scopedError } = await client
+        .from('vehicles')
+        .delete()
+        .eq('organization_id', organizationId);
+      if (scopedError) throw scopedError;
+    }
+
+    // Cleanup any vehicles missing org linkage (use REST fetch to avoid builder API quirks)
+    const supabaseUrl = window.ENV?.SUPABASE_URL;
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseKey) {
+      const { data: sessionData } = await client.auth.getSession();
+      const authToken = sessionData?.session?.access_token || supabaseKey;
+
+      const resp = await fetch(`${supabaseUrl}/rest/v1/vehicles?organization_id=is.null`, {
+        method: 'DELETE',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${authToken}`
+        }
+      });
+
+      if (!resp.ok && resp.status !== 204) {
+        const body = await resp.text().catch(() => '');
+        throw new Error(`Null-org vehicle cleanup failed: ${resp.status} ${body}`);
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to delete all vehicles:', error);
+    lastApiError = error;
+    return false;
+  }
+}
+
 /**
  * Create or update account in Supabase
  */
@@ -1662,6 +1969,26 @@ export async function saveAccountToSupabase(accountData) {
     console.log('🔍 Getting org context...');
     const { user, organizationId } = await getOrgContextOrThrow(client);
     console.log('✅ Got org context:', { userId: user?.id, organizationId });
+
+    // If we don't have a real org/user (or we're in a dev fallback), avoid Supabase write to prevent RLS failures
+    const isDevHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const missingAuth = !user?.id || !organizationId;
+    const placeholderOrg = organizationId === '00000000-0000-0000-0000-000000000000' || (organizationId || '').startsWith('dev-org');
+    const devUser = (user?.external_ref || '').startsWith('dev-user') || (user?.email || '').includes('@localhost');
+    if (isDevHost || missingAuth || placeholderOrg || devUser) {
+      console.warn('⚠️ No valid auth/org for Supabase accounts insert; using local storage fallback to avoid RLS.');
+      const localAccount = {
+        ...accountData,
+        id: accountData.id || `local-account-${Date.now()}`,
+        organization_id: organizationId || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      const existingAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
+      existingAccounts.push(localAccount);
+      localStorage.setItem('local_accounts', JSON.stringify(existingAccounts));
+      return localAccount;
+    }
     
     // Prepare account data for Supabase with all fields
     const supabaseAccount = {
@@ -1865,6 +2192,11 @@ export async function fetchAccounts() {
   try {
     lastApiError = null;
     const { organizationId } = await getOrgContextOrThrow(client);
+
+    if (!organizationId) {
+      console.warn('⚠️ No organization_id; using local accounts only.');
+      return JSON.parse(localStorage.getItem('local_accounts') || '[]');
+    }
 
     const { data, error } = await client
       .from('accounts')

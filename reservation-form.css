@@ -194,6 +194,45 @@ body {
   }
 }
 
+/* More menu */
+.more-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-more {
+  min-width: 70px;
+}
+
+.more-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 110%;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  min-width: 180px;
+  display: none;
+  z-index: 2000;
+}
+
+.more-menu-dropdown .dropdown-item {
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: #c1121f;
+}
+
+.more-menu-dropdown .dropdown-item:hover {
+  background: #f8d7da;
+}
+
 .conf-number-section {
   display: inline-flex;
   align-items: center;
@@ -653,6 +692,20 @@ body {
   font-size: 12px;
   font-family: inherit;
   background: white;
+}
+
+/* Enlarge key billing/passenger text fields for readability */
+#billingFirstName,
+#billingLastName,
+#billingPhone,
+#billingEmail,
+#passengerFirstName,
+#passengerLastName,
+#passengerPhone,
+#passengerEmail {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 9px;
 }
 
 .form-control:focus {
@@ -1501,6 +1554,14 @@ textarea.form-control {
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 12px;
+}
+
+/* Emphasize key pickup/drop-off times */
+#puDate,
+#puTime,
+#doTime {
+  font-size: 14px;
+  font-weight: 700;
 }
 
 /* Address Grid */

@@ -11,6 +11,7 @@ export class GoogleMapsService {
     this.placesService = null;
     this.autocompleteService = null;
     this.geocoder = null;
+    this.directionsService = null;
     this.geocodingCache = new Map();
     this.placeCache = new Map();
     this.mapsScriptPromise = null;
@@ -520,6 +521,7 @@ export class GoogleMapsService {
         this.placesService = new google.maps.places.PlacesService(document.createElement('div'));
         this.geocoder = new google.maps.Geocoder();
         this.sessionToken = new google.maps.places.AutocompleteSessionToken();
+        this.directionsService = new google.maps.DirectionsService();
       });
     }
 
@@ -532,6 +534,66 @@ export class GoogleMapsService {
   clearCache() {
     this.geocodingCache.clear();
     this.placeCache.clear();
+  }
+
+  /**
+   * Get driving distance/duration between an origin/destination with optional waypoints
+   * @param {object} params
+   * @param {string|object} params.origin
+   * @param {string|object} params.destination
+   * @param {Array<string|object>} [params.waypoints]
+   * @returns {Promise<{distanceMeters:number,durationSeconds:number,distanceText:string,durationText:string}>}
+   */
+  async getRouteSummary({ origin, destination, waypoints = [] }) {
+    await this.ensurePlacesReady();
+    if (!this.directionsService) {
+      throw new Error('Directions service not ready');
+    }
+
+    const request = {
+      origin,
+      destination,
+      travelMode: google.maps.TravelMode.DRIVING,
+      optimizeWaypoints: true
+    };
+
+    if (waypoints && waypoints.length) {
+      request.waypoints = waypoints.map(wp => ({ location: wp, stopover: true }));
+    }
+
+    const result = await new Promise((resolve, reject) => {
+      this.directionsService.route(request, (response, status) => {
+        if (status !== google.maps.DirectionsStatus.OK) {
+          reject(new Error(`Directions failed: ${status}`));
+          return;
+        }
+        resolve(response);
+      });
+    });
+
+    const leg = result?.routes?.[0]?.legs?.reduce((acc, leg) => {
+      acc.distanceMeters += leg.distance?.value || 0;
+      acc.durationSeconds += leg.duration?.value || 0;
+      return acc;
+    }, { distanceMeters: 0, durationSeconds: 0 });
+
+    const distanceMeters = leg?.distanceMeters || 0;
+    const durationSeconds = leg?.durationSeconds || 0;
+
+    return {
+      distanceMeters,
+      durationSeconds,
+      distanceText: distanceMeters ? `${(distanceMeters / 1609.344).toFixed(1)} mi` : '-',
+      durationText: durationSeconds ? this.formatDuration(durationSeconds) : '-'
+    };
+  }
+
+  formatDuration(totalSeconds) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.round((totalSeconds % 3600) / 60);
+    if (hours === 0) return `${minutes} min`;
+    if (minutes === 0) return `${hours} hr`;
+    return `${hours} hr ${minutes} min`;
   }
 
   /**

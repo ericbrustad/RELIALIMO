@@ -96,16 +96,18 @@ function injectBannerStyles() {
       top: 0;
       left: 0;
       right: 0;
-      height: 36px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 48px;
+      background: linear-gradient(135deg, #3549a5 0%, #6b2db0 100%);
       color: white;
       z-index: 999999;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 13px;
+      font-size: 15px;
       display: flex;
       align-items: center;
-      padding: 0 16px;
+      padding: 0 20px;
+      opacity: 0.9;
+      pointer-events: none;
     }
 
     .dev-banner-content {
@@ -122,6 +124,11 @@ function injectBannerStyles() {
       display: flex;
       align-items: center;
       gap: 12px;
+    }
+
+    /* Hide dev-banner auth pills so only the main header user menu shows */
+    .dev-auth {
+      display: none !important;
     }
 
     .dev-auth {
@@ -159,25 +166,28 @@ function injectBannerStyles() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 12px;
-      height: 12px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: #999;
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.6);
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.7), 0 0 12px rgba(255,255,255,0.5);
     }
 
     .dev-op-label {
-      font-weight: 600;
-      font-size: 12px;
-      color: #f5f5f5;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.4px;
+      color: #fdfdfd;
+      text-transform: uppercase;
     }
 
     .dev-banner-icon {
-      font-size: 18px;
+      font-size: 22px;
     }
 
     .dev-banner-text {
-      font-weight: 500;
+      font-weight: 700;
+      font-size: 15px;
     }
 
     #devModeStatus {
@@ -264,7 +274,7 @@ function injectBannerStyles() {
 
     /* Adjust body padding to account for banner */
     body {
-      padding-top: 36px !important;
+      padding-top: 48px !important;
     }
 
     /* Animation for status change */

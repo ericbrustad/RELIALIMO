@@ -221,6 +221,39 @@ export async function saveReservation(reservationData) {
   }
 }
 
+// Delete reservation by id or confirmation number
+export async function deleteReservation(reservationIdOrConf) {
+  // Development mode: also clear localStorage shadow copy
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    try {
+      const existingReservations = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+      const cleaned = existingReservations.filter(r => (r.id || r.confirmation_number) !== reservationIdOrConf);
+      localStorage.setItem('dev_reservations', JSON.stringify(cleaned));
+    } catch (e) {
+      console.warn('⚠️ Failed to prune dev reservations:', e);
+    }
+  }
+
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('Supabase client not initialized');
+
+    const { data, error } = await client
+      .from('reservations')
+      .delete()
+      .or(`id.eq.${reservationIdOrConf},confirmation_number.eq.${reservationIdOrConf}`)
+      .select();
+
+    if (error) throw error;
+    logSuccess('Reservation deleted', data);
+    return data;
+  } catch (error) {
+    console.error('❌ deleteReservation error:', error);
+    return showDatabaseError('Delete Reservation', error);
+  }
+}
+
 export async function getAllReservations() {
   try {
     // Development mode: load from localStorage so localhost saves show in the list
@@ -390,13 +423,15 @@ export async function deleteAccount(accountId) {
     await setupAPI();
     const client = getSupabaseClient();
     if (!client) throw new Error('No Supabase client');
-    
+
+    // Delete by id OR account_number to handle cases where the selected value is an account number
     const { error } = await client
       .from('accounts')
       .delete()
-      .eq('id', accountId);
-    
+      .or(`id.eq.${accountId},account_number.eq.${accountId}`);
+
     if (error) throw error;
+    accountCache = null; // Invalidate cache so lists/searches refresh
     logSuccess('Account deleted', accountId);
     return true;
   } catch (error) {
@@ -749,6 +784,7 @@ export default {
   getAllPassengers,
   saveBookingAgent,
   getAllBookingAgents,
+  deleteReservation,
   saveAccountAddress,
   getAccountAddresses,
   searchAccounts,

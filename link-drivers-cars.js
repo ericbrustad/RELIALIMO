@@ -5,29 +5,33 @@ async function loadDriversFromSupabase() {
   try {
     const supabaseUrl = window.ENV && window.ENV.SUPABASE_URL;
     const supabaseKey = window.ENV && window.ENV.SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) return false;
+    if (!supabaseUrl || !supabaseKey) return { success: false };
     const storedSession = localStorage.getItem('supabase_session');
     let authToken = supabaseKey;
     if (storedSession) {
       try { const s = JSON.parse(storedSession); if (s.access_token) authToken = s.access_token; } catch {}
     }
+    const forcedOrg = window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || null;
+    let orgId = forcedOrg;
     // Discover current org
-    const orgRes = await fetch(`${supabaseUrl}/rest/v1/organization_members?select=organization_id&order=created_at.asc&limit=1`, {
-      headers: { apikey: supabaseKey, Authorization: `Bearer ${authToken}` }
-    });
-    if (!orgRes.ok) return false;
-    const orgRows = await orgRes.json();
-    const orgId = orgRows && orgRows[0] && orgRows[0].organization_id;
-    if (!orgId) return false;
+    if (!orgId) {
+      const orgRes = await fetch(`${supabaseUrl}/rest/v1/organization_members?select=organization_id&order=created_at.asc&limit=1`, {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${authToken}` }
+      });
+      if (!orgRes.ok) return { success: false };
+      const orgRows = await orgRes.json();
+      orgId = orgRows && orgRows[0] && orgRows[0].organization_id;
+      if (!orgId) return { success: false };
+    }
 
     // Fetch drivers for this org
     const res = await fetch(`${supabaseUrl}/rest/v1/drivers?select=id,first_name,last_name,status&organization_id=eq.${encodeURIComponent(orgId)}&order=last_name`, {
       headers: { apikey: supabaseKey, Authorization: `Bearer ${authToken}` }
     });
-    if (!res.ok) return false;
+    if (!res.ok) return { success: false };
     const drivers = await res.json();
     const sel = document.getElementById('driverSelect');
-    if (!sel) return false;
+    if (!sel) return { success: false };
     // Clear existing options and populate
     sel.innerHTML = '<option value="">Select Driver</option>';
     drivers.forEach(d => {
@@ -36,9 +40,38 @@ async function loadDriversFromSupabase() {
       opt.textContent = `${(d.last_name||'').trim()}, ${(d.first_name||'').trim()}`;
       sel.appendChild(opt);
     });
-    return drivers.length > 0;
+    return { success: drivers.length > 0, orgId, authToken };
   } catch (e) {
     // Silent fallback to sample data
+    return { success: false };
+  }
+}
+
+async function loadVehicleTypesFromSupabase(orgId, authToken) {
+  try {
+    const supabaseUrl = window.ENV && window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV && window.ENV.SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) return false;
+
+    const token = authToken || supabaseKey;
+    const effectiveOrg = orgId || window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || '';
+    const orgFilter = effectiveOrg ? `&organization_id=eq.${encodeURIComponent(effectiveOrg)}` : '';
+    const res = await fetch(`${supabaseUrl}/rest/v1/vehicle_types?select=id,name,code,status&status=eq.ACTIVE${orgFilter}&order=sort_order.asc,name.asc`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return false;
+    const vehicleTypes = await res.json();
+    const sel = document.getElementById('carSelect');
+    if (!sel) return false;
+    sel.innerHTML = '<option value="">Select Vehicle Type</option>';
+    (vehicleTypes || []).forEach((vt) => {
+      const opt = document.createElement('option');
+      opt.value = vt.id || vt.code || vt.name;
+      opt.textContent = vt.name || vt.code || 'Vehicle Type';
+      sel.appendChild(opt);
+    });
+    return vehicleTypes.length > 0;
+  } catch (e) {
     return false;
   }
 }
@@ -232,10 +265,10 @@ function toggleCarSelection(id) {
 document.addEventListener('DOMContentLoaded', () => {
   renderLinkedCars();
   renderSelectedCars();
-  // Try to load drivers from Supabase; fallback to static options if unavailable
-  loadDriversFromSupabase().then(loaded => {
-    if (!loaded) {
-      // leave the hardcoded options in place
+  // Try to load drivers and active vehicle types from Supabase; fallback to static options if unavailable
+  loadDriversFromSupabase().then(({ success, orgId, authToken }) => {
+    if (success) {
+      loadVehicleTypesFromSupabase(orgId, authToken);
     }
   });
   

@@ -59,7 +59,7 @@ function updateMagicLinkAvailability() {
     magicLinkBadge.textContent = 'Magic link disabled';
     magicLinkBadge.className = 'status-chip disabled';
     magicLinkDescription.textContent =
-      'Magic link sign-in is turned off in System Settings. Contact an Admin to enable it again.';
+      'The ReliaLimo™Magic link sign-in is turned off in System Settings. Contact an Admin to enable it again.';
     return;
   }
 
@@ -67,14 +67,14 @@ function updateMagicLinkAvailability() {
     magicLinkBadge.textContent = 'Restricted';
     magicLinkBadge.className = 'status-chip restricted';
     magicLinkDescription.textContent =
-      'Magic link sign-in is available only to Admins. Please sign in with your password or ask an admin for help.';
+      'The ReliaLimo™ Magic link sign-in is available only to Admins. Please sign in with your password or ask an admin for help.';
     return;
   }
 
   magicLinkBadge.textContent = 'Magic link available';
   magicLinkBadge.className = 'status-chip enabled';
   magicLinkDescription.textContent =
-    'Magic link sign-in is enabled for Admins. Use your Supabase email to request a link.';
+    'Magic link sign-in is enabled for Admins. Use your ReliaLimo email to request a link.';
 }
 
 let supabase;

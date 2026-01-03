@@ -1,10 +1,8 @@
-// Function to get environment variables safely
+// Function to get environment variables safely (works in browser without process)
 function getEnvVar(varName) {
-  // Check multiple possible locations for environment variables
-  return window.ENV?.[varName] || 
-         process?.env?.[varName] || 
-         process?.env?.[`NEXT_PUBLIC_${varName}`] ||
-         process?.env?.[`VITE_${varName}`];
+  const env = (typeof window !== 'undefined' && window.ENV) ? window.ENV : {};
+  const procEnv = (typeof process !== 'undefined' && process.env) ? process.env : {};
+  return env[varName] || procEnv[varName] || procEnv[`NEXT_PUBLIC_${varName}`] || procEnv[`VITE_${varName}`];
 }
 
 // Function to get Supabase configuration

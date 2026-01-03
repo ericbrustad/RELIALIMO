@@ -1263,6 +1263,9 @@ class Accounts {
     
     // Switch to Account Info tab
     this.switchAccountTab('info');
+
+    // Prefill with the next available account number so the user sees it immediately
+    this.prefillNextAccountNumber();
     
     // Focus first name field
     setTimeout(() => {
@@ -1270,6 +1273,34 @@ class Accounts {
     }, 100);
     
     console.log('✅ New account form ready - account number will be assigned on save');
+  }
+
+  async prefillNextAccountNumber() {
+    const accountNumberEl = document.getElementById('accountNumber');
+    const miscAccountNumberEl = document.getElementById('miscAccountNumber');
+    if (!accountNumberEl) return;
+
+    accountNumberEl.value = '';
+    accountNumberEl.placeholder = 'Fetching next account number...';
+
+    try {
+      const nextNum = await this.db?.getNextAccountNumber?.();
+      if (!nextNum) throw new Error('No next account number returned');
+
+      const numStr = nextNum.toString();
+      accountNumberEl.value = numStr;
+      accountNumberEl.placeholder = '';
+      accountNumberEl.setAttribute('readonly', true);
+      accountNumberEl.style.backgroundColor = '#f5f5f5';
+
+      if (miscAccountNumberEl) {
+        miscAccountNumberEl.value = numStr;
+        miscAccountNumberEl.placeholder = '';
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to prefill next account number:', e);
+      accountNumberEl.placeholder = 'Will be assigned on save';
+    }
   }
 
   searchAccounts(query) {

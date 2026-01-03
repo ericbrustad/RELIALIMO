@@ -3,7 +3,7 @@ import { CostCalculator } from './CostCalculator.js';
 import { googleMapsService } from './GoogleMapsService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
-import { fetchDrivers, setupAPI, listDriverNames, listActiveVehiclesLight, listActiveVehicleTypes } from './api-service.js';
+import { fetchDrivers, setupAPI, listDriverNames, listActiveVehiclesLight, listActiveVehicleTypes, fetchVehicleTypes, fetchActiveVehicles } from './api-service.js';
 import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
@@ -159,6 +159,7 @@ class ReservationForm {
       console.warn('⚠️ CompanySettingsManager not available; confirmation settings will use defaults');
       this.companySettingsManager = null;
     }
+    this.pendingAccountNumber = null;
     this.stops = [];
     this.selectedAirline = null;
     this.selectedFlight = null;
@@ -174,6 +175,8 @@ class ReservationForm {
     this.createdDateTime = null;
     this.dateTimeInterval = null;
     this.dateTimeFrozen = false;
+    this.vehicleTypeRates = {};
+    this.latestRouteSummary = null;
     
     this.init();
   }
@@ -236,6 +239,11 @@ class ReservationForm {
 
   detectViewMode() {
     try {
+      const settingValue = this.companySettingsManager?.getSetting?.('enableReservationViewMode');
+      if (settingValue === false || settingValue === 'false' || settingValue === '0') {
+        return false;
+      }
+
       if (window.RELIA_VIEW_MODE === true || window.RELIA_VIEW_MODE === 'true') {
         return true;
       }
@@ -593,42 +601,73 @@ class ReservationForm {
   async loadDrivers() {
     const primary = document.getElementById('driverSelect');
     const secondary = document.getElementById('secondaryDriverSelect');
-    try {
-      await setupAPI();
-      const drivers = await listDriverNames({ limit: 200, offset: 0 });
 
-      const isActive = (d) => {
-        const flag = (d?.status || d?.driver_status || '').toString().trim().toUpperCase();
-        if (!flag) return true; // treat empty as active
-        return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
-      };
+    const render = (el, opts) => {
+      if (!el) return;
+      if (!opts || !opts.length) {
+        el.innerHTML = '<option value="">-- No drivers found --</option>';
+        return;
+      }
+      el.innerHTML = '<option value="">-- Select Driver --</option>' + opts
+        .map(o => `<option value="${o.value}">${o.label}</option>`)
+        .join('');
+    };
 
-      const options = Array.isArray(drivers) && drivers.length
-        ? drivers
+    const isActive = (d) => {
+      const flag = (d?.status || d?.driver_status || '').toString().trim().toUpperCase();
+      if (!flag) return true; // treat empty as active
+      return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
+    };
+
+    const buildOptions = (list) => {
+      return Array.isArray(list) && list.length
+        ? list
             .filter(isActive)
             .map(d => {
               const name = (d.dispatch_display_name || [d.first_name, d.last_name].filter(Boolean).join(' ')).trim() || 'Unnamed Driver';
               return { value: d.id || name, label: name };
             })
         : [];
+    };
 
-      const render = (el) => {
-        if (!el) return;
-        if (!options.length) {
-          el.innerHTML = '<option value="">-- No drivers found --</option>';
-          return;
+    try {
+      await setupAPI();
+      let options = buildOptions(await listDriverNames({ limit: 200, offset: 0 }));
+      let source = 'listDriverNames';
+
+      if (!options.length) {
+        try {
+          const fallbackDrivers = await fetchDrivers();
+          const fallbackOptions = buildOptions(fallbackDrivers);
+          if (fallbackOptions.length) {
+            options = fallbackOptions;
+            source = 'fetchDrivers';
+          }
+        } catch (fallbackErr) {
+          console.warn('⚠️ fetchDrivers fallback failed:', fallbackErr);
         }
-        el.innerHTML = '<option value="">-- Select Driver --</option>' + options
-          .map(o => `<option value="${o.value}">${o.label}</option>`)
-          .join('');
-      };
+      }
 
-      render(primary);
-      render(secondary);
+      render(primary, options);
+      render(secondary, options);
 
-      console.log(`✅ Loaded ${options.length} drivers`);
+      console.log('[loadDrivers] option counts', { count: options.length, source });
     } catch (error) {
       console.error('❌ Error loading drivers:', error);
+
+      try {
+        const fallbackDrivers = await fetchDrivers();
+        const fallbackOptions = buildOptions(fallbackDrivers);
+        if (fallbackOptions.length) {
+          render(primary, fallbackOptions);
+          render(secondary, fallbackOptions);
+          console.log('[loadDrivers] recovered with fetchDrivers fallback', { count: fallbackOptions.length });
+          return;
+        }
+      } catch (fallbackErr) {
+        console.warn('⚠️ Driver fallback failed after error:', fallbackErr);
+      }
+
       if (primary) primary.innerHTML = '<option value="">-- Error loading drivers --</option>';
       if (secondary) secondary.innerHTML = '<option value="">-- Error loading drivers --</option>';
     }
@@ -639,21 +678,50 @@ class ReservationForm {
     const secondaryCar = document.getElementById('secondaryCarSelect');
     const vehicleTypeSelect = document.getElementById('vehicleTypeRes');
 
-    const render = (el, options) => {
+    const render = (el, options, placeholder = '-- Select Vehicle Type --') => {
       if (!el) return;
       if (!options.length) {
-        el.innerHTML = '<option value="">-- No vehicles found --</option>';
+        el.innerHTML = '<option value="">-- No vehicle types found --</option>';
         return;
       }
-      el.innerHTML = '<option value="">-- Select Vehicle --</option>' + options
+      el.innerHTML = `<option value="">${placeholder}</option>` + options
         .map(o => `<option value="${o.value}">${o.label}</option>`)
         .join('');
     };
 
     try {
       await setupAPI();
-      const vehicles = await listActiveVehiclesLight({ limit: 200, offset: 0 });
-      const vehicleTypes = await listActiveVehicleTypes({ limit: 200, offset: 0 });
+      let vehicles = [];
+      try {
+        vehicles = await listActiveVehiclesLight({ limit: 200, offset: 0 });
+      } catch (err) {
+        console.warn('⚠️ listActiveVehiclesLight failed; continuing with vehicle types only:', err);
+      }
+
+      if (!vehicles || !vehicles.length) {
+        try {
+          vehicles = await fetchActiveVehicles({ includeInactive: false });
+          console.log('[loadVehicleTypes] used fetchActiveVehicles fallback', { count: Array.isArray(vehicles) ? vehicles.length : 0 });
+        } catch (err) {
+          console.warn('⚠️ fetchActiveVehicles fallback failed:', err);
+        }
+      }
+
+      const normalizeVehicleTypeName = (name) => {
+        if (!name) return '';
+        return name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      };
+
+      // Prefer full vehicle types (with rates) when available; fall back to lightweight list
+      let vehicleTypes = [];
+      try {
+        vehicleTypes = await fetchVehicleTypes({ includeInactive: false });
+      } catch (e) {
+        console.warn('⚠️ fetchVehicleTypes failed, falling back to listActiveVehicleTypes:', e);
+      }
+      if (!Array.isArray(vehicleTypes) || !vehicleTypes.length) {
+        vehicleTypes = await listActiveVehicleTypes({ limit: 200, offset: 0 });
+      }
 
       // Filter to active only (defensive in case data is cached/legacy)
       const isActive = (v) => {
@@ -664,35 +732,79 @@ class ReservationForm {
 
       const activeVehicles = Array.isArray(vehicles) ? vehicles.filter(isActive) : [];
 
-      const options = activeVehicles.length
-        ? activeVehicles.map(v => {
-            const label = v.veh_disp_name || v.veh_title || v.unit_number || `${[v.make, v.model, v.year].filter(Boolean).join(' ')}` || 'Vehicle';
-            const value = v.id || v.veh_disp_name || v.unit_number || label;
-            return { value, label };
-          })
-        : [];
-
       const typeOptionsFromTable = Array.isArray(vehicleTypes) && vehicleTypes.length
-        ? vehicleTypes.map(t => ({ value: t.id, label: t.name || t.code || 'Vehicle Type' }))
+        ? vehicleTypes.map(t => ({
+            value: t.id,
+            label: normalizeVehicleTypeName(t.name || t.code || 'Vehicle Type'),
+            raw: t
+          }))
         : [];
 
       const typeOptionsFallback = activeVehicles.length
         ? Array.from(new Set(activeVehicles.map(v => v.veh_type || v.veh_disp_name || v.veh_title || 'Vehicle')))
-            .map(t => ({ value: t, label: t }))
+            .map(t => {
+              const label = normalizeVehicleTypeName(t);
+              return { value: label, label };
+            })
         : [];
 
-      const typeOptions = typeOptionsFromTable.length ? typeOptionsFromTable : typeOptionsFallback;
+      const defaultSeedTypes = ['Sedan', 'SUV', 'Sprinter', 'Van', 'Bus', 'Mini Coach', 'Motorcoach', 'Stretch Limo'];
+      const defaultOptions = defaultSeedTypes.map(t => ({ value: t, label: t }));
 
-      render(primaryCar, options);
-      render(secondaryCar, options);
+      const mergedOptions = [];
+      const seen = new Set();
+      const pushUnique = (arr) => {
+        arr.forEach((o) => {
+          const key = normalizeVehicleTypeName(o.label || o.value || '').toLowerCase();
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          mergedOptions.push({ value: o.value || o.label, label: o.label || o.value || 'Vehicle Type', raw: o.raw });
+        });
+      };
+
+      pushUnique(typeOptionsFromTable);
+      pushUnique(typeOptionsFallback);
+      if (!mergedOptions.length) pushUnique(defaultOptions);
+
+      // Capture rate metadata for downstream cost application
+      this.vehicleTypeRates = {};
+      typeOptionsFromTable.forEach((opt) => {
+        const rates = opt.raw?.rates || opt.raw?.metadata?.rates || null;
+        if (opt.value && rates) {
+          this.vehicleTypeRates[opt.value] = rates;
+        }
+      });
+
+      const typeOptions = mergedOptions.map(({ value, label }) => ({ value, label }));
+
+      render(primaryCar, typeOptions);
+      render(secondaryCar, typeOptions);
       render(vehicleTypeSelect, typeOptions);
 
-      console.log(`✅ Loaded ${options.length} vehicles`);
+      console.log('[loadVehicleTypes] option counts', {
+        vehicleTypeOptions: typeOptions.length,
+        vehicleTypeSelectOptions: vehicleTypeSelect?.options?.length || 0,
+        primaryCarOptions: primaryCar?.options?.length || 0,
+        secondaryCarOptions: secondaryCar?.options?.length || 0,
+        sample: typeOptions.slice(0, 5)
+      });
+
+      if (vehicleTypeSelect && !vehicleTypeSelect.dataset.boundPricing) {
+        vehicleTypeSelect.addEventListener('change', () => {
+          this.applyVehicleTypePricing();
+        });
+        vehicleTypeSelect.dataset.boundPricing = 'true';
+      }
+
+      // Apply rates after initial load if a value is already present
+      this.applyVehicleTypePricing();
+
+      console.log(`✅ Loaded ${typeOptions.length} vehicle types (remote:${typeOptionsFromTable.length}, fallback:${typeOptionsFallback.length})`);
     } catch (error) {
       console.error('❌ Error loading vehicles:', error);
-      if (primaryCar) primaryCar.innerHTML = '<option value="">-- Error loading vehicles --</option>';
-      if (secondaryCar) secondaryCar.innerHTML = '<option value="">-- Error loading vehicles --</option>';
-      if (vehicleTypeSelect) vehicleTypeSelect.innerHTML = '<option value="">-- Error loading vehicles --</option>';
+      if (primaryCar) primaryCar.innerHTML = '<option value="">-- Error loading vehicle types --</option>';
+      if (secondaryCar) secondaryCar.innerHTML = '<option value="">-- Error loading vehicle types --</option>';
+      if (vehicleTypeSelect) vehicleTypeSelect.innerHTML = '<option value="">-- Error loading vehicle types --</option>';
     }
   }
 
@@ -1034,6 +1146,31 @@ class ReservationForm {
       });
     }
 
+    // More menu actions
+    const moreBtn = document.getElementById('moreActionsBtn');
+    const moreMenu = document.getElementById('moreActionsDropdown');
+    if (moreBtn && moreMenu && !moreBtn.dataset.bound) {
+      moreBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isOpen = moreMenu.style.display === 'block';
+        moreMenu.style.display = isOpen ? 'none' : 'block';
+      });
+      document.addEventListener('click', (e) => {
+        if (!moreMenu.contains(e.target) && e.target !== moreBtn) {
+          moreMenu.style.display = 'none';
+        }
+      });
+      const deleteBtn = document.getElementById('deleteReservationBtn');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          moreMenu.style.display = 'none';
+          this.deleteReservationWithConfirm();
+        });
+      }
+      moreBtn.dataset.bound = '1';
+    }
+
     // Main navigation buttons
     wireMainNav();
 
@@ -1070,6 +1207,23 @@ class ReservationForm {
       printBtn.addEventListener('click', (e) => {
         e.preventDefault();
         window.print();
+      });
+    }
+
+    // Auto-derive spot/garage times from pickup
+    const puTimeEl = document.getElementById('puTime');
+    const puDateEl = document.getElementById('puDate');
+    [puTimeEl, puDateEl].forEach(el => {
+      if (!el) return;
+      el.addEventListener('change', () => this.updateTimesFromPickup());
+      el.addEventListener('input', () => this.updateTimesFromPickup());
+    });
+
+    // Keep DO Time updated when duration changes
+    const durationEl = document.getElementById('duration');
+    if (durationEl) {
+      ['change', 'input'].forEach(evt => {
+        durationEl.addEventListener(evt, () => this.updateDropoffFromDuration());
       });
     }
 
@@ -1356,8 +1510,6 @@ class ReservationForm {
         this.createAccountFromBilling();
       });
       console.log('✅ Create Account button listener attached');
-    } else {
-      console.error('❌ createAccountBtn not found in DOM!');
     }
 
     // Copy Passenger Info checkbox
@@ -1406,67 +1558,54 @@ class ReservationForm {
     this.setupMatchDetection();
 
     // Add Contact Modal
-    document.getElementById('closeContactModal').addEventListener('click', () => {
-      this.closeAddContactModal();
-    });
+    const safeModalBind = (id, handler, eventName = 'click') => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener(eventName, handler);
+      } else {
+        console.warn(`⚠️ Element ${id} not found for modal binding`);
+      }
+    };
 
-    document.getElementById('cancelContact').addEventListener('click', () => {
-      this.closeAddContactModal();
-    });
-
-    document.getElementById('saveContact').addEventListener('click', () => {
-      this.saveNewContact();
-    });
-
-    // Close modal on outside click
-    document.getElementById('addContactModal').addEventListener('click', (e) => {
+    safeModalBind('closeContactModal', () => this.closeAddContactModal());
+    safeModalBind('cancelContact', () => this.closeAddContactModal());
+    safeModalBind('saveContact', () => this.saveNewContact());
+    safeModalBind('addContactModal', (e) => {
       if (e.target.id === 'addContactModal') {
         this.closeAddContactModal();
       }
-    });
+    }, 'click');
 
     // Modal close
-    document.getElementById('closeModal').addEventListener('click', () => {
-      this.closeModal();
-    });
-
-    document.getElementById('cancelAccount').addEventListener('click', () => {
-      this.closeModal();
-    });
-
-    document.getElementById('createAccount').addEventListener('click', () => {
-      this.createNewAccount();
-    });
-
-    // Close modal on outside click
-    document.getElementById('accountModal').addEventListener('click', (e) => {
+    safeModalBind('closeModal', () => this.closeModal());
+    safeModalBind('cancelAccount', () => this.closeModal());
+    safeModalBind('createAccount', () => this.createNewAccount());
+    safeModalBind('accountModal', (e) => {
       if (e.target.id === 'accountModal') {
         this.closeModal();
       }
-    });
-
-
+    }, 'click');
 
     // Affiliate search and modal
     this.setupAffiliateSearch();
-    
-    document.getElementById('openAffiliateListBtn').addEventListener('click', () => {
+
+    safeModalBind('openAffiliateListBtn', () => {
       this.openAffiliateModal();
     });
 
-    document.getElementById('closeAffiliateModal').addEventListener('click', () => {
+    safeModalBind('closeAffiliateModal', () => {
       this.closeAffiliateModal();
     });
 
-    document.getElementById('closeAffiliateListBtn').addEventListener('click', () => {
+    safeModalBind('closeAffiliateListBtn', () => {
       this.closeAffiliateModal();
     });
 
-    document.getElementById('affiliateModal').addEventListener('click', (e) => {
+    safeModalBind('affiliateModal', (e) => {
       if (e.target.id === 'affiliateModal') {
         this.closeAffiliateModal();
       }
-    });
+    }, 'click');
   }
 
   setupStoredRoutingDragAndDrop() {
@@ -2065,8 +2204,19 @@ class ReservationForm {
       <td>${locationName}</td>
       <td>${fullAddress}</td>
       <td>${timeIn}</td>
-      <td><button class="btn-remove" onclick="this.closest('tr').remove()">Remove</button></td>
+      <td><button class="btn-remove" onclick="const row=this.closest('tr'); row?.remove(); window.reservationForm?.updateTripMetricsFromStops?.();">Remove</button></td>
     `;
+
+    // Persist metadata for downstream calculations
+    row.dataset.stopType = stopType;
+    row.dataset.locationName = locationName;
+    row.dataset.address1 = address1;
+    row.dataset.address2 = address2;
+    row.dataset.city = city;
+    row.dataset.state = state;
+    row.dataset.zipCode = zipCode;
+    row.dataset.fullAddress = fullAddress;
+    row.dataset.timeIn = timeIn;
 
     tableBody.appendChild(row);
 
@@ -2083,6 +2233,8 @@ class ReservationForm {
       createBtn.textContent = originalText;
       createBtn.style.background = '';
     }, 1500);
+
+    this.updateTripMetricsFromStops().catch(err => console.warn('⚠️ Unable to update trip metrics:', err));
   }
 
   clearAddressForm() {
@@ -2201,7 +2353,7 @@ class ReservationForm {
   useExistingAccount(account) {
     // Populate Billing Accounts section with existing account (using db field names)
     const acctNum = account.account_number || account.id;
-    document.getElementById('billingAccountSearch').value = `${acctNum} - ${account.first_name} ${account.last_name}`;
+    document.getElementById('billingAccountSearch').value = acctNum;
     document.getElementById('billingCompany').value = account.company_name || '';
     document.getElementById('billingFirstName').value = account.first_name;
     document.getElementById('billingLastName').value = account.last_name;
@@ -2297,7 +2449,7 @@ class ReservationForm {
       
       if (!billingAccountSearch.value) {
         const acctNum = account.account_number || account.id;
-        billingAccountSearch.value = `${acctNum} - ${account.first_name} ${account.last_name}`;
+        billingAccountSearch.value = acctNum;
         crossFilledFields.push('Account Search');
       }
       if (!billingCompany.value && account.company_name) {
@@ -2472,8 +2624,12 @@ class ReservationForm {
       return;
     }
 
-    // Get next account number using db module
-    const nextAccountNumber = db.getNextAccountNumber();
+    // Get next account number using db module (use cached value when available)
+    const nextAccountNumber = this.pendingAccountNumber || await db.getNextAccountNumber();
+    if (!nextAccountNumber) {
+      alert('Unable to determine the next account number. Please try again.');
+      return;
+    }
     
     // Prepare account data for db module with proper field mappings
     const accountData = {
@@ -2498,8 +2654,13 @@ class ReservationForm {
       return;
     }
 
-    // Increment account number for next account
-    db.setNextAccountNumber(nextAccountNumber + 1);
+    // Increment account number for next account (local dev fallback only)
+    if (typeof db.setNextAccountNumber === 'function') {
+      db.setNextAccountNumber(nextAccountNumber + 1);
+    }
+
+    // Clear cached pending number now that it has been used
+    this.pendingAccountNumber = null;
 
     // Update billing account search field with account number
     const billingAccountSearch = document.getElementById('billingAccountSearch');
@@ -2629,6 +2790,11 @@ class ReservationForm {
     // Build account form in modal
     modalBody.innerHTML = `
       <div class="form-section">
+        <div class="form-group">
+          <label>Account Number</label>
+          <input type="text" id="accountNumberPreview" class="form-control" placeholder="Fetching next account number..." readonly />
+        </div>
+
         <div class="form-row-2">
           <div class="form-group">
             <label>First Name *</label>
@@ -2658,7 +2824,30 @@ class ReservationForm {
       </div>
     `;
     
+    this.prefillAccountNumberForModal();
     modal.classList.add('active');
+  }
+
+  async prefillAccountNumberForModal() {
+    const acctField = document.getElementById('accountNumberPreview');
+    if (!acctField) return;
+
+    acctField.value = '';
+    acctField.placeholder = 'Fetching next account number...';
+
+    try {
+      const nextNum = await db.getNextAccountNumber();
+      if (!nextNum) throw new Error('No account number returned');
+
+      const numStr = nextNum.toString();
+      this.pendingAccountNumber = nextNum;
+      acctField.value = numStr;
+      acctField.placeholder = '';
+    } catch (e) {
+      console.warn('⚠️ Failed to fetch next account number for modal:', e);
+      this.pendingAccountNumber = null;
+      acctField.placeholder = 'Will be assigned on save';
+    }
   }
 
   saveNewContact() {
@@ -3738,19 +3927,221 @@ class ReservationForm {
   }
 
   async calculateRoute() {
-    // Get all stops with coordinates
-    const validStops = this.stops.filter(stop => stop && stop.coordinates);
-    
-    if (validStops.length < 2) {
-      document.getElementById('routeInfo').style.display = 'none';
+    return this.updateTripMetricsFromStops();
+  }
+
+  updateTimesFromPickup() {
+    const puDate = document.getElementById('puDate')?.value || '';
+    const puTime = document.getElementById('puTime')?.value || '';
+    if (!puTime) return;
+
+    const formatTime = (dateStr, timeStr, offsetMinutes) => {
+      const baseDate = dateStr || new Date().toISOString().slice(0, 10);
+      const d = new Date(`${baseDate}T${timeStr}`);
+      if (Number.isNaN(d.getTime())) return null;
+      d.setMinutes(d.getMinutes() + offsetMinutes);
+      const hh = `${d.getHours()}`.padStart(2, '0');
+      const mm = `${d.getMinutes()}`.padStart(2, '0');
+      return `${hh}:${mm}`;
+    };
+
+    const spot = formatTime(puDate, puTime, -15);
+    const garOut = formatTime(puDate, puTime, -45);
+    const garIn = formatTime(puDate, puTime, 30);
+
+    if (spot) {
+      const spotEl = document.getElementById('spotTime');
+      if (spotEl) spotEl.value = spot;
+    }
+    if (garOut) {
+      const garOutEl = document.getElementById('garOutTime');
+      if (garOutEl) garOutEl.value = garOut;
+    }
+    if (garIn) {
+      const garInEl = document.getElementById('garInTime');
+      if (garInEl) garInEl.value = garIn;
+    }
+
+    // Also keep DO Time aligned with pickup + duration when user edits pickup times
+    this.updateDropoffFromDuration();
+  }
+
+  updateDropoffFromDuration() {
+    const puDate = document.getElementById('puDate')?.value;
+    const puTime = document.getElementById('puTime')?.value;
+    const durationVal = document.getElementById('duration')?.value;
+
+    if (!puDate || !puTime || durationVal === undefined || durationVal === null) return;
+
+    const durationHours = parseFloat(durationVal);
+    if (Number.isNaN(durationHours)) return;
+
+    const start = new Date(`${puDate}T${puTime}`);
+    if (Number.isNaN(start.getTime())) return;
+
+    const minutesToAdd = Math.round(durationHours * 60);
+    const end = new Date(start.getTime() + minutesToAdd * 60000);
+    const hh = `${end.getHours()}`.padStart(2, '0');
+    const mm = `${end.getMinutes()}`.padStart(2, '0');
+
+    const doTimeEl = document.getElementById('doTime');
+    if (doTimeEl) doTimeEl.value = `${hh}:${mm}`;
+  }
+
+  async updateTripMetricsFromStops() {
+    const stops = this.getStops();
+    if (!Array.isArray(stops) || stops.length < 2) {
+      const routeInfo = document.getElementById('routeInfo');
+      if (routeInfo) routeInfo.style.display = 'none';
+      const inlineDistance = document.getElementById('routeDistanceInline');
+      const inlineDuration = document.getElementById('routeDurationInline');
+      if (inlineDistance) inlineDistance.textContent = '-';
+      if (inlineDuration) inlineDuration.textContent = '-';
+      this.latestRouteSummary = null;
       return;
     }
 
+    const origin = stops[0].fullAddress || stops[0].address || stops[0].address1;
+    const destination = stops[stops.length - 1].fullAddress || stops[stops.length - 1].address || stops[stops.length - 1].address1;
+    const waypointStops = stops.slice(1, -1).map(s => s.fullAddress || s.address || s.address1).filter(Boolean);
+
+    if (!origin || !destination) {
+      this.latestRouteSummary = null;
+      return;
+    }
+
+    let summary;
     try {
-      // Mapbox disabled for reservation form; skip route calculation
-      document.getElementById('routeInfo').style.display = 'none';
+      summary = await this.googleMapsService.getRouteSummary({ origin, destination, waypoints: waypointStops });
+    } catch (e) {
+      console.warn('⚠️ Directions lookup failed:', e);
+      return;
+    }
+
+    const routeInfo = document.getElementById('routeInfo');
+    if (routeInfo) routeInfo.style.display = 'block';
+
+    const distanceEl = document.getElementById('routeDistance');
+    const durationEl = document.getElementById('routeDuration');
+    const inlineDistance = document.getElementById('routeDistanceInline');
+    const inlineDuration = document.getElementById('routeDurationInline');
+    if (distanceEl) distanceEl.textContent = summary.distanceText;
+    if (durationEl) durationEl.textContent = summary.durationText;
+    if (inlineDistance) inlineDistance.textContent = summary.distanceText;
+    if (inlineDuration) inlineDuration.textContent = summary.durationText;
+
+    this.latestRouteSummary = {
+      ...summary,
+      miles: summary.distanceMeters ? summary.distanceMeters / 1609.344 : null
+    };
+
+    // Auto-set drop-off time based on pickup time + duration
+    if (summary.durationSeconds) {
+      const puDate = document.getElementById('puDate')?.value;
+      const puTime = document.getElementById('puTime')?.value;
+      if (puDate && puTime) {
+        const start = new Date(`${puDate}T${puTime}`);
+        if (!Number.isNaN(start.getTime())) {
+          const end = new Date(start.getTime() + summary.durationSeconds * 1000);
+          const hh = `${end.getHours()}`.padStart(2, '0');
+          const mm = `${end.getMinutes()}`.padStart(2, '0');
+          const doTimeEl = document.getElementById('doTime');
+          if (doTimeEl) doTimeEl.value = `${hh}:${mm}`;
+        }
+      }
+    }
+
+    // Keep spot/garage times aligned after any pickup time edits
+    this.updateTimesFromPickup();
+
+    // Re-apply vehicle type pricing now that distance is known
+    this.applyVehicleTypePricing();
+  }
+
+  applyVehicleTypePricing() {
+    try {
+      const vehicleTypeId = document.getElementById('vehicleTypeRes')?.value || '';
+      if (!vehicleTypeId) {
+        return;
+      }
+
+      const rates = this.vehicleTypeRates?.[vehicleTypeId];
+      if (!rates) {
+        this.calculateCosts();
+        return;
+      }
+
+      const getNum = (val) => {
+        const num = parseFloat(val);
+        return Number.isFinite(num) ? num : 0;
+      };
+
+      const setIfEmpty = (id, value) => {
+        if (value === undefined || value === null) return;
+        const el = document.getElementById(id);
+        if (!el) return;
+        const current = getNum(el.value);
+        if (!el.value || current === 0) {
+          el.value = value;
+        }
+      };
+
+      const durationHours = getNum(document.getElementById('duration')?.value);
+      const passengerCount = getNum(document.getElementById('numPax')?.value || document.getElementById('passQty')?.value);
+
+      if (rates.perHour) {
+        const hourRate = getNum(rates.perHour.asLow)
+          || getNum(rates.perHour.rateSchedules && rates.perHour.rateSchedules[0]?.ratePerHour)
+          || getNum(rates.perHour.hoursRange && rates.perHour.hoursRange.ratePerHour);
+        if (hourRate) {
+          setIfEmpty('hourRate', hourRate.toString());
+        }
+        if (durationHours) {
+          setIfEmpty('hourQty', durationHours.toFixed(2));
+        }
+      }
+
+      if (rates.perPassenger) {
+        const basePassRate = getNum(rates.perPassenger.baseRate)
+          || getNum(rates.perPassenger.tiers && rates.perPassenger.tiers[0]?.rate);
+        if (basePassRate) {
+          setIfEmpty('passRate', basePassRate.toString());
+        }
+        if (passengerCount) {
+          setIfEmpty('passQty', passengerCount.toString());
+        }
+      }
+
+      if (rates.distance) {
+        const miles = this.latestRouteSummary?.miles;
+        const includedMiles = getNum(rates.distance.includedMiles);
+        const billableMiles = miles !== undefined && miles !== null
+          ? Math.max(0, miles - includedMiles)
+          : null;
+
+        const mileRate = getNum(rates.distance.basePerMile)
+          || getNum(rates.distance.tiers && rates.distance.tiers[0]?.rate);
+        if (mileRate) {
+          setIfEmpty('mileRate', mileRate.toString());
+        }
+
+        if (billableMiles !== null) {
+          const mileQtyEl = document.getElementById('mileQty');
+          if (mileQtyEl) {
+            mileQtyEl.value = billableMiles.toFixed(1);
+          }
+        }
+
+        const minimumFare = getNum(rates.distance.minimumFare);
+        if (minimumFare) {
+          setIfEmpty('flatQty', '1');
+          setIfEmpty('flatRate', minimumFare.toString());
+        }
+      }
+
+      this.calculateCosts();
     } catch (error) {
-      console.error('Route calculation error:', error);
+      console.warn('[ReservationForm] applyVehicleTypePricing failed:', error);
     }
   }
 
@@ -3759,9 +4150,13 @@ class ReservationForm {
     const distanceEl = document.getElementById('routeDistance');
     const durationEl = document.getElementById('routeDuration');
     const directionsEl = document.getElementById('routeDirections');
+    const inlineDistance = document.getElementById('routeDistanceInline');
+    const inlineDuration = document.getElementById('routeDurationInline');
 
     distanceEl.textContent = route.distance;
     durationEl.textContent = route.duration;
+    if (inlineDistance) inlineDistance.textContent = route.distance;
+    if (inlineDuration) inlineDuration.textContent = route.duration;
 
     // Display turn-by-turn directions
     directionsEl.innerHTML = route.steps.map((step, index) => `
@@ -3825,6 +4220,8 @@ class ReservationForm {
     newInput.addEventListener('blur', () => {
       setTimeout(() => this.hideAddressSuggestions(newInput), 200);
     });
+
+    this.updateTripMetricsFromStops().catch(() => {});
   }
 
   setupCostCalculationListeners() {
@@ -3860,6 +4257,22 @@ class ReservationForm {
   }
 
   calculateCosts() {
+    const requiredIds = [
+      'flatQty', 'flatRate', 'hourQty', 'hourRate', 'unitQty', 'unitRate',
+      'otQty', 'otRate', 'stopsQty', 'stopsRate', 'gratuityQty', 'fuelQty',
+      'discountQty', 'passQty', 'passRate', 'mileQty', 'mileRate',
+      'surfaceQty', 'baseRateQty', 'adminQty', 'adminRate',
+      'flatExt', 'hourExt', 'unitExt', 'otExt', 'stopsExt', 'gratuityExt',
+      'fuelExt', 'discountExt', 'passExt', 'mileExt', 'surfaceExt', 'baseRateExt',
+      'adminExt', 'subTotal', 'totalDue'
+    ];
+
+    // If any cost field is missing (e.g., on stripped-down embeds), skip calculation to avoid null errors
+    const missing = requiredIds.find(id => !document.getElementById(id));
+    if (missing) {
+      return;
+    }
+
     const costs = {
       flat: {
         qty: parseFloat(document.getElementById('flatQty').value) || 0,
@@ -3934,6 +4347,23 @@ class ReservationForm {
     const topSaveBtn = document.querySelector('.btn-save') || document.getElementById('saveBtn');
     const bottomSaveBtn = document.getElementById('saveReservationBtn');
     const saveButtons = [topSaveBtn, bottomSaveBtn].filter(Boolean);
+
+    // More menu toggle
+    const moreBtn = document.getElementById('moreActionsBtn');
+    const moreMenu = document.getElementById('moreActionsDropdown');
+    if (moreBtn && moreMenu && !moreBtn.dataset.bound) {
+      moreBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const isOpen = moreMenu.style.display === 'block';
+        moreMenu.style.display = isOpen ? 'none' : 'block';
+      });
+      document.addEventListener('click', (e) => {
+        if (!moreMenu.contains(e.target) && e.target !== moreBtn) {
+          moreMenu.style.display = 'none';
+        }
+      });
+      moreBtn.dataset.bound = '1';
+    }
 
     // Show loading state on all save buttons
     const originalButtonState = saveButtons.map(btn => ({
@@ -4069,6 +4499,11 @@ class ReservationForm {
         r.confirmation_number === currentConfNumber || r.id === currentConfNumber
       );
       const isNewReservation = !existingReservation;
+
+      // If this reservation already exists, carry its id so we update instead of inserting a duplicate
+      if (existingReservation?.id) {
+        reservationData.id = existingReservation.id;
+      }
       
       // Get account_id from billing account search (if an account number is entered)
       const accountSearchValue = reservationData.billingAccount.account?.trim();
@@ -4226,6 +4661,8 @@ class ReservationForm {
           ...reservationData,
           confirmationNumber: currentConfNumber,
           confirmation_number: currentConfNumber,
+          formSnapshot,
+          form_snapshot: formSnapshot,
           createdAt: this.createdDateTime || reservationData.details.createdAt,
           created_at: this.createdDateTime || reservationData.details.created_at,
           accountId: accountId,
@@ -4314,6 +4751,53 @@ class ReservationForm {
         s.btn.style.background = s.background;
         s.btn.style.color = s.color;
       });
+    }
+  }
+
+  async deleteReservationWithConfirm() {
+    try {
+      const confField = document.getElementById('confNumber') || document.getElementById('confirmation-number');
+      const currentConfNumber = confField?.value?.trim();
+      if (!currentConfNumber || currentConfNumber === 'NEW' || currentConfNumber === 'Loading...') {
+        alert('No reservation loaded to delete.');
+        return;
+      }
+
+      const allReservations = await db.getAllReservations();
+      const existingReservation = allReservations.find(r => 
+        r.confirmation_number === currentConfNumber ||
+        r.id === currentConfNumber
+      );
+
+      if (!existingReservation) {
+        alert('Reservation not found.');
+        return;
+      }
+
+      const confirmed = window.confirm('Are you sure you want to DELETE this reservation?');
+      if (!confirmed) return;
+
+      // Prefer API delete if available
+      if (typeof db.deleteReservation === 'function') {
+        await db.deleteReservation(existingReservation.id || existingReservation.confirmation_number);
+      } else if (window.apiService?.deleteReservation) {
+        await window.apiService.deleteReservation(existingReservation.id || existingReservation.confirmation_number);
+      }
+
+      // Optionally remove from any local cache
+      try {
+        if (existingReservation.id) {
+          await db.removeReservationFromCache?.(existingReservation.id);
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to remove from cache:', e);
+      }
+
+      alert('Reservation deleted.');
+      window.location.href = 'reservations-list.html';
+    } catch (err) {
+      console.error('❌ Failed to delete reservation:', err);
+      alert('Failed to delete reservation. Please try again.');
     }
   }
 
@@ -4747,12 +5231,18 @@ class ReservationForm {
 
     this.applyFarmoutSnapshotDetails(snapshot.details || {});
 
+    // Ensure the visible Account # reflects the loaded billing account value
+    this.tryResolveBillingAccountAndUpdateDisplay();
+
     if (snapshot.details?.farmOption) {
       const normalizedFarmOption = snapshot.details.farmOption.replace(/_/g, '-');
       document.querySelectorAll('input[name="farmOption"]').forEach(radio => {
         radio.checked = radio.value === normalizedFarmOption;
       });
     }
+
+    // Ensure derived times follow pickup time rules when loading
+    this.updateTimesFromPickup();
 
     if (Array.isArray(snapshot.routing?.stops)) {
       this.loadStops(snapshot.routing.stops);
@@ -4911,21 +5401,45 @@ class ReservationForm {
     }
   }
 
-  copyToDraftAndNavigate(mode) {
+  async copyToDraftAndNavigate(mode) {
     const snapshot = this.collectReservationSnapshot();
 
-    if (mode === 'roundtrip' && Array.isArray(snapshot.routing?.stops) && snapshot.routing.stops.length >= 2) {
-      const reversed = [...snapshot.routing.stops].reverse().map(s => {
-        let type = s.type;
-        if (type === 'pickup') type = 'dropoff';
-        else if (type === 'dropoff') type = 'pickup';
-        return { ...s, type };
-      });
-      snapshot.routing.stops = reversed;
+    // Always use a fresh confirmation number for the copy
+    const nextConf = await this.computeNextConfirmationNumber();
+    const currentConf = (document.getElementById('confNumber')?.value || '').trim();
+
+    // Round trip mode: ask for return date/time and invert stops
+    if (mode === 'roundtrip') {
+      if (Array.isArray(snapshot.routing?.stops) && snapshot.routing.stops.length >= 2) {
+        const reversed = [...snapshot.routing.stops].reverse().map(s => {
+          let type = s.type;
+          if (type === 'pickup') type = 'dropoff';
+          else if (type === 'dropoff') type = 'pickup';
+          return { ...s, type };
+        });
+        snapshot.routing.stops = reversed;
+      }
+
+      const returnDate = window.prompt('Enter return PU Date (YYYY-MM-DD):', snapshot.details?.puDate || '');
+      const returnTime = window.prompt('Enter return PU Time (HH:MM, 24h):', snapshot.details?.puTime || '');
+      if (returnDate) snapshot.details.puDate = returnDate;
+      if (returnTime) snapshot.details.puTime = returnTime;
     }
 
+    // Persist draft
     localStorage.setItem(RESERVATION_DRAFT_KEY, JSON.stringify(snapshot));
-    window.location.href = 'reservation-form.html';
+
+    // Build target URL carrying the new confirmation number
+    const targetUrl = `reservation-form.html?conf=${encodeURIComponent(nextConf)}${currentConf ? `&copiedFrom=${encodeURIComponent(currentConf)}` : ''}`;
+
+    // Notify user and offer to open immediately
+    const message = `Copy created with confirmation #${nextConf}.\nOpen now to edit and save?`;
+    if (window.confirm(message)) {
+      window.location.href = targetUrl;
+    } else {
+      // Show link they can use later
+      alert(`Copy saved. To edit later, open:\n${window.location.origin}/${targetUrl}`);
+    }
   }
 
   openBillingPaymentTab() {

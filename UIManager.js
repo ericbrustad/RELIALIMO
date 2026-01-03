@@ -535,17 +535,24 @@ export class UIManager {
     const availabilityBtn = document.getElementById('farmoutAvailabilityBtn');
     if (availabilityBtn) {
       availabilityBtn.addEventListener('click', () => {
-        window.open('driver-availability.html', '_blank');
+        this.showFarmoutToolShell('driver-availability.html', 'Availability Console');
       });
     }
 
     const tripStatusBtn = document.getElementById('farmoutTripStatusBtn');
     if (tripStatusBtn) {
       tripStatusBtn.addEventListener('click', () => {
-        window.open('driver-trip-status.html', '_blank');
+        this.showFarmoutToolShell('driver-trip-monitor.html', 'Trip Monitor');
       });
     }
 
+    const farmoutToolBack = document.getElementById('farmoutToolBack');
+    if (farmoutToolBack) {
+      farmoutToolBack.addEventListener('click', () => {
+        this.hideFarmoutToolShell();
+        this.switchView('farm-out_reservations_View');
+      });
+    }
     const modeToggle = document.getElementById('farmoutModeToggle');
     if (modeToggle) {
       modeToggle.querySelectorAll('button').forEach(button => {
@@ -577,6 +584,43 @@ export class UIManager {
     }
   }
 
+  showFarmoutToolShell(url, label) {
+    const shell = document.getElementById('farmoutToolShell');
+    const frame = document.getElementById('farmoutToolFrame');
+    const labelEl = document.getElementById('farmoutToolLabel');
+    const main = document.getElementById('mainContent');
+    const toolButtons = Array.from(document.querySelectorAll('.farmout-tool-btn'));
+    if (!shell || !frame || !main) return;
+
+    if (labelEl) {
+      labelEl.textContent = label || 'Farm-out Tool';
+    }
+    if (url) {
+      frame.src = url;
+    }
+
+    shell.style.display = 'block';
+    main.classList.add('hidden');
+
+    if (toolButtons.length) {
+      toolButtons.forEach(btn => {
+        const isActive = btn.dataset.toolUrl === url;
+        btn.classList.toggle('active', Boolean(isActive));
+      });
+    }
+  }
+
+  hideFarmoutToolShell() {
+    const shell = document.getElementById('farmoutToolShell');
+    const main = document.getElementById('mainContent');
+    const toolButtons = Array.from(document.querySelectorAll('.farmout-tool-btn'));
+    if (shell) shell.style.display = 'none';
+    if (main) main.classList.remove('hidden');
+    if (toolButtons.length) {
+      toolButtons.forEach(btn => btn.classList.remove('active'));
+    }
+  }
+
   installInteractionGuards() {
     if (this.interactionGuardInstalled) {
       return;
@@ -596,6 +640,10 @@ export class UIManager {
 
       const tabButton = event.target.closest('.tab-btn');
       if (tabButton) {
+        // Allow farmout tool buttons to bubble to their own handlers
+        if (tabButton.classList.contains('farmout-tool-btn')) {
+          return;
+        }
         const viewId = this.resolveViewIdFromTab(tabButton);
         if (viewId) {
           event.preventDefault();

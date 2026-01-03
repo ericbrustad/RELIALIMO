@@ -80,6 +80,7 @@
                     </div>
                     <div id="accountSuggestions" class="suggestions-dropdown"></div>
                   </div>
+                  <button type="button" id="viewAccountBtn" class="btn-icon" title="Open account details" style="padding: 8px 10px; font-size: 16px; margin-top: 24px;">👤</button>
                   <button type="button" id="addAccountBtn" class="btn-icon" title="Add New Account" style="padding: 8px 10px; font-size: 16px; margin-top: 24px;">+</button>
                   <button type="button" id="clearBillingAccountBtn" class="btn-icon" title="Clear billing account" style="padding: 8px 10px; font-size: 16px; margin-top: 24px;">×</button>
                 </div>
@@ -367,6 +368,17 @@
                   <div class="form-group">
                     <label>Gar-In Time</label>
                     <input type="time" id="garInTime" class="form-control" />
+                  </div>
+                </div>
+
+                <div class="time-metrics" style="display:flex; gap:16px; margin-top:6px; font-size:13px; color:#37474f;">
+                  <div style="display:flex; flex-direction:column;">
+                    <span style="font-weight:600;">By Car Distance</span>
+                    <span id="routeDistanceInline">-</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column;">
+                    <span style="font-weight:600;">Duration</span>
+                    <span id="routeDurationInline">-</span>
                   </div>
                 </div>
 
@@ -664,7 +676,7 @@
                   <div class="subsection-title" style="margin-top: 20px;">Route Information</div>
                   <div class="route-details">
                     <div class="route-detail-row">
-                      <span class="route-label">Distance:</span>
+                      <span class="route-label">Distance (miles by car):</span>
                       <span class="route-value" id="routeDistance">-</span>
                     </div>
                     <div class="route-detail-row">
@@ -725,6 +737,12 @@
               <button class="action-btn btn-roundtrip">🔄 Round Trip</button>
               <button class="action-btn btn-email">📧 Email/Fax</button>
               <button class="action-btn btn-print">🖨️ Print</button>
+              <div class="more-menu">
+                <button class="action-btn btn-more" id="moreActionsBtn">⋯ More</button>
+                <div class="more-menu-dropdown" id="moreActionsDropdown">
+                  <button class="dropdown-item" id="deleteReservationBtn">🗑️ Delete Reservation</button>
+                </div>
+              </div>
             </div>
 
             <section class="panel">

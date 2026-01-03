@@ -11,6 +11,10 @@ body {
   overflow-x: hidden;
 }
 
+#loggedInEmail {
+  display: none !important;
+}
+
 /* Rate Management Layout */
 .rate-management-layout {
   display: grid;
@@ -4105,6 +4109,12 @@ body {
 .vehicle-type-item.active {
   background: #2196F3;
   color: white;
+}
+
+/* Fleet list scroll handling */
+#fleetList {
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
 }
 
 .vehicle-editor-container {

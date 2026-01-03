@@ -566,36 +566,51 @@ textarea {
   flex-wrap: wrap;
 }
 
-.farmout-tabs {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.farmout-tab {
-  padding: 8px 14px;
-  border-radius: 16px;
-  border: 1px solid #3a3a3a;
-  background: #1a1a1a;
-  color: #d5d5d5;
-  font-size: 12px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.farmout-tab:hover {
-  background: #2a2a2a;
-  border-color: #4a4a4a;
-  color: #ffffff;
-}
-
 .farmout-toolbar {
   display: flex;
   gap: 12px;
   align-items: flex-end;
   flex-wrap: wrap;
+}
+
+.farmout-tool-buttons {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  flex-wrap: wrap;
+}
+
+.farmout-tool-shell {
+  background: #0f0f0f;
+  border-bottom: 1px solid #2e2e2e;
+  padding: 10px 14px 0;
+  display: none;
+}
+
+.farmout-tool-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.farmout-tool-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+#farmoutToolFrame {
+  width: 100%;
+  height: calc(100vh - 140px);
+  border: 1px solid #2e2e2e;
+  border-radius: 6px;
+  background: #0f0f0f;
+}
+
+.main-content.hidden {
+  display: none !important;
 }
 
 .toolbar-group {

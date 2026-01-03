@@ -1,34 +1,41 @@
-<script type="module">
-import { getSupabaseClient, setupAPI } from './api-service.js';
-async function fetchUserPermissions() {
-  await setupAPI();
-  const client = getSupabaseClient();
-  const { data: { user } } = await client.auth.getUser();
-  if (!user) return null;
-  const { data, error } = await client
-    .from('system_users')
-    .select('role, allowed_sections')
-    .eq('email', user.email)
-    .single();
-  if (error) return null;
-  return data;
-}
-async function enforceSectionAccess() {
-  const perms = await fetchUserPermissions();
-  if (!perms) return;
-  // Hide master delete buttons if not admin
-  if (perms.role !== 'admin') {
-    document.querySelectorAll('.btn-danger').forEach(btn => btn.style.display = 'none');
-  }
-}
-enforceSectionAccess();
-</script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Utilities</title>
   <script src="env.js"></script>
+  <script type="module">
+  import { getSupabaseClient, setupAPI } from './api-service.js';
+  async function fetchUserPermissions() {
+    await setupAPI();
+    const client = getSupabaseClient();
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return null;
+    try {
+      const { data, error, status } = await client
+        .from('system_users')
+        .select('role, allowed_sections')
+        .eq('email', user.email)
+        .single();
+      if (error) {
+        if (status === 404) return null;
+        return null;
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+  async function enforceSectionAccess() {
+    const perms = await fetchUserPermissions();
+    if (!perms) return;
+    // Hide master delete buttons if not admin
+    if (perms.role !== 'admin') {
+      document.querySelectorAll('.btn-danger').forEach(btn => btn.style.display = 'none');
+    }
+  }
+  enforceSectionAccess();
+  </script>
   <link rel="stylesheet" href="appearance.css">
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; }
@@ -125,10 +132,24 @@ enforceSectionAccess();
     <li><button id="deleteAllAffiliatesBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Affiliates</button></li>
     <li><button id="deleteAllReservationsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Reservations (Supabase)</button></li>
     <li><button id="deleteLocalReservationsBtn" class="btn" style="background:#ef6c00;">Delete Local Reservations</button></li>
+    <li><button id="deleteLocalAccountsBtn" class="btn" style="background:#ef6c00;">Delete Local Accounts</button></li>
+    <li><button id="deleteLocalVehiclesBtn" class="btn" style="background:#ef6c00;">Delete Local Vehicles</button></li>
     <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Accounts (Supabase)</button></li>
     <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Drivers (Supabase)</button></li>
     <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Rate Data (Supabase)</button></li>
+    <li><button id="deleteAllVehiclesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Vehicles (Supabase)</button></li>
+    <li style="margin-top:18px;"><strong>View Data Lists</strong></li>
+    <li><button id="viewSupabaseReservationsBtn" class="btn" style="background:#1565c0;">View Supabase Reservations</button></li>
+    <li><button id="viewLocalReservationsBtn" class="btn" style="background:#1976d2;">View Local Reservations</button></li>
+    <li><button id="viewSupabaseAccountsBtn" class="btn" style="background:#2e7d32;">View Supabase Accounts</button></li>
+    <li><button id="viewLocalAccountsBtn" class="btn" style="background:#43a047;">View Local Accounts</button></li>
+    <li><button id="viewSupabaseDriversBtn" class="btn" style="background:#6a1b9a;">View Supabase Drivers</button></li>
+    <li><button id="viewLocalDriversBtn" class="btn" style="background:#8e24aa;">View Local Drivers</button></li>
+    <li><button id="viewSupabaseVehiclesBtn" class="btn" style="background:#ff7043;">View Supabase Vehicles</button></li>
+    <li><button id="viewLocalVehiclesBtn" class="btn" style="background:#ff8a65;">View Local Vehicles</button></li>
   </ul>
+
+  <div id="dataListOutput" style="margin-top:16px; padding:12px; border:1px solid #ccc; border-radius:6px; background:#fafafa; font-family:monospace; white-space:pre; max-height:420px; overflow:auto;"></div>
 
   <div style="margin-top:24px; padding:16px; border:1px solid #e0e0e0; border-radius:6px;">
     <h3 style="margin-top:0;">Driver Tools</h3>
@@ -179,8 +200,12 @@ enforceSectionAccess();
 <script type="module">
 console.log('=== UTILITIES MODULE LOADING ===');
 
-import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient } from './api-service.js';
+import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient, deleteAllReservationsSupabase, deleteAllAccountsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase, deleteAllVehiclesSupabase, resetConfirmationCounterToStart } from './api-service.js';
 import * as driverFieldConfig from './driver-field-config.js';
+
+// Forced vehicle context (used by vehicle-related buttons); pull from env when present
+const VEHICLE_FORCE_ORG_ID = window.ENV?.FORCE_VEHICLE_ORG_ID || '54eb6ce7-ba97-4198-8566-6ac075828160';
+const VEHICLE_FORCE_USER_ID = window.ENV?.FORCE_VEHICLE_USER_ID || '99d34cd5-a593-4362-9846-db7167276592';
 // Show login/profile info in top right
 async function showProfileBox() {
   await setupAPI();
@@ -225,13 +250,116 @@ async function ensureSupabaseReady() {
     const { data: { user } } = await client.auth.getUser();
     if (!user) throw new Error('User not authenticated');
     document.getElementById('authWarning').style.display = 'none';
-    document.querySelectorAll('button.btn').forEach(btn => btn.disabled = false);
+    // Keep auth/login controls clickable; re-enable the rest
+    document.querySelectorAll('button.btn').forEach(btn => {
+      if (btn.id === 'logoutBtn' || btn.id === 'loginBtn') return;
+      btn.disabled = false;
+    });
     return true;
   } catch (e) {
     document.getElementById('authWarning').style.display = 'block';
-    document.querySelectorAll('button.btn').forEach(btn => btn.disabled = true);
+    document.querySelectorAll('button.btn').forEach(btn => {
+      if (btn.id === 'logoutBtn' || btn.id === 'loginBtn') return;
+      btn.disabled = true;
+    });
     return false;
   }
+}
+
+function renderDataList(title, data) {
+  const output = document.getElementById('dataListOutput');
+  if (!output) return;
+  const rows = Array.isArray(data) ? data : [];
+  const summary = `${title} (count: ${rows.length})`;
+  output.textContent = `${summary}\n\n${rows.length ? JSON.stringify(rows, null, 2) : 'No records found.'}`;
+}
+
+function readLocalKeys(keys) {
+  const collected = [];
+  keys.forEach((k) => {
+    try {
+      const raw = localStorage.getItem(k);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) collected.push(...parsed);
+    } catch (e) {
+      console.warn('⚠️ Failed reading local key', k, e);
+    }
+  });
+  return collected;
+}
+
+async function fetchSupabaseList(table, columns = '*', orderField = 'updated_at') {
+  const ready = await ensureSupabaseReady();
+  if (!ready) throw new Error('Not authenticated');
+  const client = getSupabaseClient();
+  const forcedOrg = (table === 'vehicles' || table === 'vehicle_types') ? VEHICLE_FORCE_ORG_ID : null;
+  const org = forcedOrg || await getCurrentOrgId();
+  let query = client.from(table).select(columns).limit(500);
+  if (org) query = query.eq('organization_id', org);
+  if (orderField) query = query.order(orderField, { ascending: false }).order('id', { ascending: false });
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+function attachDataViewHandlers() {
+  const bind = (id, handler) => {
+    const btn = document.getElementById(id);
+    if (btn && !btn.dataset.bound) {
+      btn.addEventListener('click', handler);
+      btn.dataset.bound = '1';
+      btn.disabled = false;
+    }
+  };
+
+  bind('viewSupabaseReservationsBtn', async () => {
+    try {
+      const rows = await fetchSupabaseList('reservations');
+      renderDataList('Supabase Reservations', rows);
+    } catch (e) { alert(e.message || e); }
+  });
+
+  bind('viewLocalReservationsBtn', () => {
+    const rows = readLocalKeys(['local_reservations', 'dev_reservations']);
+    renderDataList('Local Reservations', rows);
+  });
+
+  bind('viewSupabaseAccountsBtn', async () => {
+    try {
+      const rows = await fetchSupabaseList('accounts');
+      renderDataList('Supabase Accounts', rows);
+    } catch (e) { alert(e.message || e); }
+  });
+
+  bind('viewLocalAccountsBtn', () => {
+    const rows = readLocalKeys(['local_accounts']);
+    renderDataList('Local Accounts', rows);
+  });
+
+  bind('viewSupabaseDriversBtn', async () => {
+    try {
+      const rows = await fetchSupabaseList('drivers');
+      renderDataList('Supabase Drivers', rows);
+    } catch (e) { alert(e.message || e); }
+  });
+
+  bind('viewLocalDriversBtn', () => {
+    const rows = readLocalKeys(['dev_drivers', 'local_drivers']);
+    renderDataList('Local Drivers', rows);
+  });
+
+  bind('viewSupabaseVehiclesBtn', async () => {
+    try {
+      const rows = await fetchSupabaseList('vehicles');
+      renderDataList('Supabase Vehicles', rows);
+    } catch (e) { alert(e.message || e); }
+  });
+
+  bind('viewLocalVehiclesBtn', () => {
+    const rows = readLocalKeys(['local_vehicles', 'dev_vehicles']);
+    renderDataList('Local Vehicles', rows);
+  });
 }
 
 // Expose helpers to non-module scripts
@@ -241,8 +369,13 @@ window.getSupabaseClient = getSupabaseClient;
 window.setupAPI = setupAPI;
 window.ensureDriverTablesAndColumns = ensureDriverTablesAndColumns;
 window.driverFieldConfig = driverFieldConfig;
+window.deleteVehicleTypeById = deleteVehicleTypeById;
+window.hydrateVehicleOrgId = hydrateVehicleOrgId;
+window.VEHICLE_FORCE_ORG_ID = VEHICLE_FORCE_ORG_ID;
+window.VEHICLE_FORCE_USER_ID = VEHICLE_FORCE_USER_ID;
 
 ensureSupabaseReady();
+attachDataViewHandlers();
 
 
 async function getCurrentOrgId() {
@@ -281,7 +414,7 @@ async function expect204(res, step) {
 async function hydrateVehicleOrgId() {
   const orgInput = document.getElementById('vehicleOrgIdInput');
   if (!orgInput || orgInput.value.trim()) return;
-  const org = await getCurrentOrgId();
+  const org = VEHICLE_FORCE_ORG_ID || await getCurrentOrgId();
   if (org) orgInput.value = org;
 }
 
@@ -395,23 +528,37 @@ async function deleteVehicleTypeById() {
 }
 
 async function deleteAllReservationsForOrg() {
-  const client = getSupabaseClient();
-  const orgId = await getCurrentOrgId();
+  const orgId = await getCurrentOrgId() || window.ENV?.SUPABASE_UUID;
+  if (!orgId) throw new Error('Unable to determine your organization.');
 
-  if (!orgId) {
-    throw new Error('Unable to determine your organization.');
+  // Use service key (PAT) to bypass RLS “permission denied” on auth.users
+  const supabaseUrl = window.ENV?.SUPABASE_URL;
+  const serviceKey = window.ENV?.SUPABASE_SERVICE_ROLE_KEY || window.ENV?.SUPABASE_PAT;
+  if (!supabaseUrl || !serviceKey) throw new Error('Supabase service key not configured.');
+
+  const headers = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    Prefer: 'count=exact'
+  };
+
+  const res = await fetch(`${supabaseUrl}/rest/v1/reservations?organization_id=eq.${orgId}`, {
+    method: 'DELETE',
+    headers
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text || `Delete failed (${res.status})`);
   }
 
-  const { error, count } = await client
-    .from('reservations')
-    .delete({ count: 'exact' })
-    .eq('organization_id', orgId);
-
-  if (error) {
-    throw error;
+  const contentRange = res.headers.get('content-range');
+  if (contentRange && contentRange.includes('/')) {
+    const [, total] = contentRange.split('/');
+    const num = parseInt(total, 10);
+    if (!Number.isNaN(num)) return num;
   }
-
-  return typeof count === 'number' ? count : null;
+  return null;
 }
 
 const deleteAllReservationsBtn = document.getElementById('deleteAllReservationsSupabaseBtn');
@@ -442,6 +589,7 @@ if (deleteAllReservationsBtn) {
       const message = deletedCount === null
         ? 'All reservations deleted.'
         : `Deleted ${deletedCount} reservation${deletedCount === 1 ? '' : 's'}.`;
+      resetConfirmationCounterToStart();
       alert(message);
     } catch (err) {
       console.error('Failed to delete reservations:', err);
@@ -465,7 +613,42 @@ if (deleteLocalReservationsBtn) {
     const cached = JSON.parse(localStorage.getItem('local_reservations') || '[]');
     const removedCount = Array.isArray(cached) ? cached.length : 0;
     localStorage.removeItem('local_reservations');
+    resetConfirmationCounterToStart();
     alert(`Cleared ${removedCount} local reservation${removedCount === 1 ? '' : 's'}.`);
+  });
+}
+
+// Clear local cached accounts (no auth required)
+const deleteLocalAccountsBtn = document.getElementById('deleteLocalAccountsBtn');
+if (deleteLocalAccountsBtn) {
+  deleteLocalAccountsBtn.disabled = false;
+
+  deleteLocalAccountsBtn.addEventListener('click', () => {
+    const confirmDelete = confirm('Delete all locally stored accounts (offline cache)?');
+    if (!confirmDelete) return;
+
+    const cached = JSON.parse(localStorage.getItem('local_accounts') || '[]');
+    const removedCount = Array.isArray(cached) ? cached.length : 0;
+    localStorage.removeItem('local_accounts');
+    localStorage.removeItem('accounts'); // legacy key cleanup
+    alert(`Cleared ${removedCount} local account${removedCount === 1 ? '' : 's'}.`);
+  });
+}
+
+// Clear local cached vehicles (no auth required)
+const deleteLocalVehiclesBtn = document.getElementById('deleteLocalVehiclesBtn');
+if (deleteLocalVehiclesBtn) {
+  deleteLocalVehiclesBtn.disabled = false;
+
+  deleteLocalVehiclesBtn.addEventListener('click', () => {
+    const confirmDelete = confirm('Delete all locally stored vehicles (offline cache)?');
+    if (!confirmDelete) return;
+
+    const cached = JSON.parse(localStorage.getItem('local_vehicles') || '[]');
+    const removedCount = Array.isArray(cached) ? cached.length : 0;
+    localStorage.removeItem('local_vehicles');
+    localStorage.removeItem('dev_vehicles');
+    alert(`Cleared ${removedCount} local vehicle${removedCount === 1 ? '' : 's'}.`);
   });
 }
 
@@ -491,12 +674,11 @@ function setupDeleteButton(btnId, fn, label) {
   }
 }
 
-// Note: These delete functions don't exist yet in api-service.js
-// Uncomment when available:
-// setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
-// setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
-// setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
-// setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
+setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
+setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
+setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+setupDeleteButton('deleteAllVehiclesSupabaseBtn', deleteAllVehiclesSupabase, 'Vehicles');
 
 // Remove Duplicate Affiliates button
 const removeDupBtn = document.getElementById('removeDuplicateAffiliatesBtn');
@@ -1706,7 +1888,12 @@ if (addMemBtn) addMemBtn.addEventListener('click', addCurrentUserMembership);
 // Vehicle Type delete wiring
 const deleteVehicleTypeBtn = document.getElementById('deleteVehicleTypeBtn');
 if (deleteVehicleTypeBtn) {
-  deleteVehicleTypeBtn.addEventListener('click', deleteVehicleTypeById);
+  const handler = window.deleteVehicleTypeById || (typeof deleteVehicleTypeById !== 'undefined' ? deleteVehicleTypeById : null);
+  if (handler) {
+    deleteVehicleTypeBtn.addEventListener('click', handler);
+  } else {
+    console.warn('⚠️ deleteVehicleTypeById handler not available');
+  }
   hydrateVehicleOrgId();
 }
 </script>

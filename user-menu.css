@@ -8,6 +8,21 @@
   align-items: center;
 }
 
+/* Hide the main header pill in vertical (sidebar) layout to avoid bottom-left placement */
+html[data-layout="vertical"] #userMenuContainer {
+  display: none !important;
+}
+
+/* When mounted inside the Office window tabs bar, push to the right */
+.window-tabs-bar #userMenuContainer {
+  margin-left: auto;
+}
+
+.window-tabs-bar .user-menu-toggle {
+  background: #ffffff;
+  border-color: #c6c6c6;
+}
+
 /* User Menu Wrapper */
 .user-menu-wrapper {
   position: relative;

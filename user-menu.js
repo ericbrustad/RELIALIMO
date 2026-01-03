@@ -26,12 +26,15 @@ function ensureContainer() {
   let container = document.getElementById('userMenuContainer');
   if (container) return container;
 
-  const headerContent = document.querySelector('.header-content');
-  if (!headerContent) return null;
+  // Only render in Office tabs bar so it stays top-right with the tab row (avoid sidebar/bottom placement)
+  let target = document.querySelector('.window-tabs-bar');
+  if (!target) return null;
 
   container = document.createElement('div');
   container.id = 'userMenuContainer';
-  headerContent.appendChild(container);
+  // Nudge to the right edge when placed in the tabs bar
+  container.style.marginLeft = 'auto';
+  target.appendChild(container);
   return container;
 }
 

@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-service.js';
+import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 
 class MyOffice {
@@ -2431,25 +2431,69 @@ class MyOffice {
 
     this.loadVehicleTypeDrafts();
     let records = Object.values(this.vehicleTypeSeeds);
+    let derivedFromVehicles = [];
+    let remoteRecords = [];
 
     if (this.apiReady) {
-      const remote = await fetchVehicleTypes();
+      const remote = await fetchVehicleTypes({ includeInactive: true });
+
       if (Array.isArray(remote) && remote.length) {
-        records = remote;
+        remoteRecords = remote;
         remote.forEach((v) => { this.vehicleTypeSeeds[v.id] = v; });
         const localExtras = Object.values(this.vehicleTypeSeeds).filter((v) => v.id && !remote.find((r) => r.id === v.id));
         if (localExtras.length) {
-          records = [...records, ...localExtras];
+          remoteRecords = [...remoteRecords, ...localExtras];
+        }
+      }
+
+      // Also derive types from vehicles to prefer the longer list when Supabase types are sparse
+      const vehicles = await fetchActiveVehicles({ includeInactive: true });
+      if (Array.isArray(vehicles) && vehicles.length) {
+        const seen = new Set();
+        derivedFromVehicles = [];
+        vehicles.forEach((veh) => {
+          const name = (veh.veh_type || veh.vehicle_type || veh.veh_title || veh.unit_number || '').trim();
+          if (!name || seen.has(name)) return;
+          seen.add(name);
+          const id = veh.vehicle_type_id || veh.id || name;
+          derivedFromVehicles.push({ id, name, status: veh.status || 'active', source: 'vehicles' });
+        });
+        if (derivedFromVehicles.length) {
+          derivedFromVehicles.forEach((v) => { this.vehicleTypeSeeds[v.id] = v; });
         }
       }
     }
+
+    // Pick the longest deterministic list: prefer derived if it is larger than remote; otherwise remote; fallback to seeds
+    const longestList = (derivedFromVehicles.length > remoteRecords.length)
+      ? derivedFromVehicles
+      : (remoteRecords.length ? remoteRecords : records);
+
+    // Merge duplicates while favoring derived entries (they often carry the richer set)
+    const unique = new Map();
+    const pushList = (arr, preferVehicles = false) => {
+      (arr || []).forEach((v) => {
+        const id = v.id || v.code || v.name;
+        if (!id) return;
+        if (!unique.has(id) || preferVehicles) {
+          unique.set(id, v);
+        }
+      });
+    };
+
+    pushList(longestList, longestList === derivedFromVehicles);
+    pushList(remoteRecords, false);
+    pushList(Object.values(this.vehicleTypeSeeds || {}), false);
+
+    records = Array.from(unique.values());
+    records.sort((a, b) => this.normalizeVehicleTypeName(a.name || '').localeCompare(this.normalizeVehicleTypeName(b.name || ''), undefined, { sensitivity: 'base' }));
 
     list.innerHTML = '';
     records.forEach((v) => {
       const div = document.createElement('div');
       div.className = 'vehicle-type-item';
       div.dataset.vehicleId = v.id || v.code || crypto.randomUUID();
-      div.textContent = v.name || 'Untitled Vehicle Type';
+      div.textContent = this.normalizeVehicleTypeName(v.name || 'Untitled Vehicle Type');
       list.appendChild(div);
     });
 
@@ -2642,7 +2686,7 @@ class MyOffice {
       const id = t.id || t.code || t.name;
       if (!id) return;
       if (!uniqueTypes.has(id)) {
-        uniqueTypes.set(id, { id, name: t.name || t.display_name || id });
+        uniqueTypes.set(id, { id, name: this.normalizeVehicleTypeName(t.name || t.display_name || id) });
       }
     });
     select.innerHTML = '';
@@ -2800,6 +2844,11 @@ class MyOffice {
       </div>
     `;
     return item;
+  }
+
+  normalizeVehicleTypeName(name) {
+    if (!name) return '';
+    return name.replace(/\s*\(.*?\)\s*$/, '').trim();
   }
 
   getFleetStatusColor(status) {

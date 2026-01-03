@@ -880,13 +880,19 @@ class LimoReservationSystem {
 
   setupEventListeners() {
     // View switching
-    document.getElementById('userViewBtn').addEventListener('click', () => {
-      this.uiManager.switchView('userView');
-    });
+    const userViewBtn = document.getElementById('userViewBtn');
+    if (userViewBtn) {
+      userViewBtn.addEventListener('click', () => {
+        this.uiManager.switchView('userView');
+      });
+    }
 
-    document.getElementById('driverViewBtn').addEventListener('click', () => {
-      this.uiManager.switchView('driverView');
-    });
+    const driverViewBtn = document.getElementById('driverViewBtn');
+    if (driverViewBtn) {
+      driverViewBtn.addEventListener('click', () => {
+        this.uiManager.switchView('driverView');
+      });
+    }
 
     // Reservations button - always navigate to reservations list
     const reservationsBtn = document.getElementById('reservationsBtn');
@@ -902,16 +908,32 @@ class LimoReservationSystem {
       });
     }
 
-    document.getElementById('farmOutBtn').addEventListener('click', () => {
-      // Switch to the farm-out reservations view (dark table)
-      this.uiManager.switchView('farm-out_reservations_View');
+    const farmOutBtn = document.getElementById('farmOutBtn');
+    if (farmOutBtn) {
+      farmOutBtn.addEventListener('click', () => {
+        // Switch to the farm-out reservations view (dark table)
+        this.uiManager.switchView('farm-out_reservations_View');
+        this.uiManager.hideFarmoutToolShell();
+      });
+    }
+
+    // Farm-out tool buttons in header
+    document.querySelectorAll('.farmout-tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const url = btn.dataset.toolUrl;
+        const label = (btn.textContent || '').trim() || 'Farm-out Tool';
+        this.uiManager.showFarmoutToolShell(url, label);
+      });
     });
 
     // Form submission
-    document.getElementById('reservationForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.handleNewReservation();
-    });
+    const reservationForm = document.getElementById('reservationForm');
+    if (reservationForm) {
+      reservationForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleNewReservation();
+      });
+    }
 
     // Filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -928,13 +950,19 @@ class LimoReservationSystem {
     });
 
     // Map view selectors
-    document.getElementById('userMapView').addEventListener('change', (e) => {
-      this.mapManager.changeMapLayer(e.target.value, 'user');
-    });
+    const userMapView = document.getElementById('userMapView');
+    if (userMapView) {
+      userMapView.addEventListener('change', (e) => {
+        this.mapManager.changeMapLayer(e.target.value, 'user');
+      });
+    }
 
-    document.getElementById('driverMapView').addEventListener('change', (e) => {
-      this.mapManager.changeMapLayer(e.target.value, 'driver');
-    });
+    const driverMapView = document.getElementById('driverMapView');
+    if (driverMapView) {
+      driverMapView.addEventListener('change', (e) => {
+        this.mapManager.changeMapLayer(e.target.value, 'driver');
+      });
+    }
 
     window.addEventListener('reservationFarmoutUpdated', (event) => {
       if (!event || !event.detail) return;

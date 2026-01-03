@@ -327,6 +327,12 @@ class CompanySettingsManager {
       reservations: {
         label: 'Reservation Settings',
         settings: {
+          enableReservationViewMode: {
+            label: 'Enable View Mode for current reservations',
+            type: 'checkbox',
+            default: true,
+            description: 'When off, current reservations open editable by default for admins/dispatch.'
+          },
           requirePaymentUpfront: { label: 'Require Payment Upfront', type: 'checkbox', default: false },
           requireAdvanceReservation: { label: 'Require Advance Reservation (hours)', type: 'number', default: 0, min: 0 },
           cancellationPolicyHours: { label: 'Cancellation Policy (hours)', type: 'number', default: 2, min: 0 },

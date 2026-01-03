@@ -110,6 +110,12 @@
 import { setupAPI, getSupabaseClient } from './api-service.js';
 import { signInWithEmail } from './supabase-client.js';
 
+// Forced vehicle context
+const FORCED_ORG_ID = '54eb6ce7-ba97-4198-8566-6ac075828160';
+const FORCED_USER_ID = '99d34cd5-a593-4362-9846-db7167276592';
+window.FORCED_ORG_ID = FORCED_ORG_ID;
+window.FORCED_USER_ID = FORCED_USER_ID;
+
 let supabaseClient = null;
 let importData = null;
 
@@ -134,6 +140,7 @@ async function ensureValidSession() {
 }
 
 async function getOrgContext() {
+  if (FORCED_ORG_ID) return FORCED_ORG_ID;
   const { data: { user } } = await supabaseClient.auth.getUser();
   if (!user) throw new Error('User not authenticated');
   const { data, error } = await supabaseClient
@@ -178,6 +185,8 @@ async function exportVehicles() {
   try {
     await ensureValidSession();
     const orgId = await getOrgContext();
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    const userId = FORCED_USER_ID || user?.id || null;
     
     const { data, error } = await supabaseClient
       .from('vehicles')
@@ -341,6 +350,8 @@ async function importVehicles() {
   try {
     await ensureValidSession();
     const orgId = await getOrgContext();
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    const userId = FORCED_USER_ID || user?.id || null;
 
     // Helper to convert empty strings to null for numeric fields
     const toNumeric = (val) => {
@@ -372,6 +383,8 @@ async function importVehicles() {
 
     const vehicles = importData.map(row => ({
       organization_id: orgId,
+      created_by: userId,
+      updated_by: userId,
       veh_type: row.VehType || row.veh_type || null,
       veh_title: row.VehTitle || row.veh_title || null,
       base_rate: toNumeric(row.BaseRate || row.base_rate),
@@ -441,11 +454,13 @@ async function loadCurrentVehicles() {
     await ensureValidSession();
     const table = document.getElementById('currentVehiclesTable');
     
-    let orgId = null;
-    try {
-      orgId = await getOrgContext();
-    } catch (orgErr) {
-      console.warn('Could not get org context:', orgErr);
+    let orgId = FORCED_ORG_ID || null;
+    if (!orgId) {
+      try {
+        orgId = await getOrgContext();
+      } catch (orgErr) {
+        console.warn('Could not get org context:', orgErr);
+      }
     }
 
     let query = supabaseClient.from('vehicles').select('*');
