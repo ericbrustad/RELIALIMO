@@ -31,11 +31,7 @@
     <script>
       // Apply saved layout mode early to avoid flash
       (function() {
-        // Migrate old stored layout key so stale "horizontal" values don't override desired vertical default
-        if (localStorage.getItem('headerLayout')) {
-          localStorage.removeItem('headerLayout');
-        }
-        const savedLayout = localStorage.getItem('headerLayoutV2') || 'vertical';
+        const savedLayout = localStorage.getItem('headerLayout') || 'vertical';
         document.documentElement.setAttribute('data-layout', savedLayout);
       })();
     </script>
@@ -51,7 +47,7 @@
     <link rel="stylesheet" href="user-menu.css" />
     <style>
       :root {
-        --sidebar-width: 175px;
+        --sidebar-width: 220px;
       }
 
       /* Main section visibility control */
@@ -110,8 +106,8 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 6px;
-        padding: 8px;
+        gap: 12px;
+        padding: 16px;
         height: 100%;
         box-sizing: border-box;
       }
@@ -119,7 +115,7 @@
       html[data-layout="vertical"] #app > header.header .main-nav {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 8px;
         flex: 1;
       }
 
@@ -128,14 +124,14 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 6px 8px;
+        padding: 10px 12px;
         border: 1px solid rgba(255,255,255,0.1);
         background: rgba(255,255,255,0.05);
         color: white;
         cursor: pointer;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
-        border-radius: 5px;
+        border-radius: 6px;
         transition: background 0.15s ease, transform 0.05s ease;
       }
 
@@ -150,18 +146,13 @@
       }
 
       html[data-layout="vertical"] #app > header.header .logo {
-        font-size: 12px;
+        font-size: 16px;
         font-weight: 800;
         color: white;
         display: flex;
         align-items: center;
         gap: 6px;
         margin: 0;
-      }
-
-      /* Shrink icon sizes in vertical menu */
-      html[data-layout="vertical"] #app > header.header .nav-btn span:last-child {
-        font-size: 18px !important;
       }
 
       html[data-layout="vertical"] .app-main-section {
@@ -203,10 +194,7 @@
         flex-direction: row;
         gap: 6px;
         flex: 1;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
-        white-space: nowrap;
+        flex-wrap: wrap;
       }
 
       html[data-layout="horizontal"] #app > header.header .nav-btn {
@@ -244,90 +232,49 @@
         height: calc(100vh - 120px) !important;
       }
 
-      /* FINAL GUARD: force sidebar width regardless of late styles */
-      html[data-layout="vertical"] body {
-        padding-left: var(--sidebar-width) !important;
-      }
-      html[data-layout="vertical"] #app > header.header {
-        width: var(--sidebar-width) !important;
-        min-width: var(--sidebar-width) !important;
-        max-width: var(--sidebar-width) !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        bottom: 0 !important;
-        box-sizing: border-box !important;
-        overflow-x: hidden !important;
-        overflow-y: auto !important;
-      }
-      html[data-layout="horizontal"] body {
-        padding-left: 0 !important;
-      }
-      html[data-layout="horizontal"] #app > header.header {
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: none !important;
-        position: relative !important;
-        box-sizing: border-box !important;
-      }
-
-      /* Prevent nav buttons from forcing sidebar wider */
-      #app > header.header .header-content { width: 100%; box-sizing: border-box; }
-      #app > header.header .main-nav { width: 100%; box-sizing: border-box; }
-      #app > header.header .nav-btn {
-        max-width: 100%;
-        box-sizing: border-box;
-        word-break: break-word;
-        white-space: normal;
-      }
-      #app > header.header .nav-btn span { display: inline-block; max-width: 100%; }
-
-      /* Position user menu top-right in horizontal; keep visible in vertical */
-      #userMenuContainer {
-        position: absolute;
-        top: 8px;
-        right: 8px;
+      /* Layout switcher */
+      .layout-toggle {
+        position: fixed;
+        top: 12px;
+        right: 12px;
         display: flex;
-        justify-content: flex-end;
-        width: auto;
-        z-index: 1200;
+        gap: 6px;
+        flex-wrap: wrap;
+        width: 160px;
+        z-index: 2001;
       }
-      html[data-layout="vertical"] #userMenuContainer {
-        position: static;
-        align-self: flex-end;
-        margin-left: auto;
-        padding: 4px 0;
+
+      .layout-toggle button {
+        padding: 6px 8px;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        min-width: 0;
+        width: calc(50% - 3px);
       }
-      html[data-layout="vertical"] #app > header.header .header-content {
-        padding-top: 16px;
+
+      .layout-toggle button.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
       }
     </style>
     <script>
       function setLayout(mode) {
         const normalized = mode === 'horizontal' ? 'horizontal' : 'vertical';
-        localStorage.setItem('headerLayoutV2', normalized);
+        localStorage.setItem('headerLayout', normalized);
         document.documentElement.setAttribute('data-layout', normalized);
         document.querySelectorAll('.layout-toggle button').forEach(btn => {
           const isVerticalButton = btn.id === 'layoutVertical';
           const isActive = isVerticalButton ? normalized === 'vertical' : normalized === 'horizontal';
           btn.classList.toggle('active', isActive);
         });
-        stabilizeSidebarLayout();
-      }
-
-      function enforceSavedLayout() {
-        const savedLayout = localStorage.getItem('headerLayoutV2') || 'vertical';
-        document.documentElement.setAttribute('data-layout', savedLayout);
-        document.querySelectorAll('.layout-toggle button').forEach(btn => {
-          const isVerticalButton = btn.id === 'layoutVertical';
-          const isActive = isVerticalButton ? savedLayout === 'vertical' : savedLayout === 'horizontal';
-          btn.classList.toggle('active', isActive);
-        });
-        stabilizeSidebarLayout();
       }
 
       function initLayoutToggle() {
-        const savedLayout = localStorage.getItem('headerLayoutV2') || 'vertical';
+        const savedLayout = localStorage.getItem('headerLayout') || 'vertical';
         setLayout(savedLayout);
         const verticalBtn = document.getElementById('layoutVertical');
         const horizontalBtn = document.getElementById('layoutHorizontal');
@@ -337,51 +284,14 @@
         }
       }
 
-      function stabilizeSidebarLayout() {
-        lockSidebarLayout();
-        // Re-apply shortly after potential reflows or late styles load
-        setTimeout(lockSidebarLayout, 50);
-        setTimeout(lockSidebarLayout, 200);
-        setTimeout(lockSidebarLayout, 600);
-      }
-
-      function lockSidebarLayout() {
-        const layout = document.documentElement.getAttribute('data-layout') || 'vertical';
-        const headerEl = document.querySelector('#app > header.header');
-        if (layout === 'vertical') {
-          if (headerEl) {
-            headerEl.style.setProperty('position', 'fixed', 'important');
-            headerEl.style.setProperty('top', '0', 'important');
-            headerEl.style.setProperty('left', '0', 'important');
-            headerEl.style.setProperty('bottom', '0', 'important');
-            headerEl.style.setProperty('width', 'var(--sidebar-width)', 'important');
-            headerEl.style.setProperty('min-width', 'var(--sidebar-width)', 'important');
-            headerEl.style.setProperty('max-width', 'var(--sidebar-width)', 'important');
-            headerEl.style.setProperty('box-sizing', 'border-box', 'important');
-          }
-          document.body.style.setProperty('padding-left', 'var(--sidebar-width)', 'important');
-        } else {
-          if (headerEl) {
-            headerEl.style.removeProperty('min-width');
-            headerEl.style.removeProperty('max-width');
-            headerEl.style.removeProperty('box-sizing');
-            headerEl.style.setProperty('position', 'relative', 'important');
-            headerEl.style.setProperty('top', '', 'important');
-            headerEl.style.setProperty('left', '', 'important');
-            headerEl.style.setProperty('bottom', '', 'important');
-            headerEl.style.setProperty('width', '100%', 'important');
-          }
-          document.body.style.setProperty('padding-left', '0', 'important');
-        }
-      }
-
-      document.addEventListener('DOMContentLoaded', () => {
-        initLayoutToggle();
-        stabilizeSidebarLayout();
-      });
+      document.addEventListener('DOMContentLoaded', initLayoutToggle);
     </script>
   </head>
   <body>
+    <div class="layout-toggle" aria-label="Header layout selector">
+      <button id="layoutVertical">Vertical</button>
+      <button id="layoutHorizontal">Horizontal</button>
+    </div>
     <div id="app">
       <!-- UNIFIED HEADER -->
       <header class="header">
@@ -490,7 +400,7 @@
 
       <!-- NEW RESERVATION SECTION -->
       <div id="new-reservationSection" class="app-main-section">
-        <iframe src="reservation-form.html?_v=burgerking" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+        <iframe src="reservation-form.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
       </div>
 
       <!-- CONFIRMED RESERVATION SECTION (VIEW MODE) -->
@@ -601,7 +511,6 @@
       }
 
       function switchMainSection(section) {
-        enforceSavedLayout();
         const isNewReservationRequest = section === 'new-reservation';
 
         // Skip if already on this section unless forcing a fresh new reservation load
@@ -750,18 +659,6 @@
               }, '*');
             }
           }, 100);
-        } else if (event.data.action === 'navigateToSystemSettings') {
-          // Open Office then forward page selection to its iframe
-          switchMainSection('office');
-          setTimeout(() => {
-            const officeIframe = document.querySelector('#officeSection iframe');
-            if (officeIframe && officeIframe.contentWindow) {
-              officeIframe.contentWindow.postMessage({
-                action: 'navigateToSystemSettings',
-                page: event.data.page
-              }, '*');
-            }
-          }, 100);
         } else if (event.data.action === 'navigateToSystemMapping') {
           // Switch to Office section
           switchMainSection('office');
@@ -790,6 +687,12 @@
     <!-- Authentication Protection & User Menu -->
     <script type="module" src="auth-guard.js"></script>
     <script type="module" src="user-menu.js"></script>
+    
+    <!-- Dev Mode Banner (localhost only) -->
+    <script type="module">
+      import { initDevModeBanner } from './dev-mode-banner.js';
+      initDevModeBanner();
+    </script>
     
     <!-- Company Settings & Application -->
     <script src="CompanySettingsManager.js"></script>

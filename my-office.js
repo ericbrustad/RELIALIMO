@@ -3,6 +3,7 @@ import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDri
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 import { loadPolicies, upsertPolicy, deletePolicyById, getActivePolicies, POLICIES_STORAGE_KEY, normalizePolicy } from './policies-store.js';
+import { MapboxService } from './MapboxService.js';
 
 class MyOffice {
   constructor() {
@@ -63,6 +64,9 @@ class MyOffice {
     ];
     this.selectedUserId = this.users[0]?.id || null;
     this.userInputs = {};
+    this.mapboxService = new MapboxService();
+    this.companyGeo = { latitude: null, longitude: null };
+    this.airportGeo = { latitude: null, longitude: null };
     this.init();
   }
 
@@ -73,6 +77,7 @@ class MyOffice {
     this.setupMagicLinkHelpers();
     this.setupDriversForm();
     this.setupAffiliatesForm();
+    this.setupAirportAddressLookup();
     this.setupSystemUsers();
     this.setupCompanyInfoForm();
     this.setupAccountsCalendarPrefs();
@@ -859,6 +864,9 @@ class MyOffice {
     // Load existing company info on page load
     this.loadCompanyInfo();
 
+    // Wire address lookup/autofill
+    this.setupCompanyAddressLookup();
+
     // Save button handler
     const saveBtn = document.getElementById('saveCompanyInfoBtn');
     if (saveBtn) {
@@ -932,11 +940,97 @@ class MyOffice {
       if (el) el.value = value;
     }
 
+    // Persist geocode values into hidden fields for later saves
+    const latitudeInput = document.getElementById('companyLatitude');
+    const longitudeInput = document.getElementById('companyLongitude');
+    if (latitudeInput) latitudeInput.value = info.latitude || '';
+    if (longitudeInput) longitudeInput.value = info.longitude || '';
+    this.companyGeo = {
+      latitude: info.latitude || null,
+      longitude: info.longitude || null
+    };
+
     // Checkbox
     const showEinCheckbox = document.getElementById('companyShowEinOnDocs');
     if (showEinCheckbox) {
       showEinCheckbox.checked = info.show_ein_on_docs || false;
     }
+  }
+
+  setupCompanyAddressLookup() {
+    const addressInput = document.getElementById('companyStreetAddress');
+    const suggestions = document.getElementById('companyAddressSuggestions');
+    if (!addressInput || !suggestions) {
+      return;
+    }
+
+    let debounceTimer;
+    addressInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      const query = (e.target?.value || '').trim();
+      if (query.length < 3) {
+        suggestions.classList.remove('active');
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        const results = await this.mapboxService.geocodeAddress(query);
+        this.showCompanyAddressSuggestions(addressInput, suggestions, results);
+      }, 300);
+    });
+
+    addressInput.addEventListener('blur', () => {
+      setTimeout(() => suggestions.classList.remove('active'), 200);
+    });
+  }
+
+  showCompanyAddressSuggestions(inputElement, suggestionsContainer, results) {
+    if (!results || results.length === 0) {
+      suggestionsContainer.classList.remove('active');
+      return;
+    }
+
+    suggestionsContainer.innerHTML = results.map((result, index) => `
+      <div class="address-suggestion-item" data-index="${index}">
+        <div class="suggestion-main">${result.name}</div>
+        <div class="suggestion-secondary">${result.address}</div>
+      </div>
+    `).join('');
+
+    suggestionsContainer.querySelectorAll('.address-suggestion-item').forEach((item, index) => {
+      item.addEventListener('click', () => {
+        this.selectCompanyAddress(results[index]);
+        suggestionsContainer.classList.remove('active');
+      });
+    });
+
+    suggestionsContainer.classList.add('active');
+  }
+
+  selectCompanyAddress(addressData) {
+    const addressLine = addressData.address || addressData.name || '';
+    const latitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[1] : null;
+    const longitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[0] : null;
+
+    const city = addressData.context?.city || addressData.context?.place || '';
+    const state = addressData.context?.state || '';
+    const zip = addressData.context?.zipcode || addressData.context?.postcode || '';
+
+    const addressInput = document.getElementById('companyStreetAddress');
+    const cityInput = document.getElementById('companyCity');
+    const stateInput = document.getElementById('companyState');
+    const zipInput = document.getElementById('companyZipCode');
+    const latitudeInput = document.getElementById('companyLatitude');
+    const longitudeInput = document.getElementById('companyLongitude');
+
+    if (addressInput) addressInput.value = addressLine;
+    if (cityInput) cityInput.value = city;
+    if (stateInput) stateInput.value = state;
+    if (zipInput) zipInput.value = zip;
+    if (latitudeInput) latitudeInput.value = latitude ?? '';
+    if (longitudeInput) longitudeInput.value = longitude ?? '';
+
+    this.companyGeo = { latitude, longitude };
   }
 
   async saveCompanyInfo() {
@@ -958,6 +1052,8 @@ class MyOffice {
       quote_email: document.getElementById('companyQuoteEmail')?.value?.trim() || '',
       billing_email: document.getElementById('companyBillingEmail')?.value?.trim() || '',
       website: document.getElementById('companyWebsite')?.value?.trim() || '',
+      latitude: parseFloat(document.getElementById('companyLatitude')?.value) || null,
+      longitude: parseFloat(document.getElementById('companyLongitude')?.value) || null,
       // Also set email to general_email for backwards compatibility
       email: document.getElementById('companyGeneralEmail')?.value?.trim() || '',
       // Also set address to street_address for backwards compatibility
@@ -1990,6 +2086,18 @@ class MyOffice {
     const resourcesContainer = document.getElementById('companyResourcesContainer');
     if (resourcesContainer) {
       resourcesContainer.style.display = 'block';
+    }
+
+    // Hide rate manager when switching to resources to avoid it appearing below
+    const rateSection = document.getElementById('system-rate-manager-section');
+    if (rateSection) {
+      rateSection.style.display = 'none';
+      rateSection.classList.remove('active');
+    }
+    document.querySelectorAll('.rate-top-tab').forEach(tab => tab.classList.remove('active'));
+    const contentArea = document.querySelector('.content-area');
+    if (contentArea) {
+      contentArea.classList.remove('rate-manager-active');
     }
 
     // Hide all resource sections within the container
@@ -3620,9 +3728,120 @@ class MyOffice {
           });
           // Add active class to clicked item
           item.classList.add('active');
+          this.populateAirportFormFromItem(item);
         }
       });
     }
+  }
+
+  populateAirportFormFromItem(item) {
+    const codeInput = document.getElementById('airportCode');
+    const descriptionInput = document.getElementById('airportDescription');
+    const addressSearch = document.getElementById('airportAddressSearch');
+    const address1 = document.getElementById('airportAddress1');
+    const city = document.getElementById('airportCity');
+    const state = document.getElementById('airportState');
+    const zip = document.getElementById('airportZip');
+    const country = document.getElementById('airportCountry');
+    const latitude = document.getElementById('airportLatitude');
+    const longitude = document.getElementById('airportLongitude');
+
+    const dataset = item.dataset || {};
+    if (codeInput) codeInput.value = dataset.code || '';
+    if (descriptionInput) descriptionInput.value = dataset.description || dataset.name || '';
+    if (addressSearch) addressSearch.value = dataset.address || dataset.addressLine1 || '';
+    if (address1) address1.value = dataset.address || dataset.addressLine1 || '';
+    if (city) city.value = dataset.city || '';
+    if (state) state.value = dataset.state || '';
+    if (zip) zip.value = dataset.zip || dataset.postalCode || '';
+    if (country) country.value = dataset.country || 'United States';
+    if (latitude) latitude.value = dataset.latitude || '';
+    if (longitude) longitude.value = dataset.longitude || '';
+
+    this.airportGeo = {
+      latitude: dataset.latitude ? parseFloat(dataset.latitude) : null,
+      longitude: dataset.longitude ? parseFloat(dataset.longitude) : null
+    };
+  }
+
+  setupAirportAddressLookup() {
+    const addressInput = document.getElementById('airportAddressSearch');
+    const suggestions = document.getElementById('airportAddressSuggestions');
+    if (!addressInput || !suggestions) {
+      return;
+    }
+
+    let debounceTimer;
+    addressInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      const query = (e.target?.value || '').trim();
+      if (query.length < 3) {
+        suggestions.classList.remove('active');
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        const results = await this.mapboxService.geocodeAddress(query);
+        this.showAirportAddressSuggestions(suggestions, results);
+      }, 300);
+    });
+
+    addressInput.addEventListener('blur', () => {
+      setTimeout(() => suggestions.classList.remove('active'), 200);
+    });
+  }
+
+  showAirportAddressSuggestions(suggestionsContainer, results) {
+    if (!results || results.length === 0) {
+      suggestionsContainer.classList.remove('active');
+      return;
+    }
+
+    suggestionsContainer.innerHTML = results.map((result, index) => `
+      <div class="address-suggestion-item" data-index="${index}">
+        <div class="suggestion-main">${result.name}</div>
+        <div class="suggestion-secondary">${result.address}</div>
+      </div>
+    `).join('');
+
+    suggestionsContainer.querySelectorAll('.address-suggestion-item').forEach((item, index) => {
+      item.addEventListener('click', () => {
+        this.selectAirportAddress(results[index]);
+        suggestionsContainer.classList.remove('active');
+      });
+    });
+
+    suggestionsContainer.classList.add('active');
+  }
+
+  selectAirportAddress(addressData) {
+    const addressLine = addressData.address || addressData.name || '';
+    const latitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[1] : null;
+    const longitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[0] : null;
+
+    const city = addressData.context?.city || addressData.context?.place || '';
+    const state = addressData.context?.state || '';
+    const zip = addressData.context?.zipcode || addressData.context?.postcode || '';
+
+    const addressSearch = document.getElementById('airportAddressSearch');
+    const address1 = document.getElementById('airportAddress1');
+    const cityInput = document.getElementById('airportCity');
+    const stateInput = document.getElementById('airportState');
+    const zipInput = document.getElementById('airportZip');
+    const countryInput = document.getElementById('airportCountry');
+    const latitudeInput = document.getElementById('airportLatitude');
+    const longitudeInput = document.getElementById('airportLongitude');
+
+    if (addressSearch) addressSearch.value = addressLine;
+    if (address1) address1.value = addressLine;
+    if (cityInput) cityInput.value = city;
+    if (stateInput) stateInput.value = state;
+    if (zipInput) zipInput.value = zip;
+    if (countryInput) countryInput.value = addressData.context?.country || countryInput.value || 'United States';
+    if (latitudeInput) latitudeInput.value = latitude ?? '';
+    if (longitudeInput) longitudeInput.value = longitude ?? '';
+
+    this.airportGeo = { latitude, longitude };
   }
 
   setupAirlinesItemSelection() {
@@ -5134,6 +5353,8 @@ class MyOffice {
     window.addEventListener('storage', (e) => {
       if (e.key === SERVICE_TYPES_STORAGE_KEY) {
         this.loadAndApplyServiceTypes();
+    this.setupPoliciesSync();
+    this.loadAndApplyPolicies();
       }
     });
   }

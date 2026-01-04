@@ -3286,6 +3286,8 @@ class ReservationForm {
     }
 
     try {
+      // Prevent dropdown flicker from overlapping local passenger autocomplete
+      container.dataset.locked = 'accounts';
       // Track hover to prevent flicker on blur
       if (!container.dataset.hoverBound) {
         container.addEventListener('mouseenter', () => { container.dataset.hovering = '1'; });
@@ -3323,6 +3325,8 @@ class ReservationForm {
     } catch (error) {
       console.error('❌ searchAccountsForPassenger failed:', error);
       container.classList.remove('active');
+    } finally {
+      delete container.dataset.locked;
     }
   }
 
@@ -3547,13 +3551,17 @@ class ReservationForm {
     const container = document.getElementById(containerId);
     if (!container) return;
 
+    const isLocked = () => container.dataset.locked === 'accounts';
+
     let debounceTimer;
     const hide = () => {
+      if (isLocked()) return;
       container.classList.remove('active');
       container.innerHTML = '';
     };
 
     const showResults = (results) => {
+      if (isLocked()) return;
       if (!results || results.length === 0) {
         hide();
         return;
@@ -3577,6 +3585,7 @@ class ReservationForm {
     };
 
     const handleInput = (value) => {
+      if (isLocked()) return;
       const query = (value || '').toString().trim();
       if (query.length < minChars) {
         hide();
@@ -3873,8 +3882,11 @@ class ReservationForm {
           addressData.context = {
             city: details.addressComponents.city,
             state: details.addressComponents.state,
+            stateCode: details.addressComponents.state,
+            stateName: details.addressComponents.stateName,
             zipcode: details.addressComponents.postalCode,
-            country: details.addressComponents.country
+            country: details.addressComponents.country,
+            countryCode: details.addressComponents.countryCode
           };
         }
         if (details?.name && !addressData.name) {
@@ -3900,7 +3912,9 @@ class ReservationForm {
           // Try to match state abbreviation
           const stateOptions = stateInput.querySelectorAll('option');
           stateOptions.forEach(option => {
-            if (option.value === addressData.context.state || option.text === addressData.context.state) {
+            const stateCode = addressData.context.stateCode || addressData.context.state;
+            const stateName = addressData.context.stateName || addressData.context.state;
+            if (option.value === stateCode || option.text === stateCode || option.text === stateName) {
               stateInput.value = option.value;
             }
           });
@@ -3913,14 +3927,10 @@ class ReservationForm {
       if (addressData.context.country) {
         const countryInput = document.getElementById('country');
         if (countryInput) {
-          // Match country code
-          if (addressData.context.country === 'United States') {
-            countryInput.value = 'US';
-          } else if (addressData.context.country === 'Canada') {
-            countryInput.value = 'CA';
-          } else if (addressData.context.country === 'Mexico') {
-            countryInput.value = 'MX';
-          }
+          const cc = (addressData.context.countryCode || addressData.context.country || '').toUpperCase();
+          if (cc === 'US' || addressData.context.country === 'United States') countryInput.value = 'US';
+          else if (cc === 'CA' || addressData.context.country === 'Canada') countryInput.value = 'CA';
+          else if (cc === 'MX' || addressData.context.country === 'Mexico') countryInput.value = 'MX';
         }
       }
     }
@@ -3992,7 +4002,22 @@ class ReservationForm {
 
   async updateTripMetricsFromStops() {
     const stops = this.getStops();
-    if (!Array.isArray(stops) || stops.length < 2) {
+    const stopsWithAddress = Array.isArray(stops)
+      ? stops.filter(s => s && (s.fullAddress || s.address || s.address1))
+      : [];
+
+    // Require a pick-up and a drop-off; intermediate stops are optional
+    const pickupStop = stopsWithAddress.find(s => {
+      const t = (s.stopType || s.type || '').toLowerCase();
+      return t === 'pickup';
+    }) || stopsWithAddress[0];
+
+    const dropoffStop = [...stopsWithAddress].reverse().find(s => {
+      const t = (s.stopType || s.type || '').toLowerCase();
+      return t === 'dropoff';
+    }) || stopsWithAddress[stopsWithAddress.length - 1];
+
+    if (!pickupStop || !dropoffStop || pickupStop === dropoffStop) {
       const routeInfo = document.getElementById('routeInfo');
       if (routeInfo) routeInfo.style.display = 'none';
       const inlineDistance = document.getElementById('routeDistanceInline');
@@ -4003,9 +4028,12 @@ class ReservationForm {
       return;
     }
 
-    const origin = stops[0].fullAddress || stops[0].address || stops[0].address1;
-    const destination = stops[stops.length - 1].fullAddress || stops[stops.length - 1].address || stops[stops.length - 1].address1;
-    const waypointStops = stops.slice(1, -1).map(s => s.fullAddress || s.address || s.address1).filter(Boolean);
+    const origin = pickupStop.fullAddress || pickupStop.address || pickupStop.address1;
+    const destination = dropoffStop.fullAddress || dropoffStop.address || dropoffStop.address1;
+    const waypointStops = stopsWithAddress
+      .filter(s => s !== pickupStop && s !== dropoffStop)
+      .map(s => s.fullAddress || s.address || s.address1)
+      .filter(Boolean);
 
     if (!origin || !destination) {
       this.latestRouteSummary = null;
@@ -4985,10 +5013,24 @@ class ReservationForm {
       el.value = raw;
     }
 
-    // Check if at least one stop is defined
+    // Require both a pick-up and a drop-off; intermediate stops are optional
     const stops = this.getStops();
-    if (stops.length === 0) {
-      alert('Please add at least one stop (pickup or dropoff).');
+    const stopsWithAddress = Array.isArray(stops)
+      ? stops.filter(s => s && (s.fullAddress || s.address || s.address1))
+      : [];
+
+    const hasPickup = stopsWithAddress.some(s => {
+      const t = (s.stopType || s.type || '').toLowerCase();
+      return t === 'pickup';
+    });
+
+    const hasDropoff = stopsWithAddress.some(s => {
+      const t = (s.stopType || s.type || '').toLowerCase();
+      return t === 'dropoff';
+    });
+
+    if (!hasPickup || !hasDropoff) {
+      alert('Please add both a pick-up and a drop-off address. Stops are optional.');
       return false;
     }
 

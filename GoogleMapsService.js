@@ -364,25 +364,32 @@ export class GoogleMapsService {
       streetName: '',
       city: '',
       state: '',
+      stateName: '',
       postalCode: '',
       country: '',
+      countryCode: ''
     };
 
     if (!components) return address;
+
+    const cityTypes = ['locality', 'postal_town', 'administrative_area_level_3', 'sublocality', 'sublocality_level_1'];
 
     components.forEach(component => {
       if (component.types.includes('street_number')) {
         address.streetNumber = component.short_name;
       } else if (component.types.includes('route')) {
         address.streetName = component.long_name;
-      } else if (component.types.includes('locality')) {
-        address.city = component.long_name;
+      } else if (cityTypes.some(type => component.types.includes(type))) {
+        // Prefer locality, but allow fallbacks for outskirts/PO boxes
+        if (!address.city) address.city = component.long_name;
       } else if (component.types.includes('administrative_area_level_1')) {
-        address.state = component.short_name;
+        address.state = component.short_name; // USPS/ISO code
+        address.stateName = component.long_name;
       } else if (component.types.includes('postal_code')) {
         address.postalCode = component.short_name;
       } else if (component.types.includes('country')) {
         address.country = component.long_name;
+        address.countryCode = component.short_name;
       }
     });
 

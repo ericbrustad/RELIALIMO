@@ -707,6 +707,55 @@ export async function getNextConfirmationNumber() {
   }
 }
 
+async function ensureUniqueConfirmationNumber(client, candidate) {
+  let attempts = 0;
+  let next = candidate;
+  while (attempts < 5) {
+    const { data, error } = await client
+      .from('reservations')
+      .select('id')
+      .eq('confirmation_number', next)
+      .limit(1);
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return next;
+    }
+    next += 1;
+    attempts += 1;
+  }
+  return next;
+}
+
+export async function createReservationFromAccount(accountData) {
+  await setupAPI();
+  const client = getSupabaseClient();
+  if (!client) throw new Error('No Supabase client');
+
+  const rawNext = await getNextConfirmationNumber();
+  const confirmationNumber = await ensureUniqueConfirmationNumber(client, Number(rawNext) || 100000);
+
+  const now = new Date().toISOString();
+  const billingAccount = accountData.account_number || accountData.id || accountData.accountId || '';
+
+  const stub = {
+    confirmation_number: confirmationNumber,
+    status: 'pending',
+    status_detail_code: 'draft',
+    status_detail_label: 'Draft',
+    status_detail_category: 'pending',
+    efarm_status: 'Farm-out Unassigned',
+    billing_account: billingAccount,
+    passenger_first_name: accountData.first_name || '',
+    passenger_last_name: accountData.last_name || '',
+    passenger_email: accountData.email || '',
+    passenger_phone: accountData.cell_phone || accountData.phone || '',
+    created_at: now,
+    updated_at: now
+  };
+
+  return stub;
+}
+
 export async function getNextAccountNumber() {
   try {
     await setupAPI();
@@ -772,6 +821,7 @@ export default {
   getAllAccounts,
   getAccountById,
   deleteAccount,
+  createReservationFromAccount,
   saveDriver,
   getAllDrivers,
   deleteDriver,

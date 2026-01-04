@@ -337,14 +337,18 @@ class Accounts {
         }
       }
       
-      // Populate the listbox
+      // Populate the listbox; always clear to drop deleted accounts
       const listbox = document.getElementById('accountsListbox');
-      if (listbox && allAccounts.length > 0) {
+      if (listbox) {
         listbox.innerHTML = allAccounts.map(acc => {
           const inactiveLabel = (acc.status || '').toString().toLowerCase() === 'inactive' ? ' (INACTIVE)' : '';
           const displayName = `${acc.account_number || acc.id}${inactiveLabel} - ${acc.first_name || ''} ${acc.last_name || ''} ${acc.company_name ? '- ' + acc.company_name : ''}`.trim();
           return `<option value="${acc.id}">${displayName}</option>`; // Use acc.id for consistency
         }).join('');
+
+        if (allAccounts.length === 0) {
+          listbox.innerHTML = '<option value="">No accounts found</option>';
+        }
       }
       
       console.log(`✅ Loaded ${allAccounts.length} accounts`);
@@ -1713,7 +1717,7 @@ class Accounts {
     let reservationRecord = null;
 
     try {
-      reservationRecord = this.db.createReservationFromAccount(accountData);
+      reservationRecord = await this.db.createReservationFromAccount(accountData);
     } catch (error) {
       console.error('❌ Failed to generate reservation from account:', error);
       return null;

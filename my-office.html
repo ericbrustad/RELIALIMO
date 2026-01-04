@@ -116,6 +116,9 @@
                   <div class="form-group">
                     <label>Street Address</label>
                     <input type="text" id="companyStreetAddress" class="form-control" value="" />
+                    <div id="companyAddressSuggestions" class="address-suggestions-dropdown"></div>
+                    <input type="hidden" id="companyLatitude" />
+                    <input type="hidden" id="companyLongitude" />
                   </div>
                 </div>
 
@@ -5609,7 +5612,7 @@ further assistance.</textarea>
                 </label>
               </div>
               <div class="resource-list" id="airportsList">
-                <div class="resource-item active">
+                <div class="resource-item active" data-code="MSP" data-name="Minneapolis-St Paul International Airport" data-address="4300 Glumack Dr" data-city="St. Paul" data-state="MN" data-zip="55111" data-country="United States" data-latitude="44.8848" data-longitude="-93.2223">
                   <div class="resource-item-main">
                     <div class="resource-item-details">
                       <div class="resource-item-name">Minneapolis-St Paul International Airport</div>
@@ -5619,7 +5622,7 @@ further assistance.</textarea>
                     </div>
                   </div>
                 </div>
-                <div class="resource-item">
+                <div class="resource-item" data-code="FCM" data-name="Premier Jet Center Flying Cloud" data-address="14800 Pioneer Trl" data-city="Eden Prairie" data-state="MN" data-zip="55347" data-country="United States" data-latitude="44.8272" data-longitude="-93.4575">
                   <div class="resource-item-main">
                     <div class="resource-item-details">
                       <div class="resource-item-name">Premier Jet Center Flying Cloud</div>
@@ -5629,7 +5632,7 @@ further assistance.</textarea>
                     </div>
                   </div>
                 </div>
-                <div class="resource-item">
+                <div class="resource-item" data-code="MSP-SIG" data-name="Signature MSP" data-address="4300 Glumack Dr, Terminal 2" data-city="St. Paul" data-state="MN" data-zip="55111" data-country="United States" data-latitude="44.8848" data-longitude="-93.2223">
                   <div class="resource-item-main">
                     <div class="resource-item-details">
                       <div class="resource-item-name">Signature MSP</div>
@@ -5658,21 +5661,60 @@ further assistance.</textarea>
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Code: <span class="required">*</span></label>
-                      <input type="text" class="form-control" placeholder="e.g., MSP" />
+                      <input type="text" id="airportCode" class="form-control" placeholder="e.g., MSP" />
                     </div>
                     <div class="form-group">
                       <label>Description:</label>
-                      <input type="text" class="form-control" placeholder="Airport name or description" />
+                      <input type="text" id="airportDescription" class="form-control" placeholder="Airport name or description" />
                     </div>
                   </div>
 
                   <div class="form-row">
                     <div class="form-group">
                       <label>Status:</label>
-                      <select class="form-control">
+                      <select id="airportStatus" class="form-control">
                         <option value="ACTIVE" selected>ACTIVE</option>
                         <option value="INACTIVE">INACTIVE</option>
                       </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>Lookup / Address:</label>
+                      <input type="text" id="airportAddressSearch" class="form-control" placeholder="Start typing address or airport..." />
+                      <div id="airportAddressSuggestions" class="address-suggestions-dropdown"></div>
+                      <input type="hidden" id="airportLatitude" />
+                      <input type="hidden" id="airportLongitude" />
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>Address Line 1:</label>
+                      <input type="text" id="airportAddress1" class="form-control" placeholder="Street address" />
+                    </div>
+                  </div>
+
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label>City:</label>
+                      <input type="text" id="airportCity" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                      <label>State/Province:</label>
+                      <input type="text" id="airportState" class="form-control" />
+                    </div>
+                  </div>
+
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label>Postal Code:</label>
+                      <input type="text" id="airportZip" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                      <label>Country:</label>
+                      <input type="text" id="airportCountry" class="form-control" placeholder="United States" />
                     </div>
                   </div>
                 </div>
