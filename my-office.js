@@ -7630,7 +7630,10 @@ class MyOffice {
   }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
   /**
    * Initialize office.Airports from localStorage and ensure each airport has its own cell
    */
@@ -7738,6 +7741,9 @@ class MyOffice {
     return window.office.Airports.size;
   }
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 }
 
@@ -7776,5 +7782,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   
   console.log('Office airports system initialized - each airport stored in its own cell in office.Airports');
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 });
