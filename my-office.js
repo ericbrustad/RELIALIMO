@@ -7629,10 +7629,152 @@ class MyOffice {
       .replace(/'/g, '&#039;');
   }
 
+<<<<<<< Updated upstream
+=======
+  /**
+   * Initialize office.Airports from localStorage and ensure each airport has its own cell
+   */
+  initializeOfficeAirports() {
+    if (!window.office || !window.office.Airports) return;
+    
+    // Load airports from localStorage (company resources module storage)
+    const airportsData = JSON.parse(localStorage.getItem('cr_airports') || '[]');
+    
+    // Clear existing airports in office.Airports
+    window.office.Airports.clear();
+    
+    // Add each airport to its own cell in office.Airports Map
+    airportsData.forEach(airport => {
+      if (airport.code) {
+        // Each airport gets its own cell using the airport code as key
+        window.office.Airports.set(airport.code, {
+          code: airport.code,
+          name: airport.name || '',
+          city: airport.city || '',
+          state: airport.state || '',
+          country: airport.country || 'United States',
+          latitude: airport.latitude || null,
+          longitude: airport.longitude || null,
+          address: airport.address || '',
+          zip: airport.zip || '',
+          id: airport.id
+        });
+      }
+    });
+    
+    console.log(`Initialized ${window.office.Airports.size} airports in office.Airports`);
+  }
+
+  /**
+   * Save airport data to both localStorage and office.Airports structure
+   */
+  saveAirportToOffice(airportData) {
+    if (!window.office || !window.office.Airports || !airportData.code) return;
+    
+    // Save to office.Airports (each airport in its own cell)
+    window.office.Airports.set(airportData.code, {
+      code: airportData.code,
+      name: airportData.name || '',
+      city: airportData.city || '',
+      state: airportData.state || '',
+      country: airportData.country || 'United States',
+      latitude: airportData.latitude || null,
+      longitude: airportData.longitude || null,
+      address: airportData.address || '',
+      zip: airportData.zip || '',
+      id: airportData.id || this.generateAirportId()
+    });
+    
+    // Also update localStorage for persistence
+    const currentAirports = JSON.parse(localStorage.getItem('cr_airports') || '[]');
+    const existingIndex = currentAirports.findIndex(a => a.code === airportData.code);
+    
+    if (existingIndex >= 0) {
+      currentAirports[existingIndex] = window.office.Airports.get(airportData.code);
+    } else {
+      currentAirports.push(window.office.Airports.get(airportData.code));
+    }
+    
+    localStorage.setItem('cr_airports', JSON.stringify(currentAirports));
+    console.log(`Saved airport ${airportData.code} to office.Airports`);
+  }
+
+  /**
+   * Generate unique airport ID
+   */
+  generateAirportId() {
+    return 'airport_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  /**
+   * Get all airports from office.Airports as an array
+   */
+  getAllAirports() {
+    if (!window.office || !window.office.Airports) return [];
+    return Array.from(window.office.Airports.values());
+  }
+
+  /**
+   * Get specific airport by code from office.Airports
+   */
+  getAirportByCode(code) {
+    if (!window.office || !window.office.Airports || !code) return null;
+    return window.office.Airports.get(code.toUpperCase());
+  }
+
+  /**
+   * Check if airport exists in office.Airports
+   */
+  hasAirport(code) {
+    if (!window.office || !window.office.Airports || !code) return false;
+    return window.office.Airports.has(code.toUpperCase());
+  }
+
+  /**
+   * Get airports count
+   */
+  getAirportsCount() {
+    if (!window.office || !window.office.Airports) return 0;
+    return window.office.Airports.size;
+  }
+
+>>>>>>> Stashed changes
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+  // Create global office object with Airports structure
+  if (!window.office) {
+    window.office = {
+      Airports: new Map() // Use Map to ensure each airport gets its own cell/entry
+    };
+  }
+  
   // Expose instance globally so child iframes can access vehicle types, drivers, etc.
   window.myOffice = new MyOffice();
+<<<<<<< Updated upstream
+=======
+  
+  // Initialize airports from localStorage into office.Airports
+  window.myOffice.initializeOfficeAirports();
+  
+  // Add global utility functions for office.Airports access
+  window.getOfficeAirports = function() {
+    return window.office && window.office.Airports ? Array.from(window.office.Airports.values()) : [];
+  };
+  
+  window.getOfficeAirport = function(code) {
+    return window.office && window.office.Airports && code ? window.office.Airports.get(code.toUpperCase()) : null;
+  };
+  
+  window.addOfficeAirport = function(airportData) {
+    if (window.myOffice && airportData && airportData.code) {
+      window.myOffice.saveAirportToOffice(airportData);
+      return true;
+    }
+    return false;
+  };
+  
+  console.log('Office airports system initialized - each airport stored in its own cell in office.Airports');
+>>>>>>> Stashed changes
 });
