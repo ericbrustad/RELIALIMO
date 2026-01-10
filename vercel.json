@@ -1,7 +1,13 @@
 {
   "functions": {
-    "api/email-send.js": {
-      "runtime": "@vercel/node@3.0.7"
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
 }
