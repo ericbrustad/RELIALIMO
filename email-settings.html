@@ -285,7 +285,22 @@
         testBtn.textContent = '🔄 Sending...';
         
         try {
-          const response = await fetch('/api/email-send', {
+          // Try same-origin first; if running the UI from a different port (e.g. 8000/file://),
+          // fall back to common local backend ports.
+          const candidateBases = [
+            window.location.origin,
+            'http://localhost:3001',
+            'http://localhost:3002',
+            'http://127.0.0.1:3001',
+            'http://127.0.0.1:3002'
+          ].filter((v, i, a) => a.indexOf(v) === i);
+
+          let response = null;
+          let lastErr = null;
+
+          for (const base of candidateBases) {
+            try {
+              response = await fetch(base + '/api/email-send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -302,6 +317,17 @@
               text: 'ReliaLimo Email Test - If you got this, email sending works! Sent at: ' + new Date().toLocaleString()
             })
           });
+            break; // got a response
+          } catch (e) {
+            lastErr = e;
+            response = null;
+          }
+        }
+
+        if (!response) {
+          throw lastErr || new Error('API endpoint not available');
+        }
+
           
           // Check if response is HTML (404 page) instead of JSON
           const contentType = response.headers.get('content-type');

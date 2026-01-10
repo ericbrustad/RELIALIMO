@@ -468,30 +468,75 @@
           testBtn.textContent = 'Sending...';
           
           try {
-            const useApiKey = apiKeySid && apiKeySecret;
-            const auth = useApiKey ? `${apiKeySid}:${apiKeySecret}` : `${accountSid}:${authToken}`;
-            
-            const params = new URLSearchParams();
-            params.append('To', to);
-            params.append('Body', body);
-            if (messagingServiceSid) params.append('MessagingServiceSid', messagingServiceSid);
-            else if (fromNumber) params.append('From', fromNumber);
-            
-            const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Basic ' + btoa(auth),
-                'Content-Type': 'application/x-www-form-urlencoded'
-              },
-              body: params
-            });
-            
-            if (!res.ok) {
-              const txt = await res.text();
-              throw new Error(`HTTP ${res.status}: ${txt}`);
-            }
-            
-            const json = await res.json();
+            // Prefer server-side proxy (avoids CORS + keeps credentials off the browser)
+const candidateBases = [
+  window.location.origin,
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'http://127.0.0.1:3001',
+  'http://127.0.0.1:3002'
+].filter((v, i, a) => a.indexOf(v) === i);
+
+let json = null;
+let usedProxy = false;
+
+for (const base of candidateBases) {
+  try {
+    const proxyRes = await fetch(base + '/api/sms-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, body })
+    });
+
+    const ct = proxyRes.headers.get('content-type') || '';
+    if (ct.includes('text/html')) {
+      // likely a 404 page from a different server
+      continue;
+    }
+
+    const proxyData = await proxyRes.json().catch(() => null);
+    if (proxyRes.ok && proxyData && proxyData.ok) {
+      json = { sid: proxyData.sid };
+      usedProxy = true;
+      break;
+    }
+
+    // If proxy is present but not configured, fall back to direct Twilio (dev only)
+    if (proxyData && (proxyData.error === 'SMS API not configured' || String(proxyData.error || '').includes('not configured'))) {
+      break;
+    }
+  } catch (e) {
+    // try next base
+  }
+}
+
+if (!json) {
+  // Fallback: direct Twilio call (may be blocked by CORS and exposes credentials - not recommended)
+  const useApiKey = apiKeySid && apiKeySecret;
+  const auth = useApiKey ? `${apiKeySid}:${apiKeySecret}` : `${accountSid}:${authToken}`;
+
+  const params = new URLSearchParams();
+  params.append('To', to);
+  params.append('Body', body);
+  if (messagingServiceSid) params.append('MessagingServiceSid', messagingServiceSid);
+  else if (fromNumber) params.append('From', fromNumber);
+
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + btoa(auth),
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: params
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`HTTP ${res.status}: ${txt}`);
+  }
+
+  json = await res.json();
+}
             if (statusEl) {
               // Success - hide the status element instead of showing success message
               statusEl.style.display = 'none';

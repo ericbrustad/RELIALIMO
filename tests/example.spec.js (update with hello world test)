@@ -1,0 +1,5 @@
+test('Hello World Test', async ({ page }) => {
+    await page.goto('http://example.com');
+    const content = await page.textContent('body');
+    expect(content).toContain('Hello World');
+});

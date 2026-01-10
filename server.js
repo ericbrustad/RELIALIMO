@@ -82,6 +82,78 @@ app.post('/api/email-send', async (req, res) => {
   }
 });
 
+// SMS API endpoint (server-side Twilio proxy; avoids CORS + keeps secrets off the browser)
+app.post('/api/sms-send', async (req, res) => {
+  console.log('📱 SMS API called');
+  try {
+    const { to, body } = req.body || {};
+    if (!to || !body) {
+      return res.status(400).json({ error: "Missing to/body" });
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const apiKeySid = process.env.TWILIO_API_KEY_SID;
+    const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
+    const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+    const fromNumber = process.env.TWILIO_FROM_NUMBER;
+
+    const hasCreds = !!accountSid && (!!authToken || (!!apiKeySid && !!apiKeySecret));
+    const hasFrom = !!messagingServiceSid || !!fromNumber;
+
+    console.log('🔑 Twilio env check:', {
+      hasAccountSid: !!accountSid,
+      hasAuthToken: !!authToken,
+      hasApiKey: !!apiKeySid && !!apiKeySecret,
+      hasMessagingServiceSid: !!messagingServiceSid,
+      hasFromNumber: !!fromNumber
+    });
+
+    if (!hasCreds || !hasFrom) {
+      return res.status(500).json({
+        error: "SMS API not configured",
+        hint: "Set TWILIO_ACCOUNT_SID and (TWILIO_AUTH_TOKEN OR TWILIO_API_KEY_SID+TWILIO_API_KEY_SECRET) and (TWILIO_MESSAGING_SERVICE_SID OR TWILIO_FROM_NUMBER) in .env"
+      });
+    }
+
+    const useApiKey = !!apiKeySid && !!apiKeySecret;
+    const user = useApiKey ? apiKeySid : accountSid;
+    const pass = useApiKey ? apiKeySecret : authToken;
+    const basic = Buffer.from(`${user}:${pass}`).toString('base64');
+
+    const params = new URLSearchParams();
+    params.append('To', to);
+    params.append('Body', body);
+    if (messagingServiceSid) params.append('MessagingServiceSid', messagingServiceSid);
+    else params.append('From', fromNumber);
+
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params
+    });
+
+    const text = await response.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    if (!response.ok) {
+      console.error('❌ Twilio error:', data);
+      return res.status(response.status).json(data);
+    }
+
+    console.log('✅ SMS sent successfully! SID:', data.sid);
+    return res.status(200).json({ ok: true, sid: data.sid });
+  } catch (e) {
+    console.error('❌ SMS send error:', e);
+    return res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
+
 // Serve static files
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
