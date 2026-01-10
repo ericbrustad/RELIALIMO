@@ -8,6 +8,9 @@ export class CompanyResourcesManager {
     this.showAll = false;
     this.container = null;
     this.els = {};
+    this.syncWarningShown = false;
+    this.realTimeSyncEnabled = true;
+    this.lastSyncCheck = Date.now();
   }
 
   /**
@@ -154,7 +157,9 @@ export class CompanyResourcesManager {
     this.renderCenter();
     this.setFormMode('add');
     this.renderForm(null);
-  }
+    
+    // Perform real-time sync check when switching sections
+    if (this.realTimeSyncEnabled) {\n      this.performRealTimeSync();\n    }\n  }
 
   renderCenter() {
     const config = this.getSectionConfig(this.currentSection);
@@ -209,7 +214,14 @@ export class CompanyResourcesManager {
       row.dataset.id = item.id;
       cols.forEach(col => {
         const td = document.createElement('td');
-        td.textContent = item[col] || '';
+        
+        // Special handling for fleet assignments
+        if (this.currentSection === 'fleet' && (col === 'driver' || col === 'type' || col === 'affiliate')) {
+          td.textContent = this.getDisplayNameForAssignment(col, item[col]);
+        } else {
+          td.textContent = item[col] || '';
+        }
+        
         row.appendChild(td);
       });
       row.addEventListener('click', () => {
@@ -221,6 +233,27 @@ export class CompanyResourcesManager {
     });
   }
 
+  getDisplayNameForAssignment(fieldType, assignmentId) {
+    if (!assignmentId) return 'Unassigned';
+    
+    let sourceData = [];
+    if (fieldType === 'driver') {
+      sourceData = this.loadItemsFromSource('drivers');
+      const driver = sourceData.find(d => d.id === assignmentId);
+      return driver ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim() : 'Unknown Driver';
+    } else if (fieldType === 'type') {
+      sourceData = this.loadItemsFromSource('vehicle-types');
+      const vType = sourceData.find(vt => vt.id === assignmentId);
+      return vType ? vType.name : 'Unknown Type';
+    } else if (fieldType === 'affiliate') {
+      sourceData = this.loadItemsFromSource('affiliates');
+      const affiliate = sourceData.find(a => a.id === assignmentId);
+      return affiliate ? affiliate.name : 'Unknown Affiliate';
+    }
+    
+    return assignmentId;
+  }
+
   renderContainer(config, items) {
     const cols = config.tableColumns || ['name'];
     
@@ -229,17 +262,34 @@ export class CompanyResourcesManager {
     this.els.tableBody.innerHTML = '';
     
     const containerDiv = document.createElement('div');
-    containerDiv.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; padding: 12px;';
+    containerDiv.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; padding: 12px;';
     
     items.forEach(item => {
       const card = document.createElement('div');
-      card.style.cssText = 'border: 1px solid #d0d0d0; border-radius: 4px; padding: 12px; background: #fff; cursor: pointer; transition: background 0.2s;';
+      card.style.cssText = 'border: 1px solid #d0d0d0; border-radius: 6px; padding: 16px; background: #fff; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);';
       card.dataset.id = item.id;
       
       let content = '';
-      cols.forEach(col => {
-        content += `<div style="font-size: 12px; margin-bottom: 4px;"><strong>${this.humanizeLabel(col)}:</strong> ${item[col] || ''}</div>`;
-      });
+      
+      // Special formatting for airports to show more information in each cell
+      if (this.currentSection === 'airports') {
+        content = `
+          <div style="font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px;">
+            ${item.code || 'N/A'} - ${item.name || 'Unnamed Airport'}
+          </div>
+          <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
+            <strong>Location:</strong> ${item.city || ''}, ${item.state || ''} ${item.zip || ''}
+          </div>
+          ${item.address ? `<div style="font-size: 12px; color: #666; margin-bottom: 4px;"><strong>Address:</strong> ${item.address}</div>` : ''}
+          ${item.country && item.country !== 'United States' ? `<div style="font-size: 12px; color: #666; margin-bottom: 4px;"><strong>Country:</strong> ${item.country}</div>` : ''}
+          ${item.latitude && item.longitude ? `<div style="font-size: 11px; color: #888; margin-top: 8px;">Coordinates: ${item.latitude}, ${item.longitude}</div>` : ''}
+        `;
+      } else {
+        // Default formatting for other resource types
+        cols.forEach(col => {
+          content += `<div style="font-size: 12px; margin-bottom: 4px;"><strong>${this.humanizeLabel(col)}:</strong> ${item[col] || ''}</div>`;
+        });
+      }
       
       card.innerHTML = content;
       
@@ -247,21 +297,25 @@ export class CompanyResourcesManager {
         containerDiv.querySelectorAll('div[data-id]').forEach(c => {
           c.style.background = '#fff';
           c.style.borderColor = '#d0d0d0';
+          c.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
         });
         card.style.background = '#e3f2fd';
         card.style.borderColor = '#2196f3';
+        card.style.boxShadow = '0 4px 8px rgba(33, 150, 243, 0.2)';
         this.els.tableBody.dataset.selectedId = item.id;
       });
       
       card.addEventListener('mouseover', () => {
         if (card.dataset.id !== this.els.tableBody.dataset.selectedId) {
-          card.style.background = '#f5f5f5';
+          card.style.background = '#f9f9f9';
+          card.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
         }
       });
       
       card.addEventListener('mouseout', () => {
         if (card.dataset.id !== this.els.tableBody.dataset.selectedId) {
           card.style.background = '#fff';
+          card.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
         }
       });
       
@@ -329,13 +383,25 @@ export class CompanyResourcesManager {
         input = document.createElement('textarea');
       } else if (field.type === 'select') {
         input = document.createElement('select');
-        const opts = field.options || [];
-        opts.forEach(opt => {
-          const option = document.createElement('option');
-          option.value = opt;
-          option.textContent = opt;
-          input.appendChild(option);
-        });
+        
+        if (field.dataSource) {
+          // Populate from data source (drivers, vehicle-types, affiliates)
+          this.populateSelectField(input, field.dataSource, value);
+          
+          // Add change listener for sync validation
+          input.addEventListener('change', () => {
+            this.validateSyncChange(field.id, input.value);
+          });
+        } else {
+          // Use static options
+          const opts = field.options || [];
+          opts.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            input.appendChild(option);
+          });
+        }
       } else {
         input = document.createElement('input');
         input.type = field.type || 'text';
@@ -408,21 +474,60 @@ export class CompanyResourcesManager {
       fleet: {
         title: 'Fleet',
         listType: 'table',
-        tableColumns: ['plate', 'type'],
+        tableColumns: ['plate', 'type', 'driver', 'affiliate'],
         formTitle: (mode) => mode === 'edit' ? 'Edit Vehicle' : 'Add New Vehicle',
-        listLabel: (x) => x.plate || '',
-        blocks: [{ head: 'Fleet Info', columns: 2, fields: [{ id: 'plate', label: 'License Plate', type: 'text' }, { id: 'type', label: 'Type', type: 'text' }] }],
+        listLabel: (x) => `${x.plate || 'No Plate'} - ${x.type || 'No Type'} (${x.driver || 'Unassigned'})`,
+        blocks: [
+          { 
+            head: 'Vehicle Information', 
+            columns: 2, 
+            fields: [
+              { id: 'plate', label: 'License Plate', type: 'text' }, 
+              { id: 'vin', label: 'VIN', type: 'text' },
+              { id: 'year', label: 'Year', type: 'number' },
+              { id: 'make', label: 'Make', type: 'text' },
+              { id: 'model', label: 'Model', type: 'text' },
+              { id: 'color', label: 'Color', type: 'text' }
+            ] 
+          },
+          {
+            head: 'Assignments',
+            columns: 1,
+            fields: [
+              { id: 'type', label: 'Vehicle Type', type: 'select', dataSource: 'vehicle-types' },
+              { id: 'driver', label: 'Assigned Driver', type: 'select', dataSource: 'drivers' },
+              { id: 'affiliate', label: 'Affiliate', type: 'select', dataSource: 'affiliates' }
+            ]
+          }
+        ],
         defaults: {},
         storageKey: 'cr_fleet',
+        syncFields: ['type', 'driver', 'affiliate'], // Fields that require sync validation
       },
       airports: {
         title: 'Airports',
         listType: 'container',
-        tableColumns: ['code', 'name'],
+        tableColumns: ['code', 'name', 'city', 'state'],
         formTitle: (mode) => mode === 'edit' ? 'Edit Airport' : 'Add New Airport',
-        listLabel: (x) => `${x.code || ''} - ${x.name || ''}`,
-        blocks: [{ head: 'Airport', columns: 2, fields: [{ id: 'code', label: 'Code', type: 'text' }, { id: 'name', label: 'Name', type: 'text' }] }],
-        defaults: {},
+        listLabel: (x) => `${x.code || ''} - ${x.name || ''} (${x.city || ''}, ${x.state || ''})`,
+        blocks: [
+          { 
+            head: 'Airport Information', 
+            columns: 2, 
+            fields: [
+              { id: 'code', label: 'Airport Code', type: 'text' }, 
+              { id: 'name', label: 'Airport Name', type: 'text' },
+              { id: 'city', label: 'City', type: 'text' },
+              { id: 'state', label: 'State', type: 'text' },
+              { id: 'country', label: 'Country', type: 'text' },
+              { id: 'address', label: 'Address', type: 'text' },
+              { id: 'zip', label: 'ZIP Code', type: 'text' },
+              { id: 'latitude', label: 'Latitude', type: 'text' },
+              { id: 'longitude', label: 'Longitude', type: 'text' }
+            ] 
+          }
+        ],
+        defaults: { country: 'United States' },
         storageKey: 'cr_airports',
       },
       airlines: {
@@ -491,9 +596,18 @@ export class CompanyResourcesManager {
       return;
     }
     if (!confirm('Delete this item?')) return;
+    
     let items = this.loadItems();
+    const itemToDelete = items.find(i => i.id === selectedId);
     items = items.filter(i => i.id !== selectedId);
     this.saveItems(items);
+    
+    // Special handling for airports: also remove from office.Airports structure
+    if (this.currentSection === 'airports' && window.office && window.office.Airports && itemToDelete && itemToDelete.code) {
+      window.office.Airports.delete(itemToDelete.code);
+      console.log(`Removed airport ${itemToDelete.code} from office.Airports`);
+    }
+    
     this.editingId = null;
     this.els.tableBody.dataset.selectedId = null;
     this.renderCenter();
@@ -525,10 +639,22 @@ export class CompanyResourcesManager {
       items.push(newItem);
     }
     this.saveItems(items);
+    
+    // Special handling for airports: also save to office.Airports structure
+    if (this.currentSection === 'airports' && window.myOffice && newItem.code) {
+      window.myOffice.saveAirportToOffice(newItem);
+    }
+    
+    // Trigger real-time sync for all sections
+    this.performRealTimeSync();
+    
     this.editingId = null;
     this.renderCenter();
     this.setFormMode('add');
     this.renderForm(null);
+    
+    // Show success notification
+    this.showSyncNotification('saved');
   }
 
   handleShowAll() {
@@ -555,5 +681,281 @@ export class CompanyResourcesManager {
 
   uid() {
     return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
+  }
+
+  populateSelectField(selectEl, dataSource, selectedValue) {
+    // Clear existing options
+    selectEl.innerHTML = '<option value="">-- Select --</option>';
+    
+    // Load data from the specified source
+    const sourceData = this.loadItemsFromSource(dataSource);
+    
+    sourceData.forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      
+      // Format display text based on data source
+      if (dataSource === 'drivers') {
+        option.textContent = `${item.first_name || ''} ${item.last_name || ''}`.trim() || `Driver ${item.id}`;
+      } else if (dataSource === 'vehicle-types') {
+        option.textContent = item.name || `Type ${item.id}`;
+      } else if (dataSource === 'affiliates') {
+        option.textContent = item.name || `Affiliate ${item.id}`;
+      } else {
+        option.textContent = item.name || item.label || item.id;
+      }
+      
+      if (item.id === selectedValue) {
+        option.selected = true;
+      }
+      
+      selectEl.appendChild(option);
+    });
+  }
+
+  loadItemsFromSource(dataSource) {
+    const config = this.getSectionConfig(dataSource);
+    return JSON.parse(localStorage.getItem(config.storageKey) || '[]');
+  }
+
+  validateSyncChange(fieldId, newValue) {
+    if (!this.realTimeSyncEnabled) return;
+    
+    const config = this.getSectionConfig(this.currentSection);
+    if (!config.syncFields || !config.syncFields.includes(fieldId)) return;
+    
+    // Show warning for sync-sensitive changes
+    if (!this.syncWarningShown) {
+      this.showSyncWarning(fieldId, newValue);
+      this.syncWarningShown = true;
+      
+      // Reset warning flag after 5 seconds
+      setTimeout(() => {
+        this.syncWarningShown = false;
+      }, 5000);
+    }
+    
+    // Trigger real-time sync validation
+    this.performRealTimeSync();
+  }
+
+  showSyncWarning(fieldId, newValue) {
+    const warningDiv = document.createElement('div');
+    warningDiv.id = 'sync-warning-notification';
+    warningDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-radius: 6px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      max-width: 350px;
+      font-size: 14px;
+      color: #856404;
+    `;
+    
+    warningDiv.innerHTML = `
+      <div style="font-weight: bold; margin-bottom: 8px; color: #d63031;">⚠️ Sync Update Warning</div>
+      <div style="margin-bottom: 12px;">
+        Changing <strong>${this.humanizeLabel(fieldId)}</strong> will update related records in Drivers, Vehicle Types, and Affiliates sections.
+      </div>
+      <div style="font-size: 12px; color: #636e72;">
+        All sections will sync automatically. This ensures data consistency across the system.
+      </div>
+      <button onclick="this.parentElement.remove()" style="
+        margin-top: 12px;
+        background: #2d3436;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      ">Understood</button>
+    `;
+    
+    // Remove existing warning if present
+    const existing = document.getElementById('sync-warning-notification');
+    if (existing) existing.remove();
+    
+    document.body.appendChild(warningDiv);
+    
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+      if (document.getElementById('sync-warning-notification')) {
+        warningDiv.remove();
+      }
+    }, 10000);
+  }
+
+  performRealTimeSync() {
+    // Prevent too frequent sync operations
+    const now = Date.now();
+    if (now - this.lastSyncCheck < 1000) return; // Debounce to 1 second
+    this.lastSyncCheck = now;
+    
+    // Update all dependent dropdowns
+    this.refreshAllSelectFields();
+    
+    // Update fleet assignments that reference changed data
+    this.syncFleetAssignments();
+    
+    console.log('Real-time sync performed for Drivers, Vehicle Types, Affiliates, and Fleet');
+  }
+
+  refreshAllSelectFields() {
+    // Refresh all select fields in the current form
+    const form = this.els.formContent;
+    if (!form) return;
+    
+    const selects = form.querySelectorAll('select[id^="field_"]');
+    selects.forEach(select => {
+      const fieldId = select.id.replace('field_', '');
+      const field = this.findFieldById(fieldId);
+      
+      if (field && field.dataSource) {
+        const currentValue = select.value;
+        this.populateSelectField(select, field.dataSource, currentValue);
+      }
+    });
+  }
+
+  findFieldById(fieldId) {
+    const config = this.getSectionConfig(this.currentSection);
+    for (const block of config.blocks) {
+      const field = block.fields.find(f => f.id === fieldId);
+      if (field) return field;
+    }
+    return null;
+  }
+
+  syncFleetAssignments() {
+    // Update fleet records to ensure all assignments are valid
+    const fleetData = JSON.parse(localStorage.getItem('cr_fleet') || '[]');
+    const driversData = JSON.parse(localStorage.getItem('cr_drivers') || '[]');
+    const vehicleTypesData = JSON.parse(localStorage.getItem('cr_vehicle_types') || '[]');
+    const affiliatesData = JSON.parse(localStorage.getItem('cr_affiliates') || '[]');
+    
+    const driverIds = new Set(driversData.map(d => d.id));
+    const vehicleTypeIds = new Set(vehicleTypesData.map(vt => vt.id));
+    const affiliateIds = new Set(affiliatesData.map(a => a.id));
+    
+    let syncUpdates = 0;
+    
+    fleetData.forEach(vehicle => {
+      let updated = false;
+      
+      // Validate driver assignment
+      if (vehicle.driver && !driverIds.has(vehicle.driver)) {
+        vehicle.driver = '';
+        updated = true;
+        syncUpdates++;
+      }
+      
+      // Validate vehicle type assignment
+      if (vehicle.type && !vehicleTypeIds.has(vehicle.type)) {
+        vehicle.type = '';
+        updated = true;
+        syncUpdates++;
+      }
+      
+      // Validate affiliate assignment
+      if (vehicle.affiliate && !affiliateIds.has(vehicle.affiliate)) {
+        vehicle.affiliate = '';
+        updated = true;
+        syncUpdates++;
+      }
+    });
+    
+    if (syncUpdates > 0) {
+      localStorage.setItem('cr_fleet', JSON.stringify(fleetData));
+      console.log(`Synchronized ${syncUpdates} fleet assignments`);
+      
+      // Refresh the display if we're currently viewing fleet
+      if (this.currentSection === 'fleet') {
+        this.renderCenter();
+      }
+    }
+  }
+
+  showSyncNotification(action) {
+    const notification = document.createElement('div');
+    notification.id = 'sync-success-notification';
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      border-radius: 6px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      z-index: 10000;
+      font-size: 14px;
+      color: #155724;
+      max-width: 300px;
+    `;
+    
+    notification.innerHTML = `
+      <div style="font-weight: bold; margin-bottom: 4px;">✅ Sync Complete</div>
+      <div style="font-size: 12px;">
+        ${this.getSectionConfig(this.currentSection).title} ${action}. All related sections synchronized.
+      </div>
+    `;
+    
+    // Remove existing notification
+    const existing = document.getElementById('sync-success-notification');
+    if (existing) existing.remove();
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      if (document.getElementById('sync-success-notification')) {
+        notification.remove();
+      }
+    }, 3000);
+  }
+
+  showSyncNotification(action) {
+    const notification = document.createElement('div');
+    notification.id = 'sync-success-notification';
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      border-radius: 6px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      z-index: 10000;
+      font-size: 14px;
+      color: #155724;
+      max-width: 300px;
+    `;
+    
+    notification.innerHTML = `
+      <div style="font-weight: bold; margin-bottom: 4px;">✅ Sync Complete</div>
+      <div style="font-size: 12px;">
+        ${this.getSectionConfig(this.currentSection).title} ${action}. All related sections synchronized.
+      </div>
+    `;
+    
+    // Remove existing notification
+    const existing = document.getElementById('sync-success-notification');
+    if (existing) existing.remove();
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      if (document.getElementById('sync-success-notification')) {
+        notification.remove();
+      }
+    }, 3000);
   }
 }

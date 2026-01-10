@@ -4933,3 +4933,184 @@ body {
   background: #fff3cd;
 }
 
+/* ===================================================================
+   Enhanced Fleet System & Real-Time Sync Styles
+   =================================================================== */
+
+/* Company Resources Enhanced Fleet Form */
+.cr-field select[id^="field_"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  background: white;
+  transition: border-color 0.2s;
+}
+
+.cr-field select[id^="field_"]:focus {
+  border-color: #2196f3;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.cr-field select[id^="field_"] option {
+  padding: 8px;
+  color: #333;
+}
+
+/* Fleet table enhanced display */
+.cr-table td[data-assignment] {
+  font-weight: 500;
+  color: #2c5282;
+}
+
+.cr-table td:empty:before,
+.cr-table td:contains("Unassigned"):before {
+  content: "Unassigned";
+  color: #999;
+  font-style: italic;
+}
+
+/* Sync Warning Styles */
+#sync-warning-notification {
+  animation: slideInRight 0.3s ease-out;
+}
+
+#sync-success-notification {
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Enhanced form grid for fleet */
+.cr-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.cr-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cr-field-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cr-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+.cr-field-input,
+.cr-field-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #111827;
+  background: white;
+  transition: all 0.2s;
+}
+
+.cr-field-input:focus,
+.cr-field-select:focus {
+  border-color: #3b82f6;
+  ring: 2px;
+  ring-color: #3b82f6;
+  ring-opacity: 20%;
+  outline: none;
+}
+
+/* Block headers */
+.cr-block-header {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.cr-block {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+/* Fleet-specific enhancements */
+.fleet-assignment-indicator {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fleet-assignment-indicator.assigned {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.fleet-assignment-indicator.unassigned {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .cr-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  #sync-warning-notification,
+  #sync-success-notification {
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}
+
+/* Real-time sync status indicator */
+.sync-status-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 6px 12px;
+  background: #10b981;
+  color: white;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.sync-status-indicator.active {
+  opacity: 1;
+}
+
