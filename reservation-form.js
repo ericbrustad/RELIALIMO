@@ -298,14 +298,12 @@ class ReservationForm {
 
   /**
    * Get the current user's role from session/localStorage
-   * Also checks for known admin user IDs
+   * Only ericbrustad@gmail.com has admin access
    */
   getUserRole() {
     try {
-      // Known admin user IDs - always have admin access
-      const ADMIN_USER_IDS = [
-        '99d34cd5-a593-4362-9846-db7167276592' // Eric - primary admin
-      ];
+      // Only ericbrustad@gmail.com is the superadmin
+      const SUPERADMIN_EMAIL = 'ericbrustad@gmail.com';
 
       // Check localStorage for session
       const sessionRaw = localStorage.getItem('supabase_session');
@@ -313,14 +311,17 @@ class ReservationForm {
         const session = JSON.parse(sessionRaw);
         const user = session?.user;
         if (user) {
-          // Check if user ID is in the known admin list
-          if (user.id && ADMIN_USER_IDS.includes(user.id)) {
-            console.log('👤 [ReservationForm] Known admin user detected:', user.id);
-            return 'admin';
+          // Check if user email is the superadmin
+          if (user.email === SUPERADMIN_EMAIL) {
+            console.log('👤 [ReservationForm] Superadmin user detected:', user.email);
+            return 'superadmin';
           }
           
-          // Check role in various locations
-          const role = user.role || user.user_metadata?.role || user.app_metadata?.role;
+          // All other authenticated users are regular users with limited access
+          if (user.email && session.access_token) {
+            console.log('👤 [ReservationForm] Regular user detected, limited access:', user.email);
+            return 'user';
+          }
           if (role) {
             return role;
           }

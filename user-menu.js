@@ -14,12 +14,17 @@ function getInitials(email) {
 }
 
 function getRole(user) {
-  return (
-    user?.role ||
-    user?.user_metadata?.role ||
-    user?.app_metadata?.role ||
-    ''
-  );
+  // Only ericbrustad@gmail.com is the superadmin
+  if (user?.email === 'ericbrustad@gmail.com') {
+    return 'superadmin';
+  }
+  
+  // All other authenticated users are regular users with limited access
+  if (user?.email) {
+    return 'user';
+  }
+  
+  return '';
 }
 
 function ensureStyles() {
